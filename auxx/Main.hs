@@ -25,7 +25,6 @@ import           Pos.Launcher (HasConfigurations, NodeParams (..),
                      NodeResources (..), bracketNodeResources, lpConsoleLog,
                      runNode, runRealMode, withConfigurations)
 import           Pos.Launcher.Resource (getRealLoggerConfig)
-import           Pos.Txp (txpGlobalSettings)
 import           Pos.Util (logException)
 import           Pos.Util.CompileInfo (HasCompileInfo, withCompileInfo)
 import           Pos.Util.Config (ConfigurationException (..))
