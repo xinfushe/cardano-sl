@@ -8,7 +8,6 @@ import           Universum
 
 import           Control.Monad.Random.Strict (evalRandT)
 import           Data.Default (def)
-import           Pos.Util.Log (logInfo)
 import           System.Random (mkStdGen, randomIO)
 
 import           Pos.AllSecrets (mkAllSecretsSimple)
@@ -21,15 +20,22 @@ import           Pos.Generator.Block (BlockGenParams (..), genBlocks,
 import           Pos.Infra.StateLock (Priority (..), withStateLock)
 import           Pos.Infra.Util.JsonLog.Events (MemPoolModifyReason (..))
 import           Pos.Util.CompileInfo (withCompileInfo)
+import           Pos.Util.Trace (noTrace)
+import           Pos.Util.Trace.Named (TraceNamed, logInfo)
 
 import           Lang.Value (GenBlocksParams (..))
 import           Mode (MonadAuxxMode)
 
 
-generateBlocks :: MonadAuxxMode m => ProtocolMagic -> GenBlocksParams -> m ()
-generateBlocks pm GenBlocksParams{..} = withStateLock HighPriority ApplyBlock $ \_ -> do
+generateBlocks
+    :: MonadAuxxMode m
+    => TraceNamed m
+    -> ProtocolMagic
+    -> GenBlocksParams
+    -> m ()                                                  -- JSON logging Trace
+generateBlocks logTrace pm GenBlocksParams{..} = withStateLock noTrace HighPriority ApplyBlock $ \_ -> do
     seed <- liftIO $ maybe randomIO pure bgoSeed
-    logInfo $ "Generating with seed " <> show seed
+    logInfo logTrace $ "Generating with seed " <> show seed
 
     allSecrets <- mkAllSecretsSimple . map encToSecret <$> getSecretKeysPlain
 
@@ -44,7 +50,7 @@ generateBlocks pm GenBlocksParams{..} = withStateLock HighPriority ApplyBlock $ 
                 , _bgpSkipNoKey       = True
                 , _bgpTxpGlobalSettings = txpGlobalSettings pm
                 }
-    withCompileInfo $ evalRandT (genBlocks pm bgenParams (const ())) (mkStdGen seed)
+    withCompileInfo $ evalRandT (genBlocks logTrace pm bgenParams (const ())) (mkStdGen seed)
     -- We print it twice because there can be a ton of logs and
     -- you don't notice the first message.
-    logInfo $ "Generated with seed " <> show seed
+    logInfo logTrace $ "Generated with seed " <> show seed
