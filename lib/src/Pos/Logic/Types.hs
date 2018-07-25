@@ -12,10 +12,9 @@ module Pos.Logic.Types
 
 import           Universum
 
+import           Data.Conduit (ConduitT, transPipe)
 import           Data.Default (def)
 import           Data.Tagged (Tagged)
-import           Pipes (Producer)
-import           Pipes.Internal (unsafeHoist)
 
 import           Pos.Communication (NodeId)
 import           Pos.Core (HeaderHash, ProxySKHeavy, StakeholderId)
@@ -37,7 +36,7 @@ data Logic m = Logic
       ourStakeholderId   :: StakeholderId
       -- | Get serialized block, perhaps from a database.
     , getSerializedBlock :: HeaderHash -> m (Maybe SerializedBlock)
-    , streamBlocks       :: HeaderHash -> Producer SerializedBlock m ()
+    , streamBlocks       :: HeaderHash -> ConduitT () SerializedBlock m ()
       -- | Get a block header.
     , getBlockHeader     :: HeaderHash -> m (Maybe BlockHeader)
       -- TODO CSL-2089 use conduits in this and the following methods
@@ -101,11 +100,11 @@ data Logic m = Logic
     , securityParams     :: SecurityParams
     }
 
--- | We have to hoist a pipes producer, so the Monad constraint arises.
+-- | We have to hoist a Conduit producer, so the Monad constraint arises.
 hoistLogic :: Monad m => (forall x . m x -> n x) -> Logic m -> Logic n
 hoistLogic nat logic = logic
     { getSerializedBlock = nat . getSerializedBlock logic
-    , streamBlocks = unsafeHoist nat . streamBlocks logic
+    , streamBlocks = transPipe nat . streamBlocks logic
     , getBlockHeader = nat . getBlockHeader logic
     , getHashesRange = \a b c -> nat (getHashesRange logic a b c)
     , getBlockHeaders = \a b c -> nat (getBlockHeaders logic a b c)

@@ -19,22 +19,23 @@ import qualified Criterion
 import qualified Criterion.Main as Criterion
 import qualified Criterion.Main.Options as Criterion
 import qualified Data.ByteString.Lazy as LBS
+import           Data.Conduit.Combinators (yieldMany)
+import           Data.List.NonEmpty (NonEmpty ((:|)))
 import           Data.Semigroup ((<>))
+import           Data.Time.Units (Microsecond)
 import qualified Options.Applicative as Opt (execParser)
 
-import           Data.List.NonEmpty (NonEmpty ((:|)))
-import           Data.Time.Units (Microsecond)
 import qualified Network.Broadcast.OutboundQueue as OQ
 import qualified Network.Broadcast.OutboundQueue.Types as OQ
 import           Network.Transport (Transport)
 import qualified Network.Transport.TCP as TCP
 import           Node (NodeId)
 import qualified Node
-import           Pipes (each)
 
 import           Pos.Binary (serialize, serialize')
 import           Pos.Core (Block, BlockHeader, BlockVersion (..), HeaderHash)
 import qualified Pos.Core as Core (getBlockHeader)
+import           Pos.Core.Chrono (NewestFirst (..), OldestFirst (..))
 import           Pos.Core.ProtocolConstants (ProtocolConstants (..))
 import           Pos.Crypto (ProtocolMagic (..))
 import           Pos.Crypto.Hashing (Hash, unsafeMkAbstractHash)
@@ -51,9 +52,8 @@ import           Pos.Infra.Network.Types (Bucket (..))
 import           Pos.Infra.Reporting.Health.Types (HealthStatus (..))
 import           Pos.Logic.Pure (pureLogic)
 import           Pos.Logic.Types as Logic (Logic (..))
-
-import           Pos.Core.Chrono (NewestFirst (..), OldestFirst (..))
 import           Pos.Util.Trace (noTrace, wlogTrace)
+
 import           Test.Pos.Block.Arbitrary.Generate (generateMainBlock)
 
 -- TODO
@@ -120,7 +120,7 @@ serverLogic streamIORef arbitraryBlock arbitraryHashes arbitraryHeaders = pureLo
     , getTipHeader = pure (Core.getBlockHeader arbitraryBlock)
     , Logic.streamBlocks = \_ -> do
           bs <-  readIORef streamIORef
-          each $ map serializedBlock bs
+          yieldMany $ map serializedBlock bs
     }
 
 serializedBlock :: Block -> SerializedBlock
