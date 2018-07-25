@@ -18,7 +18,6 @@ import qualified Data.List.NonEmpty as NE
 import           Data.Time.Units (convertUnit)
 import           Formatting (build, sformat, (%))
 
-import           Pos.Block.BListener (MonadBListener (..))
 import           Pos.Block.Types (Blund, undoTx)
 import           Pos.Core (HeaderHash, Timestamp, difficultyL, headerSlotL,
                      prevBlockL)
@@ -28,6 +27,7 @@ import           Pos.Core.Chrono (NE, NewestFirst (..), OldestFirst (..))
 import           Pos.Core.Txp (TxAux (..), TxUndo)
 import           Pos.Core.Util.TimeLimit (CanLogInParallel, logWarningWaitInf)
 import           Pos.DB.BatchOp (SomeBatchOp)
+import           Pos.DB.Block (MonadBListener (..))
 import           Pos.DB.Class (MonadDBRead)
 import qualified Pos.GState as GS
 import           Pos.Infra.Reporting (MonadReporting, reportOrLogE)

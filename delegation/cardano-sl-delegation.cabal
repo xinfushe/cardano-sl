@@ -4,8 +4,9 @@ synopsis:            Cardano SL - delegation
 description:         Cardano SL - delegation
 license:             MIT
 license-file:        LICENSE
-author:              Serokell
-maintainer:          hi@serokell.io
+homepage:            https://github.com/input-output-hk/cardano-sl
+author:              IOHK
+maintainer:          support@iohk.io
 copyright:           2017 IOHK
 category:            Currency
 build-type:          Simple
@@ -18,18 +19,11 @@ library
                        Pos.Delegation.Cede
                        Pos.Delegation.Class
                        Pos.Delegation.Configuration
-                       Pos.Delegation.DB
-                       Pos.Delegation.Logic
                        Pos.Delegation.Types
 
   other-modules:
                        Pos.Delegation.Cede.Class
-                       Pos.Delegation.Cede.Logic
                        Pos.Delegation.Cede.Types
-                       Pos.Delegation.Cede.Holders
-                       Pos.Delegation.Logic.Common
-                       Pos.Delegation.Logic.Mempool
-                       Pos.Delegation.Logic.VAR
 
   build-depends:       aeson
                      , aeson-options
@@ -37,26 +31,18 @@ library
                      , cardano-sl-binary
                      , cardano-sl-core
                      , cardano-sl-crypto
-                     , cardano-sl-db
-                     , cardano-sl-lrc
                      , cardano-sl-util
-                     , conduit
                      , ether
                      , formatting
                      , lens
                      , lrucache
-                     , mmorph
                      , mtl
                      , reflection
-                     , resourcet
-                     , safe-exceptions
-                     , rocksdb-haskell-ng
                      , serokell-util
                      , formatting
                      , time
                      , transformers
                      , universum
-                     , unliftio
                      , unordered-containers
 
   default-extensions:  DeriveDataTypeable

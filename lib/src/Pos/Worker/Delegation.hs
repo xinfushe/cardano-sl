@@ -11,11 +11,11 @@ import           Data.Time.Clock (UTCTime, addUTCTime)
 import           Data.Time.Units (Second)
 
 import           Pos.Core.Conc (currentTime, delay)
+import           Pos.DB.Delegation (DelegationStateAction,
+                     runDelegationStateAction)
 import           Pos.Delegation.Class (MonadDelegation, dwMessageCache)
 import           Pos.Delegation.Configuration (HasDlgConfiguration,
                      dlgMessageCacheTimeout)
-import           Pos.Delegation.Logic (DelegationStateAction,
-                     runDelegationStateAction)
 import           Pos.Infra.Diffusion.Types (Diffusion)
 import           Pos.Infra.Reporting (MonadReporting, reportOrLogE)
 import           Pos.Infra.Shutdown (HasShutdownContext)

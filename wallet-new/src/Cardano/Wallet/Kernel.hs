@@ -12,7 +12,6 @@ module Cardano.Wallet.Kernel (
   , applyBlock
   , applyBlocks
   , bracketPassiveWallet
-  , createWalletHdRnd
   , init
   , walletLogMessage
   , walletPassive
@@ -43,15 +42,13 @@ import           Cardano.Wallet.Kernel.Diffusion (WalletDiffusion (..))
 import           Cardano.Wallet.Kernel.Keystore (Keystore)
 import qualified Cardano.Wallet.Kernel.Keystore as Keystore
 import           Cardano.Wallet.Kernel.PrefilterTx (PrefilteredBlock (..),
-                     prefilterBlock, prefilterUtxo)
+                     prefilterBlock)
 import           Cardano.Wallet.Kernel.Types (WalletId (..))
 
 import           Cardano.Wallet.Kernel.DB.AcidState (ApplyBlock (..),
-                     CancelPending (..), CreateHdWallet (..), DB,
-                     NewPending (..), NewPendingError, Snapshot (..), defDB)
+                     CancelPending (..), DB, NewPending (..), NewPendingError,
+                     Snapshot (..), defDB)
 import           Cardano.Wallet.Kernel.DB.HdWallet
-import qualified Cardano.Wallet.Kernel.DB.HdWallet as HD
-import qualified Cardano.Wallet.Kernel.DB.HdWallet.Create as HD
 import           Cardano.Wallet.Kernel.DB.InDb
 import           Cardano.Wallet.Kernel.DB.Resolved (ResolvedBlock)
 import           Cardano.Wallet.Kernel.DB.Spec (singletonPending)
@@ -59,7 +56,6 @@ import           Cardano.Wallet.Kernel.Submission (Cancelled, WalletSubmission,
                      addPending, defaultResubmitFunction, exponentialBackoff,
                      newWalletSubmission, tick)
 import           Cardano.Wallet.Kernel.Submission.Worker (tickSubmissionLayer)
-import           Cardano.Wallet.Kernel.Util (getCurrentTimestamp)
 
 -- Handy re-export of the pure getters
 
@@ -67,8 +63,7 @@ import           Cardano.Wallet.Kernel.DB.Read as Getters
 
 import           Pos.Core (ProtocolMagic, TxAux (..))
 import           Pos.Core.Chrono (OldestFirst)
-import           Pos.Crypto (EncryptedSecretKey, hash)
-import           Pos.Txp (Utxo)
+import           Pos.Crypto (hash)
 import           Pos.Util.Trace.Named (TraceNamed, logError, logInfo)
 
 
@@ -94,13 +89,8 @@ bracketPassiveWallet logTrace keystore f =
                   f)
 
 {-------------------------------------------------------------------------------
-  Manage the WalletESKs Map
+  Manage the Wallet's ESKs
 -------------------------------------------------------------------------------}
-
--- | Insert an ESK, indexed by WalletId, to the Keystore.
-insertWalletESK :: PassiveWallet -> WalletId -> EncryptedSecretKey -> IO ()
-insertWalletESK pw wid esk
-    = Keystore.insert wid esk (pw ^. walletKeystore)
 
 withKeystore :: forall a. PassiveWallet -> (Keystore -> IO a) -> IO a
 withKeystore pw action = action (pw ^. walletKeystore)
@@ -123,41 +113,6 @@ initPassiveWallet logTrace keystore db =
 -- called when the node is initialized (when run in the node proper).
 init :: PassiveWallet -> IO ()
 init PassiveWallet{..} = logInfo _walletLogMessage "Passive Wallet kernel initialized"
-
-{-------------------------------------------------------------------------------
-  Wallet Creation
--------------------------------------------------------------------------------}
-
--- | Creates an HD wallet with randomly generated addresses.
---
--- Prefilters the Utxo before passing it to the Acidstate update.
-
--- Adds an HdRoot and HdAccounts (which are discovered during prefiltering of utxo).
--- (In the case of empty utxo, no HdAccounts are created.)
--- May fail with CreateHdWalletError if the HdRootId already exists
-
--- The ESK is indexed by WalletId and added to the WalletESK map.
-createWalletHdRnd :: PassiveWallet
-                  -> HD.WalletName
-                  -> HasSpendingPassword
-                  -> AssuranceLevel
-                  -> EncryptedSecretKey
-                  -> Utxo
-                  -> IO (Either HD.CreateHdRootError [HdAccountId])
-createWalletHdRnd pw@PassiveWallet{..} name spendingPassword assuranceLevel esk utxo = do
-    created <- InDb <$> getCurrentTimestamp
-    let newRoot = HD.initHdRoot rootId name spendingPassword assuranceLevel created
-
-    res <- update' _wallets $ CreateHdWallet newRoot utxoByAccount
-    either (return . Left) insertESK res
-    where
-        utxoByAccount = prefilterUtxo rootId esk utxo
-        accountIds    = Map.keys utxoByAccount
-
-        rootId        = eskToHdRootId esk
-        walletId      = WalletIdHdRnd rootId
-
-        insertESK _arg = insertWalletESK pw walletId esk >> return (Right accountIds)
 
 {-------------------------------------------------------------------------------
   Passive Wallet API implementation

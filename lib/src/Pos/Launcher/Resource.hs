@@ -29,20 +29,24 @@ import qualified System.Metrics as Metrics
 import           Network.Broadcast.OutboundQueue.Types (NodeType (..))
 import           Pos.Binary ()
 import           Pos.Block.Configuration (HasBlockConfiguration)
-import           Pos.Block.Slog (mkSlogContext)
 import           Pos.Configuration
 import           Pos.Context (ConnectedPeers (..), NodeContext (..),
                      StartTime (..))
 import           Pos.Core (HasConfiguration, Timestamp, gdStartTime,
                      genesisData)
-import           Pos.Core.JsonLog.LogEvents (JsonLogConfig (..),
-                     jsonLogConfigFromHandle)
 import           Pos.Core.Reporting (initializeMisbehaviorMetrics)
 import           Pos.Core.StateLock (newStateLock)
 import           Pos.DB (MonadDBRead, NodeDBs)
+import           Pos.DB.Block (mkSlogContext)
+import           Pos.DB.Delegation (mkDelegationVar)
+import           Pos.DB.Lrc (LrcContext (..), mkLrcSyncData)
 import           Pos.DB.Rocks (closeNodeDBs, openNodeDBs)
-import           Pos.Delegation (DelegationVar, HasDlgConfiguration,
-                     mkDelegationVar)
+import           Pos.DB.Ssc (mkSscState)
+import           Pos.DB.Txp (GenericTxpLocalData (..), TxpGlobalSettings,
+                     mkTxpLocalData, recordTxpMetrics)
+import           Pos.DB.Update (mkUpdateContext)
+import qualified Pos.DB.Update as GState
+import           Pos.Delegation (DelegationVar, HasDlgConfiguration)
 import qualified Pos.GState as GS
 import           Pos.Infra.DHT.Real (KademliaParams (..))
 import           Pos.Infra.Network.Types (NetworkConfig (..))
@@ -50,16 +54,12 @@ import           Pos.Infra.Shutdown.Types (ShutdownContext (..))
 import           Pos.Infra.Slotting (SimpleSlottingStateVar,
                      mkSimpleSlottingStateVar)
 import           Pos.Infra.Slotting.Types (SlottingData)
+import           Pos.Infra.Util.JsonLog.Events (JsonLogConfig (..),
+                     jsonLogConfigFromHandle)
+import           Pos.Launcher.Mode (InitMode, InitModeContext (..), runInitMode)
 import           Pos.Launcher.Param (BaseParams (..), LoggingParams (..),
                      NodeParams (..))
-import           Pos.Lrc.Context (LrcContext (..), mkLrcSyncData)
-import           Pos.Ssc (SscParams, SscState, createSscContext, mkSscState)
-import           Pos.Txp (GenericTxpLocalData (..), TxpGlobalSettings,
-                     mkTxpLocalData, recordTxpMetrics)
-
-import           Pos.Launcher.Mode (InitMode, InitModeContext (..), runInitMode)
-import           Pos.Update.Context (mkUpdateContext)
-import qualified Pos.Update.DB as GState
+import           Pos.Ssc (SscParams, SscState, createSscContext)
 import           Pos.Util (bracketWithTrace, newInitFuture)
 import qualified Pos.Util.Log as Log
 import           Pos.Util.Trace (natTrace)

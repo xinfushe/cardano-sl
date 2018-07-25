@@ -13,6 +13,8 @@ import           Serokell.Util.Text (listJsonIndent)
 
 import           Pos.Core (SoftwareVersion (..))
 import           Pos.Core.Update (UpdateProposal (..))
+import           Pos.DB.Update (UpdateContext (..), getConfirmedProposals,
+                     processNewSlot)
 import           Pos.Infra.Diffusion.Types (Diffusion)
 import           Pos.Infra.Recovery.Info (recoveryCommGuard)
 import           Pos.Infra.Shutdown (triggerShutdown)
@@ -21,9 +23,6 @@ import           Pos.Infra.Slotting.Util (ActionTerminationPolicy (..),
 import           Pos.Listener.Update (UpdateMode)
 import           Pos.Network.Update.Download (downloadUpdate)
 import           Pos.Update.Configuration (curSoftwareVersion)
-import           Pos.Update.Context (UpdateContext (..))
-import           Pos.Update.DB (getConfirmedProposals)
-import           Pos.Update.Logic.Local (processNewSlot)
 import           Pos.Update.Poll.Types (ConfirmedProposalState (..))
 import           Pos.Util.Trace.Named (TraceNamed, logDebug, logInfo)
 import           Pos.Util.Util (lensOf)

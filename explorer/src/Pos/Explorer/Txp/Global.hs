@@ -15,11 +15,11 @@ import           Pos.Core.Chrono (NewestFirst (..))
 import           Pos.Core.Txp (TxAux, TxUndo)
 import           Pos.Crypto (ProtocolMagic)
 import           Pos.DB (SomeBatchOp (..))
-import           Pos.Infra.Slotting (getSlotStart)
-import           Pos.Txp (ProcessBlundsSettings (..), TxpBlund,
+import           Pos.DB.Txp (ProcessBlundsSettings (..), TxpBlund,
                      TxpGlobalApplyMode, TxpGlobalRollbackMode,
                      TxpGlobalSettings (..), applyBlocksWith, blundToAuxNUndo,
                      processBlunds, txpGlobalSettings)
+import           Pos.Infra.Slotting (getSlotStart)
 import qualified Pos.Util.Modifier as MM
 import           Pos.Util.Trace (noTrace)
 import           Pos.Util.Trace.Named (TraceNamed)

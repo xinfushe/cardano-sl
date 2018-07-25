@@ -4,8 +4,9 @@ synopsis:            Cardano SL - transaction processing
 description:         Cardano SL - transaction processing
 license:             MIT
 license-file:        LICENSE
-author:              Serokell
-maintainer:          hi@serokell.io
+homepage:            https://github.com/input-output-hk/cardano-sl
+author:              IOHK
+maintainer:          support@iohk.io
 copyright:           2016 IOHK
 category:            Currency
 build-type:          Simple
@@ -16,10 +17,6 @@ library
   hs-source-dirs:      src
   exposed-modules:
     Pos.Txp
-
-    Pos.Txp.DB
-    Pos.Txp.DB.Stakes
-    Pos.Txp.DB.Utxo
 
     Pos.Txp.Configuration
 
@@ -33,20 +30,6 @@ library
     Pos.Txp.Toil.Utxo
     Pos.Txp.Toil.Utxo.Functions
     Pos.Txp.Toil.Utxo.Util
-
-    Pos.Txp.Logic
-    Pos.Txp.Logic.Common
-    Pos.Txp.Logic.Global
-    Pos.Txp.Logic.Local
-
-    Pos.Txp.MemState
-    Pos.Txp.MemState.Class
-    Pos.Txp.MemState.Holder
-    Pos.Txp.MemState.Metrics
-    Pos.Txp.MemState.Types
-
-    Pos.Txp.Settings
-    Pos.Txp.Settings.Global
 
     Pos.Txp.Base
     Pos.Txp.Error
@@ -62,14 +45,10 @@ library
                      , cardano-sl-binary
                      , cardano-sl-core
                      , cardano-sl-crypto
-                     , cardano-sl-db
                      , cardano-sl-util
-                     , conduit
                      , containers
                      , contravariant
                      , data-default
-                     , ekg-core
-                     , ether
                      , exceptions
                      , fmt >= 0.4
                      , formatting
@@ -77,22 +56,17 @@ library
                      , hashable
                      , lens
                      , memory
-                     , mmorph
                      , mtl
                      , neat-interpolation
                      , plutus-prototype
-                     , resourcet
-                     , rocksdb-haskell-ng
                      , safe-exceptions
                      , serokell-util
-                     , stm
                      , reflection
                      , template-haskell
                      , text
                      , formatting
                      , transformers
                      , universum
-                     , unliftio
                      , unordered-containers
 
   default-language:    Haskell2010

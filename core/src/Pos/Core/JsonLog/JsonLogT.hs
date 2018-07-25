@@ -74,11 +74,6 @@ instance WithLogger m => HasLoggerName (JsonLogT m) where
     modifyLoggerName f = hoist (modifyLoggerName f)
 -}
 
-
-
-
-
-
 jsonLogDefault
     :: (ToJSON a, MonadIO m, MonadCatch m)
     => JsonLogConfig

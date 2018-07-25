@@ -66,12 +66,11 @@ import           Pos.Core.Chrono (getNewestFirst)
 import           Pos.Core.StateLock (Priority (..), withStateLockNoMetrics)
 import           Pos.Core.Txp (TxAux (..), TxId, TxUndo)
 import           Pos.Crypto (WithHash (..), shortHashF, withHash)
-import           Pos.DB.Block (getBlund)
-import qualified Pos.DB.Block.Load as GS
+import           Pos.DB.Block (getBlund, resolveForwardLink)
+import qualified Pos.DB.Block as GS
 import qualified Pos.DB.BlockIndex as DB
 import           Pos.DB.Class (MonadDBRead (..))
 import qualified Pos.GState as GS
-import           Pos.GState.BlockExtra (resolveForwardLink)
 import           Pos.Infra.Slotting (MonadSlots (..), MonadSlotsData,
                      getSlotStartPure, getSystemStartM)
 import           Pos.Infra.Slotting.Types (SlottingData)

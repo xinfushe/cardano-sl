@@ -4,8 +4,9 @@ synopsis:            Testing modules for the Cardano SL lrc package
 description:         Testing modules for the Cardano SL lrc package
 license:             MIT
 license-file:        LICENSE
-author:              Rupert Horlick
-maintainer:          rupert.horlick@iohk.io
+homepage:            https://github.com/input-output-hk/cardano-sl
+author:              IOHK
+maintainer:          support@iohk.io
 copyright:           2018 IOHK
 category:            Currency
 build-type:          Simple

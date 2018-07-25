@@ -7,17 +7,17 @@ import           Universum
 
 import           Servant
 
-import           Cardano.Wallet.WalletLayer.Types (ActiveWalletLayer,
-                     PassiveWalletLayer (..), walletPassiveLayer)
+import           Cardano.Wallet.WalletLayer.Types (PassiveWalletLayer (..))
 
 import           Cardano.Wallet.API.Request
 import           Cardano.Wallet.API.Response
 import qualified Cardano.Wallet.API.V1.Addresses as Addresses
 import           Cardano.Wallet.API.V1.Types
 
-handlers :: ActiveWalletLayer IO -> ServerT Addresses.API Handler
+
+handlers :: PassiveWalletLayer IO -> ServerT Addresses.API Handler
 handlers w =  listAddresses
-         :<|> newAddress (walletPassiveLayer w)
+         :<|> newAddress w
          :<|> getAddress
 
 listAddresses :: RequestParams -> Handler (WalletResponse [WalletAddress])

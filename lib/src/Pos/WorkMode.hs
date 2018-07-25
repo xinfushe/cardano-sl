@@ -19,8 +19,6 @@ import           Universum
 import           Control.Lens (makeLensesWith)
 import qualified Control.Monad.Reader as Mtl
 
-import           Pos.Block.BListener (MonadBListener (..), onApplyBlocksStub,
-                     onRollbackBlocksStub)
 import           Pos.Block.Slog (HasSlogContext (..), HasSlogGState (..))
 import           Pos.Context (HasNodeContext (..), HasPrimaryKey (..),
                      HasSscContext (..), NodeContext)
@@ -29,12 +27,16 @@ import           Pos.Core.JsonLog.LogEvents (JsonLogConfig)
 import           Pos.Core.Reporting (HasMisbehaviorMetrics (..))
 import           Pos.Core.Slotting (HasSlottingVar (..), MonadSlotsData)
 import           Pos.DB (MonadGState (..), NodeDBs)
-import           Pos.DB.Block (dbGetSerBlockRealDefault,
-                     dbGetSerUndoRealDefault, dbPutSerBlundsRealDefault)
+import           Pos.DB.Block (MonadBListener (..), dbGetSerBlockRealDefault,
+                     dbGetSerUndoRealDefault, dbPutSerBlundsRealDefault,
+                     onApplyBlocksStub, onRollbackBlocksStub)
 import           Pos.DB.Class (MonadDB (..), MonadDBRead (..))
 import           Pos.DB.DB (gsAdoptedBVDataDefault)
 import           Pos.DB.Rocks (dbDeleteDefault, dbGetDefault,
                      dbIterSourceDefault, dbPutDefault, dbWriteBatchDefault)
+import           Pos.DB.Txp (GenericTxpLocalData, MempoolExt,
+                     MonadTxpLocal (..), TxpHolderTag, txNormalize,
+                     txProcessTransaction)
 import           Pos.Delegation.Class (DelegationVar)
 import           Pos.Infra.DHT.Real.Param (KademliaParams)
 import           Pos.Infra.Network.Types (HasNodeType (..), getNodeTypeDefault)
@@ -46,9 +48,7 @@ import           Pos.Infra.Slotting.Impl (currentTimeSlottingSimple,
                      getCurrentSlotInaccurateSimple, getCurrentSlotSimple)
 import           Pos.Ssc.Mem (SscMemTag)
 import           Pos.Ssc.Types (SscState)
-import           Pos.Txp (GenericTxpLocalData, HasTxpConfiguration, MempoolExt,
-                     MonadTxpLocal (..), TxpHolderTag, txNormalize,
-                     txProcessTransaction)
+import           Pos.Txp (HasTxpConfiguration)
 import           Pos.Util.Lens (postfixLFields)
 import qualified Pos.Util.Log as Log
 import           Pos.Util.Trace (noTrace)

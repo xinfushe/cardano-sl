@@ -4,8 +4,9 @@ synopsis:            Cardano SL main implementation
 description:         Please see README.md
 license:             MIT
 license-file:        LICENSE
-author:              Serokell
-maintainer:          Serokell <hi@serokell.io>
+homepage:            https://github.com/input-output-hk/cardano-sl
+author:              IOHK
+maintainer:          support@iohk.io
 copyright:           2016 IOHK
 category:            Currency
 build-type:          Simple
@@ -182,7 +183,6 @@ library
                       , http-client
                       , http-client-tls
                       , http-conduit
-                      , katip
                       , lens
                       , memory
                       , mmorph
@@ -310,12 +310,14 @@ test-suite cardano-test
                      , cardano-sl
                      , cardano-sl-binary
                      , cardano-sl-binary-test
+                     , cardano-sl-block
                      , cardano-sl-block-test
                      , cardano-sl-core
                      , cardano-sl-core-test
                      , cardano-sl-crypto
                      , cardano-sl-crypto-test
                      , cardano-sl-db
+                     , cardano-sl-db-test
                      , cardano-sl-delegation
                      , cardano-sl-delegation-test
                      , cardano-sl-infra

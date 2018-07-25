@@ -28,7 +28,6 @@ import qualified Data.Map as M
 import qualified Ether
 import           UnliftIO (MonadUnliftIO)
 
-import           Pos.Block.BListener (MonadBListener (..))
 import           Pos.Block.Types (Blund)
 import           Pos.Core (HasConfiguration, HeaderHash, LocalSlotIndex (..),
                      SlotId (..), difficultyL, epochIndexL, getChainDifficulty,
@@ -39,6 +38,7 @@ import           Pos.Core.Chrono (NE, NewestFirst (..), OldestFirst (..),
 import           Pos.Core.Txp (Tx, txpTxs)
 import           Pos.Crypto (withHash)
 import           Pos.DB.BatchOp (SomeBatchOp (..))
+import           Pos.DB.Block (MonadBListener (..))
 import           Pos.DB.Class (MonadDBRead)
 import           Pos.Explorer.DB (Epoch, EpochPagedBlocksKey, Page,
                      defaultPageSize, findEpochMaxPages, numOfLastTxs)

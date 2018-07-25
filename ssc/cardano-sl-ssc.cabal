@@ -4,8 +4,9 @@ synopsis:            Cardano SL - shared seed computation
 description:         Cardano SL - shared seed computation
 license:             MIT
 license-file:        LICENSE
-author:              Serokell
-maintainer:          hi@serokell.io
+homepage:            https://github.com/input-output-hk/cardano-sl
+author:              IOHK
+maintainer:          support@iohk.io
 copyright:           2016 IOHK
 category:            Currency
 build-type:          Simple
@@ -24,25 +25,14 @@ library
 
     Pos.Ssc.Types
 
-    Pos.Ssc.Logic
-    Pos.Ssc.Logic.Local
-    Pos.Ssc.Logic.Global
-    Pos.Ssc.Logic.VAR
-
-    Pos.Ssc.State
-    Pos.Ssc.State.Local
-    Pos.Ssc.State.Global
-
     Pos.Ssc.Message
     Pos.Ssc.Mem
     Pos.Ssc.Functions
-    Pos.Ssc.SecretStorage
     Pos.Ssc.VssCertData
     Pos.Ssc.Seed
     Pos.Ssc.Configuration
     Pos.Ssc.Behavior
     Pos.Ssc.Shares
-    Pos.Ssc.DB
 
     Pos.Ssc.Toss
     Pos.Ssc.Toss.Logic
@@ -59,11 +49,9 @@ library
                      , aeson-options
                      , array
                      , base
-                     , bytestring
                      , cardano-sl-binary
                      , cardano-sl-core
                      , cardano-sl-crypto
-                     , cardano-sl-db
                      , cardano-sl-lrc
                      , cardano-sl-util
                      , containers
@@ -72,7 +60,6 @@ library
                      , data-default
                      , dlist
                      , ether
-                     , exceptions
                      , formatting
                      , lens
                      , memory
@@ -81,10 +68,7 @@ library
                      , mtl
                      , parsec
                      , reflection
-                     , rocksdb-haskell-ng
                      , serokell-util
-                     , stm
-                     , tagged
                      , text
                      , formatting
                      , time-units
@@ -124,3 +108,46 @@ library
 
   build-tools: cpphs >= 1.19
   ghc-options: -pgmP cpphs -optP --cpp
+
+test-suite test
+  main-is:             test.hs
+  hs-source-dirs:      test
+  default-language:    Haskell2010
+  type:                exitcode-stdio-1.0
+
+  other-modules:
+                       Test.Pos.Ssc.Arbitrary
+                       Test.Pos.Ssc.Gen
+                       Test.Pos.Ssc.Json
+
+
+  build-depends:       QuickCheck
+                     , aeson
+                     , base
+                     , bytestring
+                     , cardano-crypto
+                     , cardano-sl-binary-test
+                     , cardano-sl-core
+                     , cardano-sl-core-test
+                     , cardano-sl-crypto
+                     , cardano-sl-crypto-test
+                     , cardano-sl-ssc
+                     , cardano-sl-util-test
+                     , generic-arbitrary
+                     , hedgehog
+                     , parsec
+                     , universum
+
+  ghc-options:
+                       -threaded
+                       -rtsopts
+                       -Wall
+
+  -- linker speed up for linux
+  if os(linux)
+    ghc-options:       -optl-fuse-ld=gold
+    ld-options:        -fuse-ld=gold
+
+  build-tools: cpphs >= 1.19
+  ghc-options: -pgmP cpphs -optP --cpp
+

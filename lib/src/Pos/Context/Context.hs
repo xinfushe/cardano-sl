@@ -34,6 +34,9 @@ import           Pos.Core.Reporting (HasMisbehaviorMetrics (..),
                      MisbehaviorMetrics (..))
 import           Pos.Core.Slotting (HasSlottingVar (..), SlottingData)
 import           Pos.Core.StateLock (StateLock, StateLockMetrics)
+import           Pos.DB.Lrc (LrcContext)
+import           Pos.DB.Txp.Settings (TxpGlobalSettings)
+import           Pos.DB.Update (UpdateContext)
 import           Pos.Infra.DHT.Real.Param (KademliaParams)
 import           Pos.Infra.Network.Types (NetworkConfig (..))
 import           Pos.Infra.Shutdown (HasShutdownContext (..),
@@ -41,13 +44,10 @@ import           Pos.Infra.Shutdown (HasShutdownContext (..),
 import           Pos.Infra.Slotting.Impl.Simple (SimpleSlottingStateVar)
 import           Pos.Infra.Util.JsonLog.Events (MemPoolModifyReason (..))
 import           Pos.Launcher.Param (BaseParams (..), NodeParams (..))
-import           Pos.Lrc.Context (LrcContext)
 import           Pos.Network.Block.RetrievalQueue (BlockRetrievalQueue,
                      BlockRetrievalQueueTag)
 import           Pos.Recovery.Types (RecoveryHeader, RecoveryHeaderTag)
 import           Pos.Ssc.Types (HasSscContext (..), SscContext)
-import           Pos.Txp.Settings (TxpGlobalSettings)
-import           Pos.Update.Context (UpdateContext)
 import           Pos.Util.Lens (postfixLFields)
 import           Pos.Util.LoggerConfig (LoggerConfig)
 import           Pos.Util.UserSecret (HasUserSecret (..), UserSecret)

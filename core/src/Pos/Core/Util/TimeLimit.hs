@@ -133,7 +133,7 @@ runWithRandomIntervals
     :: MonadIO m
     => TraceNamed m
     -> Microsecond -> Microsecond -> m () -> m ()
-runWithRandomIntervals tr minT maxT action = do
+runWithRandomIntervals logTrace minT maxT action = do
   waitRandomInterval minT maxT
   action
-  runWithRandomIntervals tr minT maxT action
+  runWithRandomIntervals logTrace minT maxT action

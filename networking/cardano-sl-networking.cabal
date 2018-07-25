@@ -54,7 +54,6 @@ Library
                       , formatting
                       , hashable
                       , kademlia
-                      , katip
                       , lens
                       , monad-control
                       , mtl
