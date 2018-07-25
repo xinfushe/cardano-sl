@@ -25,7 +25,7 @@ import qualified Pos.Core as Core
 import           Pos.Update.Configuration ()
 
 import           Pos.Util (HasLens (..))
-import           Pos.Util.Trace (natTrace, noTrace)
+import           Pos.Util.Trace (natTrace)
 import           Pos.Util.Trace.Named (TraceNamed)
 import qualified Pos.Wallet.WalletMode as V0
 import qualified Pos.Wallet.Web.Error.Types as V0
@@ -42,7 +42,7 @@ handlers logTrace0 = (newWallet logTrace)
     :<|> (listWallets logTrace)
     :<|> (updatePassword logTrace)
     :<|> deleteWallet
-    :<|> getWallet
+    :<|> (getWallet logTrace)
     :<|> (updateWallet logTrace)
       where
         logTrace = natTrace lift logTrace0
@@ -147,14 +147,17 @@ deleteWallet
     -> m NoContent
 deleteWallet = V0.deleteWallet <=< migrate
 
-getWallet :: ( MonadThrow m
-             , MonadWalletLogicRead ctx m
-             , V0.MonadBlockchainInfo m
-             ) => WalletId -> m (WalletResponse Wallet)
-getWallet wid = do
+getWallet
+    :: ( MonadThrow m
+       , MonadWalletLogicRead ctx m
+       , V0.MonadBlockchainInfo m
+       )
+    => TraceNamed m
+    -> WalletId -> m (WalletResponse Wallet)
+getWallet logTrace wid = do
     ss <- V0.askWalletSnapshot
     wid' <- migrate wid
-    wallet <- V0.getWallet wid'
+    wallet <- V0.getWallet logTrace wid'
     single <$> addWalletInfo ss wallet
 
 addWalletInfo

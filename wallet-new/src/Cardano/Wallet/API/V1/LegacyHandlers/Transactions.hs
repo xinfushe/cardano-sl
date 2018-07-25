@@ -12,6 +12,8 @@ import           Pos.Core (TxAux)
 import qualified Pos.Core as Core
 import           Pos.Crypto (ProtocolMagic)
 import qualified Pos.Util.Servant as V0
+import           Pos.Util.Trace (natTrace)
+import           Pos.Util.Trace.Named (TraceNamed)
 import qualified Pos.Wallet.WalletMode as V0
 import qualified Pos.Wallet.Web.ClientTypes.Types as V0
 import qualified Pos.Wallet.Web.Methods.History as V0
@@ -31,22 +33,26 @@ import           Cardano.Wallet.API.V1.Types
 
 handlers
     :: HasConfigurations
-    => ProtocolMagic
+    => TraceNamed IO
+    -> ProtocolMagic
     -> (TxAux -> MonadV1 Bool)
     -> ServerT Transactions.API MonadV1
-handlers pm submitTx =
-             newTransaction pm submitTx
-        :<|> allTransactions
+handlers logTrace0 pm submitTx =
+             newTransaction logTrace pm submitTx
+        :<|> (allTransactions logTrace)
         :<|> estimateFees pm
+          where
+            logTrace = natTrace lift logTrace0
 
 newTransaction
     :: forall ctx m
      . (V0.MonadWalletTxFull ctx m)
-    => ProtocolMagic
+    => TraceNamed m
+    -> ProtocolMagic
     -> (TxAux -> m Bool)
     -> Payment
     -> m (WalletResponse Transaction)
-newTransaction pm submitTx Payment {..} = do
+newTransaction logTrace pm submitTx Payment {..} = do
     ws <- V0.askWalletSnapshot
     sourceWallet <- migrate (psWalletId pmtSource)
 
@@ -69,20 +75,21 @@ newTransaction pm submitTx Payment {..} = do
     addrCoinList <- migrate $ NE.toList pmtDestinations
     let (V1 policy) = fromMaybe (V1 defaultInputSelectionPolicy) pmtGroupingPolicy
     let batchPayment = V0.NewBatchPayment cAccountId addrCoinList policy
-    cTx <- V0.newPaymentBatch pm submitTx spendingPw batchPayment
+    cTx <- V0.newPaymentBatch logTrace pm submitTx spendingPw batchPayment
     single <$> migrate cTx
 
 
 allTransactions
     :: forall ctx m. (V0.MonadWalletHistory ctx m)
-    => Maybe WalletId
+    => TraceNamed m
+    -> Maybe WalletId
     -> Maybe AccountIndex
     -> Maybe (V1 Core.Address)
     -> RequestParams
     -> FilterOperations Transaction
     -> SortOperations Transaction
     -> m (WalletResponse [Transaction])
-allTransactions mwalletId mAccIdx mAddr requestParams fops sops  =
+allTransactions logTrace mwalletId mAccIdx mAddr requestParams fops sops  =
     case mwalletId of
         Just walletId -> do
             cIdWallet <- migrate walletId
@@ -101,7 +108,7 @@ allTransactions mwalletId mAccIdx mAddr requestParams fops sops  =
 
             -- get all `[Transaction]`'s
             let transactions = do
-                    (V0.WalletHistory wh, _) <- V0.getHistory cIdWallet (const accIds) v0Addr
+                    (V0.WalletHistory wh, _) <- V0.getHistory logTrace cIdWallet (const accIds) v0Addr
                     migrate wh
 
             -- Paginate result

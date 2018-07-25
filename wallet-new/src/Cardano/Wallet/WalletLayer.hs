@@ -12,8 +12,6 @@ module Cardano.Wallet.WalletLayer
 
 import           Universum
 
-import           System.Wlog (Severity)
-
 import           Cardano.Wallet.Kernel.Diffusion (WalletDiffusion (..))
 
 import           Cardano.Wallet.Kernel (ActiveWallet, PassiveWallet)
@@ -22,13 +20,14 @@ import qualified Cardano.Wallet.WalletLayer.Kernel as Kernel
 import qualified Cardano.Wallet.WalletLayer.Legacy as Legacy
 import           Cardano.Wallet.WalletLayer.Types as Types
 import           Pos.Core.Configuration (ProtocolMagic)
+import           Pos.Util.Trace.Named (TraceNamed)
 
 ------------------------------------------------------------
 -- Kernel
 ------------------------------------------------------------
 bracketKernelPassiveWallet
     :: forall m n a. (MonadIO m, MonadIO n, MonadMask n)
-    => (Severity -> Text -> IO ())
+    => TraceNamed IO
     -> Keystore
     -> (PassiveWalletLayer m -> PassiveWallet -> n a) -> n a
 bracketKernelPassiveWallet = Kernel.bracketPassiveWallet
@@ -40,7 +39,7 @@ bracketKernelActiveWallet
     -> PassiveWallet
     -> WalletDiffusion
     -> (ActiveWalletLayer m -> ActiveWallet -> n a) -> n a
-bracketKernelActiveWallet  = Kernel.bracketActiveWallet
+bracketKernelActiveWallet = Kernel.bracketActiveWallet
 
 ------------------------------------------------------------
 -- Legacy

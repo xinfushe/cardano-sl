@@ -114,7 +114,7 @@ initPassiveWallet :: TraceNamed IO
                   -> Keystore
                   -> AcidState DB
                   -> IO PassiveWallet
-initPassiveWallet logTrace keystore db = do
+initPassiveWallet logTrace keystore db =
     return $ PassiveWallet logTrace keystore db
 
 -- | Initialize the Passive wallet (specified by the ESK) with the given Utxo

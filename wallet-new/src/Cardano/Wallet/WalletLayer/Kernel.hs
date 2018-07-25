@@ -12,7 +12,6 @@ import           Data.Coerce (coerce)
 import           Data.Default (def)
 import           Data.Maybe (fromJust)
 import           Data.Time.Units (Second)
-import           System.Wlog (Severity (Debug))
 
 import           Pos.Block.Types (Blund, Undo (..))
 
@@ -43,6 +42,7 @@ import qualified Pos.Core as Core
 import           Pos.Core.Chrono (OldestFirst (..))
 import           Pos.Crypto (safeDeterministicKeyGen)
 import           Pos.Util.Mnemonic (Mnemonic, mnemonicToSeed)
+import           Pos.Util.Trace.Named (TraceNamed, logDebug)
 
 import qualified Cardano.Wallet.API.V1.Types as V1
 import qualified Cardano.Wallet.Kernel.Actions as Actions
@@ -57,19 +57,19 @@ import           Cardano.Wallet.API.V1.Types (Payment (..),
 -- The passive wallet cannot send new transactions.
 bracketPassiveWallet
     :: forall m n a. (MonadIO n, MonadIO m, MonadMask m)
-    => (Severity -> Text -> IO ())
+    => TraceNamed IO
     -> Keystore
     -> (PassiveWalletLayer n -> Kernel.PassiveWallet -> m a) -> m a
-bracketPassiveWallet logFunction keystore f =
-    Kernel.bracketPassiveWallet logFunction keystore $ \w -> do
+bracketPassiveWallet logTrace keystore f =
+    Kernel.bracketPassiveWallet logTrace keystore $ \w -> do
 
       -- Create the wallet worker and its communication endpoint `invoke`.
       bracket (liftIO $ Actions.forkWalletWorker $ Actions.WalletActionInterp
                  { Actions.applyBlocks  =  \blunds ->
                      Kernel.applyBlocks w $
                          OldestFirst (mapMaybe blundToResolvedBlock (toList (getOldestFirst blunds)))
-                 , Actions.switchToFork = \_ _ -> logFunction Debug "<switchToFork>"
-                 , Actions.emit         = logFunction Debug
+                 , Actions.switchToFork = \_ _ -> logDebug logTrace "<switchToFork>"
+                 , Actions.emit         = logDebug logTrace
                  }
               ) (\invoke -> liftIO (invoke Actions.Shutdown))
               $ \invoke -> do
