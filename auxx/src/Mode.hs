@@ -42,7 +42,6 @@ import           Pos.Core (Address, HasConfiguration, HasPrimaryKey (..),
                      IsBootstrapEraAddr (..), deriveFirstHDAddress,
                      largestPubKeyAddressBoot, largestPubKeyAddressSingleKey,
                      makePubKeyAddress, siEpoch)
-import           Pos.Core.JsonLog (CanJsonLog (..))
 import           Pos.Core.Reporting (HasMisbehaviorMetrics (..),
                      MonadReporting (..))
 import           Pos.Core.Slotting (HasSlottingVar (..), MonadSlotsData)
@@ -55,7 +54,6 @@ import           Pos.GState (HasGStateContext (..), getGStateImplicit)
 import           Pos.Infra.Network.Types (HasNodeType (..), NodeType (..))
 import           Pos.Infra.Shutdown (HasShutdownContext (..))
 import           Pos.Infra.Slotting.Class (MonadSlots (..))
-import           Pos.Infra.Util.JsonLog.Events (HasJsonLogConfig (..))
 import           Pos.Launcher (HasConfigurations)
 import           Pos.Ssc.Types (HasSscContext (..))
 import           Pos.Txp (HasTxpConfiguration, MempoolExt, MonadTxpLocal (..),
@@ -64,7 +62,7 @@ import           Pos.Txp (HasTxpConfiguration, MempoolExt, MonadTxpLocal (..),
 import           Pos.Txp.DB.Utxo (getFilteredUtxo)
 import           Pos.Util (HasLens (..), postfixLFields)
 import           Pos.Util.CompileInfo (HasCompileInfo, withCompileInfo)
---import           Pos.Util.LoggerName (HasLoggerName' (..))
+import           Pos.Util.Trace (noTrace)
 import           Pos.Util.UserSecret (HasUserSecret (..))
 import           Pos.WorkMode (EmptyMempoolExt, RealMode, RealModeContext (..))
 
@@ -156,8 +154,8 @@ instance HasSlogContext AuxxContext where
 instance HasSlogGState AuxxContext where
     slogGState = acRealModeContext_L . slogGState
 
-instance HasJsonLogConfig AuxxContext where
-    jsonLogConfig = acRealModeContext_L . jsonLogConfig
+-- instance HasJsonLogConfig AuxxContext where
+--     jsonLogConfig = acRealModeContext_L . jsonLogConfig
 
 instance (HasConfiguration, MonadSlotsData ctx AuxxMode)
       => MonadSlots ctx AuxxMode
@@ -167,16 +165,16 @@ instance (HasConfiguration, MonadSlotsData ctx AuxxMode)
     getCurrentSlotInaccurate = realModeToAuxx getCurrentSlotInaccurate
     currentTimeSlotting = realModeToAuxx currentTimeSlotting
 
-instance {-# OVERLAPPING #-} HasLoggerName AuxxMode where
-    askLoggerName = realModeToAuxx askLoggerName
-    modifyLoggerName f action = do
-        auxxCtx <- ask
-        let auxxToRealMode :: AuxxMode a -> RealMode EmptyMempoolExt a
-            auxxToRealMode = withReaderT (\realCtx -> set acRealModeContext_L realCtx auxxCtx)
-        realModeToAuxx $ modifyLoggerName f $ auxxToRealMode action
+-- instance {-# OVERLAPPING #-} HasLoggerName AuxxMode where
+--     askLoggerName = realModeToAuxx askLoggerName
+--     modifyLoggerName f action = do
+--         auxxCtx <- ask
+--         let auxxToRealMode :: AuxxMode a -> RealMode EmptyMempoolExt a
+--             auxxToRealMode = withReaderT (\realCtx -> set acRealModeContext_L realCtx auxxCtx)
+--         realModeToAuxx $ modifyLoggerName f $ auxxToRealMode action
 
-instance {-# OVERLAPPING #-} CanJsonLog AuxxMode where
-    jsonLog = realModeToAuxx ... jsonLog
+-- instance {-# OVERLAPPING #-} CanJsonLog AuxxMode where
+--     jsonLog = realModeToAuxx ... jsonLog
 
 instance HasConfiguration => MonadDBRead AuxxMode where
     dbGet = realModeToAuxx ... dbGet
@@ -195,8 +193,10 @@ instance HasConfiguration => MonadGState AuxxMode where
     gsAdoptedBVData = realModeToAuxx ... gsAdoptedBVData
 
 instance MonadBListener AuxxMode where
-    onApplyBlocks = realModeToAuxx ... onApplyBlocks
-    onRollbackBlocks = realModeToAuxx ... onRollbackBlocks
+    onApplyBlocks _ = realModeToAuxx ... onApplyBlocks noTrace
+    onRollbackBlocks _ = realModeToAuxx ... onRollbackBlocks noTrace
+    --TODO trace on the left side has a different monad from trace on the right side
+    --maybe a TraceNamed IO is a good solution
 
 instance HasConfiguration => MonadBalances AuxxMode where
     getOwnUtxos addrs = ifM isTempDbUsed (getOwnUtxosGenesis addrs) (getFilteredUtxo addrs)
@@ -232,8 +232,10 @@ instance ( HasConfiguration
          , HasTxpConfiguration
          ) =>
          MonadTxpLocal AuxxMode where
-    txpNormalize = withReaderT acRealModeContext . txNormalize
-    txpProcessTx pm = withReaderT acRealModeContext . txProcessTransaction pm
+    txpNormalize _ = withReaderT acRealModeContext . txNormalize noTrace
+    --TODO trace on the left side has a different monad from trace on the right side
+    --maybe a TraceNamed IO is a good solution
+    txpProcessTx _ pm = withReaderT acRealModeContext . txProcessTransaction noTrace noTrace pm
 
 instance (HasConfigurations) =>
          MonadTxpLocal (BlockGenMode EmptyMempoolExt AuxxMode) where
