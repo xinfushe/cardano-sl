@@ -21,6 +21,7 @@ import           Pos.Client.Txp.Network (TxMode)
 import           Pos.Core (ChainDifficulty)
 --import           Pos.Core.JsonLog (CanJsonLog)
 import           Pos.Update (ConfirmedProposalState (..))
+import           Pos.Util.Trace.Named (TraceNamed)
 import           Pos.WorkMode (EmptyMempoolExt)
 
 class Monad m => MonadBlockchainInfo m where
@@ -41,14 +42,14 @@ instance {-# OVERLAPPABLE #-}
 -- | Abstraction over getting update proposals
 class Monad m => MonadUpdates m where
     waitForUpdate :: m ConfirmedProposalState
-    applyLastUpdate :: m ()
+    applyLastUpdate :: TraceNamed m -> m ()
 
 instance {-# OVERLAPPABLE #-}
     (MonadUpdates m, MonadTrans t, Monad (t m)) =>
         MonadUpdates (t m)
   where
     waitForUpdate = lift waitForUpdate
-    applyLastUpdate = lift applyLastUpdate
+    applyLastUpdate tr = applyLastUpdate tr
 
 type WalletMempoolExt = EmptyMempoolExt
 

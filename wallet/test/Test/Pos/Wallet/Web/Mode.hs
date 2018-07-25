@@ -402,11 +402,11 @@ instance HasConfiguration => MonadBalances WalletTestMode where
 
 instance MonadUpdates WalletTestMode where
     waitForUpdate = waitForUpdateWebWallet
-    applyLastUpdate = applyLastUpdateWebWallet noTrace
+    applyLastUpdate = applyLastUpdateWebWallet
 
 instance (HasConfigurations) => MonadBListener WalletTestMode where
-    onApplyBlocks = onApplyBlocksWebWallet noTrace
-    onRollbackBlocks = onRollbackBlocksWebWallet noTrace
+    onApplyBlocks = onApplyBlocksWebWallet
+    onRollbackBlocks = onRollbackBlocksWebWallet
 
 instance HasConfiguration => MonadBlockchainInfo WalletTestMode where
     networkChainDifficulty = networkChainDifficultyWebWallet
@@ -419,12 +419,12 @@ type instance MempoolExt WalletTestMode = WalletMempoolExt
 instance (HasConfigurations)
         => MonadTxpLocal (BlockGenMode WalletMempoolExt WalletTestMode) where
     txpNormalize = txNormalize
-    txpProcessTx = txProcessTransactionNoLock noTrace
+    txpProcessTx = txProcessTransactionNoLock
 
 
 instance (HasConfigurations) => MonadTxpLocal WalletTestMode where
     txpNormalize = txpNormalizeWebWallet
-    txpProcessTx = txpProcessTxWebWallet noTrace
+    txpProcessTx = txpProcessTxWebWallet
 
 submitTxTestMode :: TxAux -> WalletTestMode Bool
 submitTxTestMode txAux = True <$ (asks wtcSentTxs >>= atomically . flip STM.modifyTVar (txAux:))

@@ -62,6 +62,7 @@ import           Pos.Wallet.Web.Methods.Restore (importWalletDo)
 
 import           Pos.Infra.Util.JsonLog.Events
                      (MemPoolModifyReason (ApplyBlock))
+import           Pos.Util.Trace (noTrace)
 import           Test.Pos.Block.Logic.Util (EnableTxPayload, InplaceDB,
                      genBlockGenParams)
 import           Test.Pos.Core.Arbitrary.Txp ()
@@ -84,8 +85,8 @@ wpGenBlocks
 wpGenBlocks pm blkCnt enTxPayload inplaceDB = do
     params <- genBlockGenParams pm blkCnt enTxPayload inplaceDB
     g <- pick $ MkGen $ \qc _ -> qc
-    lift $ modifyStateLock HighPriority ApplyBlock $ \prevTip -> do -- FIXME is ApplyBlock the right one?
-        blunds <- OldestFirst <$> evalRandT (genBlocks pm params maybeToList) g
+    lift $ modifyStateLock noTrace HighPriority ApplyBlock $ \prevTip -> do -- FIXME is ApplyBlock the right one?
+        blunds <- OldestFirst <$> evalRandT (genBlocks noTrace pm params maybeToList) g
         case nonEmpty $ getOldestFirst blunds of
             Just nonEmptyBlunds -> do
                 let tipBlockHeader = nonEmptyBlunds ^. _neLast . _1 . blockHeader
@@ -121,7 +122,7 @@ importWallets numLimit passGen = do
         passwds <- vectorOf l passGen
         pure (seks, passwds)
     let wuses = map mkGenesisWalletUserSecret encSecrets
-    lift $ mapM_ (uncurry importWalletDo) (zip passphrases wuses)
+    lift $ mapM_ (uncurry (importWalletDo noTrace)) (zip passphrases wuses)
     skeys <- lift getSecretKeysPlain
     assertProperty (not (null skeys)) "Empty set of imported keys"
     pure passphrases

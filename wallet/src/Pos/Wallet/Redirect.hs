@@ -163,5 +163,6 @@ txpNormalizeWebWallet
     :: ( TxpLocalWorkMode ctx m
        , MempoolExt m ~ ()
        )
-    => ProtocolMagic -> m ()
+    => TraceNamed m
+    -> ProtocolMagic -> m ()
 txpNormalizeWebWallet = txNormalize

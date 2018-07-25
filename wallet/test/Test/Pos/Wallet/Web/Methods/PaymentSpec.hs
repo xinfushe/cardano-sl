@@ -32,6 +32,7 @@ import           Pos.DB.Class (MonadGState (..))
 import           Pos.Launcher (HasConfigurations)
 import           Pos.Txp (TxFee (..))
 import           Pos.Util.CompileInfo (withCompileInfo)
+import           Pos.Util.Trace (noTrace)
 import           Pos.Wallet.Web.Account (myRootAddresses)
 import           Pos.Wallet.Web.ClientTypes (Addr, CAccount (..), CId, CTx (..),
                      NewBatchPayment (..), Wal)
@@ -95,7 +96,7 @@ newPaymentFixture = do
     let walId = rootsWIds !! idx
     let pswd = passphrases !! idx
     let noOneAccount = sformat ("There is no one account for wallet: "%build) walId
-    srcAccount <- maybeStopProperty noOneAccount =<< (lift $ (fmap fst . uncons) <$> getAccounts (Just walId))
+    srcAccount <- maybeStopProperty noOneAccount =<< (lift $ (fmap fst . uncons) <$> getAccounts noTrace (Just walId))
     srcAccId <- lift $ decodeCTypeOrFail (caId srcAccount)
 
     ws <- WS.askWalletSnapshot
@@ -123,7 +124,7 @@ newPaymentFixture = do
 rejectPaymentIfRestoringSpec :: HasConfigurations => Spec
 rejectPaymentIfRestoringSpec = walletPropertySpec "should fail with 403" $ do
     PaymentFixture{..} <- newPaymentFixture
-    res <- lift $ try (newPaymentBatch dummyProtocolMagic submitTxTestMode pswd batch)
+    res <- lift $ try (newPaymentBatch noTrace dummyProtocolMagic submitTxTestMode pswd batch)
     liftIO $ shouldBe res (Left (err403 { errReasonPhrase = "Transaction creation is disabled when the wallet is restoring." }))
 
 -- | Test one single, successful payment.
@@ -136,7 +137,7 @@ oneNewPaymentBatchSpec = walletPropertySpec oneNewPaymentBatchDesc $ do
     randomSyncTip <- liftIO $ generate arbitrary
     WS.setWalletSyncTip db walId randomSyncTip
 
-    void $ lift $ newPaymentBatch dummyProtocolMagic submitTxTestMode pswd batch
+    void $ lift $ newPaymentBatch noTrace dummyProtocolMagic submitTxTestMode pswd batch
     dstAddrs <- lift $ mapM decodeCTypeOrFail dstCAddrs
     txLinearPolicy <- lift $ (bvdTxFeePolicy <$> gsAdoptedBVData) <&> \case
         TxFeePolicyTxSizeLinear linear -> linear

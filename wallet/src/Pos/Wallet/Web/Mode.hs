@@ -71,7 +71,6 @@ import           Pos.Txp (HasTxpConfiguration, MempoolExt, MonadTxpLocal (..),
 import qualified Pos.Txp.DB as DB
 import           Pos.Util (postfixLFields)
 import qualified Pos.Util.Modifier as MM
-import           Pos.Util.Trace (noTrace)
 import           Pos.Util.UserSecret (HasUserSecret (..))
 import           Pos.Util.Util (HasLens (..))
 import           Pos.Wallet.Web.Tracking.Types (SyncQueue)
@@ -256,12 +255,12 @@ instance HasConfiguration => MonadGState WalletWebMode where
 
 instance (HasConfiguration)
        => MonadBListener WalletWebMode where
-    onApplyBlocks = onApplyBlocksWebWallet noTrace
-    onRollbackBlocks = onRollbackBlocksWebWallet noTrace
+    onApplyBlocks = onApplyBlocksWebWallet
+    onRollbackBlocks = onRollbackBlocksWebWallet
 
 instance MonadUpdates WalletWebMode where
     waitForUpdate = waitForUpdateWebWallet
-    applyLastUpdate = applyLastUpdateWebWallet noTrace
+    applyLastUpdate = applyLastUpdateWebWallet
 
 instance (HasConfiguration) =>
          MonadBlockchainInfo WalletWebMode where
@@ -322,7 +321,7 @@ type instance MempoolExt WalletWebMode = WalletMempoolExt
 instance (HasConfiguration, HasTxpConfiguration) =>
          MonadTxpLocal WalletWebMode where
     txpNormalize = txpNormalizeWebWallet
-    txpProcessTx = txpProcessTxWebWallet noTrace
+    txpProcessTx = txpProcessTxWebWallet
 
 instance MonadKeysRead WalletWebMode where
     getSecret = getSecretDefault

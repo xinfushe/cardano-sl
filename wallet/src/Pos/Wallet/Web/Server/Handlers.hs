@@ -69,7 +69,7 @@ servantHandlers logTrace pm ntpStatus submitTx = toServant' A.WalletApiRecord
     , _addresses   = addressesHandlers logTrace
     , _profile     = profileHandlers
     , _txs         = txsHandlers logTrace pm submitTx
-    , _update      = updateHandlers
+    , _update      = updateHandlers logTrace
     , _redemptions = redemptionsHandlers logTrace pm submitTx
     , _reporting   = reportingHandlers
     , _settings    = settingsHandlers logTrace ntpStatus
@@ -136,11 +136,11 @@ txsHandlers logTrace pm submitTx = toServant' A.WTxsApiRecord
     , _pendingSummary            = M.gatherPendingTxsSummary
     }
 
-updateHandlers :: MonadFullWalletWebMode ctx m => ServerT A.WUpdateApi m
-updateHandlers = toServant' A.WUpdateApiRecord
+updateHandlers :: MonadFullWalletWebMode ctx m => TraceNamed m -> ServerT A.WUpdateApi m
+updateHandlers logTrace = toServant' A.WUpdateApiRecord
     { _nextUpdate     = M.nextUpdate
     , _postponeUpdate = M.postponeUpdate
-    , _applyUpdate    = M.applyUpdate
+    , _applyUpdate    = M.applyUpdate logTrace
     }
 
 redemptionsHandlers

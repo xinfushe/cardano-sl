@@ -128,9 +128,10 @@ applyUpdate :: ( MonadIO m
                , WalletDbReader ctx m
                , MonadUpdates m
                )
-            => m NoContent
-applyUpdate = askWalletDB >>= removeNextUpdate
-              >> applyLastUpdate >> return NoContent
+            => TraceNamed m
+            -> m NoContent
+applyUpdate logTrace = askWalletDB >>= removeNextUpdate
+              >> applyLastUpdate logTrace >> return NoContent
 
 ----------------------------------------------------------------------------
 -- System
