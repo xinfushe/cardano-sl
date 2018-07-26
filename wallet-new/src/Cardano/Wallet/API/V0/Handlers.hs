@@ -18,14 +18,15 @@ import           Universum
 -- "As long as you can give me a function which transforms every
 -- monad @m@ which implements a `MonadFullWalletWebMode` into
 -- a Servant's @Handler@, I can give you back a "plain old" Server.
-handlers :: ( MonadFullWalletWebMode ctx m, HasCompileInfo )
-         => (forall a. m a -> Handler a)
-         -> TraceNamed m
+handlers :: ( MonadFullWalletWebMode ctx m
+            , HasCompileInfo )
+         => TraceNamed m
+         -> (forall a. m a -> Handler a)
          -> ProtocolMagic
          -> Diffusion m
          -> TVar NtpStatus
          -> Server V0.API
-handlers naturalTransformation logTrace pm diffusion ntpStatus = hoistServer
+handlers logTrace naturalTransformation pm diffusion ntpStatus = hoistServer
     (Proxy @V0.API)
     naturalTransformation
     (V0.servantHandlers logTrace pm ntpStatus (sendTx diffusion))

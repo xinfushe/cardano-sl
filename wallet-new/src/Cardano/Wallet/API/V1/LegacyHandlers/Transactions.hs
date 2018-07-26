@@ -12,7 +12,6 @@ import           Pos.Core (TxAux)
 import qualified Pos.Core as Core
 import           Pos.Crypto (ProtocolMagic)
 import qualified Pos.Util.Servant as V0
-import           Pos.Util.Trace (natTrace)
 import           Pos.Util.Trace.Named (TraceNamed)
 import qualified Pos.Wallet.WalletMode as V0
 import qualified Pos.Wallet.Web.ClientTypes.Types as V0
@@ -33,16 +32,14 @@ import           Cardano.Wallet.API.V1.Types
 
 handlers
     :: HasConfigurations
-    => TraceNamed IO
+    => TraceNamed MonadV1
     -> ProtocolMagic
     -> (TxAux -> MonadV1 Bool)
     -> ServerT Transactions.API MonadV1
-handlers logTrace0 pm submitTx =
+handlers logTrace pm submitTx =
              newTransaction logTrace pm submitTx
         :<|> (allTransactions logTrace)
         :<|> estimateFees pm
-          where
-            logTrace = natTrace lift logTrace0
 
 newTransaction
     :: forall ctx m

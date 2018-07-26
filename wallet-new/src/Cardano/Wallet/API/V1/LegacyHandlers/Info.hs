@@ -14,19 +14,17 @@ import           Pos.Wallet.WalletMode (MonadBlockchainInfo)
 import           Servant
 
 import qualified Pos.Core as Core
-import           Pos.Util.Trace (natTrace)
 import           Pos.Util.Trace.Named (TraceNamed)
 import qualified Pos.Wallet.Web.ClientTypes.Types as V0
 import qualified Pos.Wallet.Web.Methods.Misc as V0
 
 -- | All the @Servant@ handlers for settings-specific operations.
-handlers :: ( HasConfigurations
-            )
-         => TraceNamed IO
+handlers :: HasConfigurations
+         => TraceNamed MonadV1
          -> Diffusion MonadV1
          -> TVar NtpStatus
          -> ServerT Info.API MonadV1
-handlers logTrace0 = getInfo (natTrace lift logTrace0)
+handlers logTrace = getInfo logTrace
 
 -- | Returns the @dynamic@ settings for this wallet node,
 -- like the local time difference (the NTP drift), the sync progress,

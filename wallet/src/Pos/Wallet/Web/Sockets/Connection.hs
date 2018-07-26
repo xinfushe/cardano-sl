@@ -26,7 +26,6 @@ import           Network.Wai (Application)
 import           Network.Wai.Handler.WebSockets (websocketsOr)
 import qualified Network.WebSockets as WS
 
-import           Pos.Util.Trace (natTrace)
 import           Pos.Util.Trace.Named (TraceNamed, appendName, logError,
                      logNotice)
 import           Pos.Util.Util (HasLens (..), HasLens')
@@ -66,8 +65,8 @@ appendWSConnection logTrace var pending = do
   where
     ignoreData :: WSConnection -> IO Text
     ignoreData = WS.receiveData
-    releaseResources :: MonadIO m => CS.ConnectionTag -> m ()
-    releaseResources tag = closeWSConnection (natTrace liftIO logTrace) tag var
+    releaseResources :: CS.ConnectionTag -> IO ()
+    releaseResources tag = closeWSConnection logTrace tag var
 
 -- FIXME: we have no authentication and accept all incoming connections.
 -- Possible solution: reject pending connection if WS handshake doesn't have valid auth session token.

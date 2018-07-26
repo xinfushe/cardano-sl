@@ -25,7 +25,6 @@ import qualified Pos.Core as Core
 import           Pos.Update.Configuration ()
 
 import           Pos.Util (HasLens (..))
-import           Pos.Util.Trace (natTrace)
 import           Pos.Util.Trace.Named (TraceNamed)
 import qualified Pos.Wallet.WalletMode as V0
 import qualified Pos.Wallet.Web.Error.Types as V0
@@ -36,16 +35,14 @@ import           Servant
 
 -- | All the @Servant@ handlers for wallet-specific operations.
 handlers :: HasConfigurations
-         => TraceNamed IO
+         => TraceNamed MonadV1
          -> ServerT Wallets.API MonadV1
-handlers logTrace0 = (newWallet logTrace)
+handlers logTrace = (newWallet logTrace)
     :<|> (listWallets logTrace)
     :<|> (updatePassword logTrace)
     :<|> deleteWallet
     :<|> (getWallet logTrace)
     :<|> (updateWallet logTrace)
-      where
-        logTrace = natTrace lift logTrace0
 
 
 -- | Pure function which returns whether or not the underlying node is

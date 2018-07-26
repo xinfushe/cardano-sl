@@ -47,7 +47,8 @@ bracketKernelActiveWallet = Kernel.bracketActiveWallet
 
 bracketLegacyPassiveWallet
     :: forall ctx m n a. (MonadMask n, Legacy.MonadLegacyWallet ctx m)
-    => (PassiveWalletLayer m -> n a) -> n a
+    => TraceNamed m
+    -> (PassiveWalletLayer m -> n a) -> n a
 bracketLegacyPassiveWallet = Legacy.bracketPassiveWallet
 
 bracketLegacyActiveWallet

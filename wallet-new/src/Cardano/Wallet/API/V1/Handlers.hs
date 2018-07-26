@@ -1,6 +1,6 @@
 module Cardano.Wallet.API.V1.Handlers (handlers) where
 
-import           Servant (Server)
+import           Servant
 import           Universum
 
 import qualified Cardano.Wallet.API.V1 as V1
@@ -13,10 +13,10 @@ import           Cardano.Wallet.WalletLayer.Types (walletPassiveLayer)
 
 
 handlers :: ActiveWalletLayer IO -> Server V1.API
-handlers w =  Addresses.handlers passiveWallet
-         :<|> Wallets.handlers   passiveWallet
+handlers w =  (Addresses.handlers passiveWallet)
+         :<|> (Wallets.handlers   passiveWallet)
          :<|> accounts
-         :<|> Transactions.handlers w
+         :<|> (Transactions.handlers w)
          :<|> settings
          :<|> info
   where

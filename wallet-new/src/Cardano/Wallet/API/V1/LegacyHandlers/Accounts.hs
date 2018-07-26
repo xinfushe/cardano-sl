@@ -11,7 +11,6 @@ import qualified Cardano.Wallet.API.V1.Accounts as Accounts
 import           Cardano.Wallet.API.V1.Migration
 import           Cardano.Wallet.API.V1.Types
 import qualified Data.IxSet.Typed as IxSet
-import           Pos.Util.Trace (natTrace)
 import           Pos.Util.Trace.Named (TraceNamed)
 
 import qualified Pos.Wallet.Web.Account as V0
@@ -21,16 +20,14 @@ import           Servant
 
 handlers
     :: HasConfigurations
-    => TraceNamed IO
+    => TraceNamed MonadV1
     -> ServerT Accounts.API MonadV1
-handlers logTrace0 =
+handlers logTrace =
          deleteAccount
     :<|> (getAccount logTrace)
     :<|> (listAccounts logTrace)
     :<|> (newAccount logTrace)
     :<|> (updateAccount logTrace)
-      where
-        logTrace = natTrace lift logTrace0
 
 deleteAccount
     :: (V0.MonadWalletLogic ctx m)

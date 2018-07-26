@@ -50,6 +50,7 @@ import           Pos.Wallet.Web.Pending.Worker (startPendingTxsResubmitter)
 import qualified Pos.Wallet.Web.Server.Runner as V0
 import           Pos.Wallet.Web.Sockets (getWalletWebSockets,
                      upgradeApplicationWS)
+import           Servant (Context (..))
 import qualified Servant
 
 import           Pos.Context (HasNodeContext)
@@ -62,6 +63,7 @@ import           Pos.Infra.Shutdown.Class (HasShutdownContext (shutdownContext))
 import           Pos.Launcher.Configuration (HasConfigurations)
 import           Pos.Util (lensOf)
 import           Pos.Util.CompileInfo (HasCompileInfo)
+import           Pos.Util.Trace (natTrace)
 import           Pos.Util.Trace.Named (TraceNamed, appendName, logInfo)
 import           Pos.Wallet.Web.Mode (WalletWebMode)
 import           Pos.Wallet.Web.Server.Launcher (walletDocumentationImpl,
@@ -84,7 +86,7 @@ acidCleanupWorker
 acidCleanupWorker logTrace0 WalletBackendParams{..} = pure $ const $
     askWalletDB >>= \db -> cleanupAcidStatePeriodically logTrace db (walletAcidInterval walletDbOptions)
     where
-      logTrace = appendName "acidcleanup" logTrace0
+      logTrace = appendName "acidcleanup" (natTrace liftIO logTrace0)
 
 -- | The @Plugin@ which defines part of the conversation protocol for this node.
 conversation :: HasConfigurations => WalletBackendParams -> Plugin WalletWebMode
@@ -99,9 +101,10 @@ conversation wArgs = map const (pluginsMonitoringApi wArgs)
 
 walletDocumentation
     :: (HasConfigurations, HasCompileInfo)
-    => WalletBackendParams
+    => TraceNamed IO
+    -> WalletBackendParams
     -> Plugin WalletWebMode
-walletDocumentation WalletBackendParams {..} = pure $ \_ ->
+walletDocumentation logTrace WalletBackendParams {..} = pure $ \_ ->
     walletDocumentationImpl
         application
         walletDocAddress
@@ -109,13 +112,14 @@ walletDocumentation WalletBackendParams {..} = pure $ \_ ->
         (Just defaultSettings)
         Nothing
   where
+    logTrace' = appendName "walletDocumentation" logTrace
     application :: WalletWebMode Application
     application = do
         let app =
                 if isDebugMode walletRunMode then
-                    Servant.serve API.walletDevDocAPI LegacyServer.walletDevDocServer
+                    Servant.serveWithContext API.walletDevDocAPI (logTrace' :. EmptyContext) LegacyServer.walletDevDocServer
                 else
-                    Servant.serve API.walletDocAPI LegacyServer.walletDocServer
+                    Servant.serveWithContext API.walletDocAPI (logTrace' :. EmptyContext) LegacyServer.walletDocServer
         return $ withMiddleware walletRunMode app
 
     tls =
@@ -128,42 +132,45 @@ legacyWalletBackend :: (HasConfigurations, HasCompileInfo)
                     -> WalletBackendParams
                     -> TVar NtpStatus
                     -> Plugin WalletWebMode
-legacyWalletBackend logTrace pm WalletBackendParams {..} ntpStatus = pure $ \diffusion -> do
-    modifyLoggerName (const "legacyServantBackend") $ do
+legacyWalletBackend logTrace0 pm WalletBackendParams {..} ntpStatus = pure $ \diffusion -> do
       logInfo logTrace $ sformat ("Production mode for API: "%build)
-        walletProductionApi
+          walletProductionApi
       logInfo logTrace $ sformat ("Transaction submission disabled: "%build)
-        walletTxCreationDisabled
+          walletTxCreationDisabled
 
       ctx <- view shutdownContext
-      let
-        portCallback :: Word16 -> IO ()
-        portCallback port = {-usingLoggerName "NodeIPC" $-} flip runReaderT ctx $ startNodeJsIPC logTrace port
+      let portCallback :: Word16 -> IO ()
+          portCallback port = flip runReaderT ctx $ startNodeJsIPC logTrace' port
       walletServeImpl
-        (getApplication diffusion)
-        walletAddress
-        -- Disable TLS if in debug mode.
-        (if isDebugMode walletRunMode then Nothing else walletTLSParams)
-        (Just $ setOnExceptionResponse exceptionHandler defaultSettings)
-        (Just portCallback)
+          (getApplication diffusion)
+          walletAddress
+          -- Disable TLS if in debug mode.
+          (if isDebugMode walletRunMode then Nothing else walletTLSParams)
+          (Just $ setOnExceptionResponse exceptionHandler defaultSettings)
+          (Just portCallback)
   where
+    logTrace' = appendName "legacyWalletBackend" logTrace0
+    logTrace = natTrace liftIO logTrace'
     -- Gets the Wai `Application` to run.
     getApplication :: Diffusion WalletWebMode -> WalletWebMode Application
     getApplication diffusion = do
       logInfo logTrace "Wallet Web API has STARTED!"
       wsConn <- getWalletWebSockets
       ctx <- V0.walletWebModeContext
-      let app = upgradeApplicationWS wsConn $
+      let app :: Application
+          app = upgradeApplicationWS logTrace' wsConn $
             if isDebugMode walletRunMode then
-              Servant.serve API.walletDevAPI $ LegacyServer.walletDevServer
+              Servant.serveWithContext API.walletDevAPI (logTrace' :. EmptyContext) $ LegacyServer.walletDevServer
                 (V0.convertHandler ctx)
+                logTrace
                 pm
                 diffusion
                 ntpStatus
                 walletRunMode
             else
-              Servant.serve API.walletAPI $ LegacyServer.walletServer
+              Servant.serveWithContext API.walletAPI (logTrace' :. EmptyContext) $ LegacyServer.walletServer
                 (V0.convertHandler ctx)
+                logTrace
                 pm
                 diffusion
                 ntpStatus
@@ -219,40 +226,41 @@ walletBackend logTrace protocolMagic (NewWalletBackendParams WalletBackendParams
         bracketKernelActiveWallet protocolMagic passiveLayer passiveWallet diffusion' $ \active _ -> do
           ctx <- view shutdownContext
           let portCallback :: Word16 -> IO ()
-              portCallback port = {-usingLoggerName "NodeIPC" $-} flip runReaderT ctx $ startNodeJsIPC logTrace port
+              portCallback port = flip runReaderT ctx $ startNodeJsIPC logTrace' port
           walletServeImpl
-            (getApplication active)
-            walletAddress
-            -- Disable TLS if in debug modeit .
-            (if isDebugMode walletRunMode then Nothing else walletTLSParams)
-            Nothing
-            (Just portCallback)
+              (getApplication active)
+              walletAddress
+              -- Disable TLS if in debug modeit .
+              (if isDebugMode walletRunMode then Nothing else walletTLSParams)
+              Nothing
+              (Just portCallback)
   where
+    logTrace' = appendName "walletBackend" logTrace
     getApplication :: ActiveWalletLayer IO -> Kernel.WalletMode Application
     getApplication active = do
-      logInfo "New wallet API has STARTED!"
+      logInfo (natTrace lift logTrace) "New wallet API has STARTED!"
       return $ withMiddleware walletRunMode $
         if isDebugMode walletRunMode then
-          Servant.serve API.walletDevAPI $ Server.walletDevServer active walletRunMode
+          Servant.serveWithContext API.walletDevAPI (logTrace' :. EmptyContext) $ Server.walletDevServer active walletRunMode
         else
-          Servant.serve API.walletAPI $ Server.walletServer active
+          Servant.serveWithContext API.walletAPI (logTrace' :. EmptyContext) $ Server.walletServer active
 
     lower :: env -> ReaderT env IO a -> IO a
     lower env m = runReaderT m env
 
 -- | A @Plugin@ to resubmit pending transactions.
-resubmitterPlugin :: HasConfigurations => ProtocolMagic -> Plugin WalletWebMode
-resubmitterPlugin pm = [\diffusion -> askWalletDB >>= \db ->
-                        startPendingTxsResubmitter pm db (sendTx diffusion)]
+resubmitterPlugin :: HasConfigurations => TraceNamed IO -> ProtocolMagic -> Plugin WalletWebMode
+resubmitterPlugin logTrace pm = [\diffusion -> askWalletDB >>= \db ->
+                        startPendingTxsResubmitter (natTrace liftIO logTrace) pm db (sendTx diffusion)]
 
 -- | A @Plugin@ to notify frontend via websockets.
-notifierPlugin :: HasConfigurations => Plugin WalletWebMode
-notifierPlugin = [const V0.notifierPlugin]
+notifierPlugin :: HasConfigurations => TraceNamed IO -> Plugin WalletWebMode
+notifierPlugin logTrace = [const $ V0.notifierPlugin logTrace]
 
 -- | The @Plugin@ responsible for the restoration & syncing of a wallet.
 syncWalletWorker :: HasConfigurations => TraceNamed IO -> Plugin WalletWebMode
 syncWalletWorker logTrace0 = pure $ const $
-    (view (lensOf @SyncQueue) >>= processSyncRequest logTrace)
+    (view (lensOf @SyncQueue) >>= processSyncRequest (natTrace lift logTrace))
     where
       logTrace = appendName "syncWalletWorker" logTrace0
 

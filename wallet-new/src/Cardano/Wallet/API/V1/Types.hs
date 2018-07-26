@@ -1207,6 +1207,10 @@ instance ToHttpApiData (V1 Core.TxId) where
 instance ToSchema (V1 Core.TxId) where
     declareNamedSchema _ = declareNamedSchema (Proxy @Text)
 
+-- | was not defined in LogSafe
+instance Buildable (SecureLog Core.TxId) where
+    build _ = "<txid>"
+
 ----------------------------------------------------------------------------
   -- Transaction types
 ----------------------------------------------------------------------------
@@ -1387,7 +1391,7 @@ instance Arbitrary Transaction where
 deriveSafeBuildable ''Transaction
 instance BuildableSafeGen Transaction where
     buildSafeGen sl Transaction{..} = bprint ("{"
-        -- TODO %" id="%buildSafe sl
+        %" id="%buildSafe sl
         %" confirmations="%build
         %" amount="%buildSafe sl
         %" inputs="%buildSafeList sl
@@ -1395,7 +1399,7 @@ instance BuildableSafeGen Transaction where
         %" type="%buildSafe sl
         %" direction"%buildSafe sl
         %" }")
-        -- TODO txId
+        txId
         txConfirmations
         txAmount
         (toList txInputs)

@@ -16,7 +16,7 @@ import           Pos.Block.Types
 import           Pos.Context
 import           Pos.Core
 import           Pos.Core.Chrono
-import           Pos.Core.JsonLog (CanJsonLog (..))
+--import           Pos.Core.JsonLog (CanJsonLog (..))
 import           Pos.Core.Reporting (HasMisbehaviorMetrics (..))
 import           Pos.DB
 import           Pos.DB.Block hiding (applyBlocks, rollbackBlocks)
@@ -28,10 +28,12 @@ import           Pos.Infra.Network.Types
 import           Pos.Infra.Reporting
 import           Pos.Infra.Shutdown
 import           Pos.Infra.Slotting
-import           Pos.Infra.Util.JsonLog.Events
+--import           Pos.Infra.Util.JsonLog.Events
 import           Pos.Launcher
 import           Pos.Txp.Configuration
 import           Pos.Util
+import           Pos.Util.Trace (noTrace)
+import           Pos.Util.Trace.Named (TraceNamed)
 import           Pos.WorkMode
 
 import           Cardano.Wallet.WalletLayer (PassiveWalletLayer (..),
@@ -88,21 +90,22 @@ walletRollbackBlocks _w _bs = do
     return mempty
 
 instance MonadBListener WalletMode where
-  onApplyBlocks    bs = getWallet >>= (`walletApplyBlocks`    bs)
-  onRollbackBlocks bs = getWallet >>= (`walletRollbackBlocks` bs)
+  onApplyBlocks    _ bs = getWallet >>= (`walletApplyBlocks`    bs)
+  onRollbackBlocks _ bs = getWallet >>= (`walletRollbackBlocks` bs)
 
 {-------------------------------------------------------------------------------
   Run the wallet
 -------------------------------------------------------------------------------}
 
 runWalletMode :: forall a. (HasConfigurations, HasCompileInfo)
-              => ProtocolMagic
+              => TraceNamed IO
+              -> ProtocolMagic
               -> NodeResources ()
               -> PassiveWalletLayer IO
               -> (Diffusion WalletMode -> WalletMode a)
               -> IO a
-runWalletMode pm nr wallet action =
-    runRealMode pm nr $ \diffusion ->
+runWalletMode logTrace pm nr wallet action =
+    runRealMode logTrace pm nr $ \diffusion ->
         walletModeToRealMode wallet (action (hoistDiffusion realModeToWalletMode (walletModeToRealMode wallet) diffusion))
 
 walletModeToRealMode :: forall a. PassiveWalletLayer IO -> WalletMode a -> RealMode () a
@@ -150,9 +153,10 @@ instance HasSlogContext WalletContext where
 instance HasShutdownContext WalletContext where
   shutdownContext   = wcRealModeContext_L . shutdownContext
 
+{-
 instance HasJsonLogConfig WalletContext where
   jsonLogConfig     = wcRealModeContext_L . jsonLogConfig
-
+-}
 instance HasSscContext WalletContext where
   sscContext        = wcRealModeContext_L . sscContext
 
@@ -193,10 +197,11 @@ instance ( HasConfiguration
 instance HasConfiguration => MonadGState WalletMode where
   gsAdoptedBVData = gsAdoptedBVDataDefault
 
+{-
 instance {-# OVERLAPPING #-} CanJsonLog WalletMode where
   jsonLog = jsonLogDefault
-
+-}
 instance (HasConfiguration, HasTxpConfiguration)
       => MonadTxpLocal WalletMode where
   txpNormalize = txNormalize
-  txpProcessTx = txProcessTransaction
+  txpProcessTx logTrace = txProcessTransaction logTrace noTrace

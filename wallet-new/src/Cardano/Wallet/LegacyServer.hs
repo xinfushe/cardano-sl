@@ -19,6 +19,7 @@ import           Pos.Crypto (ProtocolMagic)
 import           Pos.Infra.Diffusion.Types (Diffusion (..))
 import           Pos.Update.Configuration (curSoftwareVersion)
 import           Pos.Util.CompileInfo (compileInfo)
+--import           Pos.Util.Trace (natTrace)
 import           Pos.Util.Trace.Named (TraceNamed)
 import           Pos.Wallet.Web.Mode (WalletWebMode)
 import           Servant
@@ -26,23 +27,23 @@ import           Servant
 -- | This function has the tricky task of plumbing different versions of the API,
 -- with potentially different monadic stacks into a uniform @Server@ we can use
 -- with Servant.
-walletServer :: (HasConfigurations, HasCompileInfo)
+walletServer :: ( HasConfigurations, HasCompileInfo )
              => (forall a. WalletWebMode a -> Handler a)
-             -> TraceNamed IO
+             -> TraceNamed WalletWebMode
              -> ProtocolMagic
              -> Diffusion WalletWebMode
              -> TVar NtpStatus
              -> Server WalletAPI
 walletServer natV0 logTrace pm diffusion ntpStatus = v0Handler :<|> v1Handler
   where
-    v0Handler    = V0.handlers natV0 logTrace pm diffusion ntpStatus
-    v1Handler    = V1.handlers natV0 logTrace pm diffusion ntpStatus
+    v0Handler    = V0.handlers logTrace natV0 pm diffusion ntpStatus
+    v1Handler    = V1.handlers logTrace natV0 pm diffusion ntpStatus
 
 
 walletDevServer
     :: (HasConfigurations, HasCompileInfo)
     => (forall a. WalletWebMode a -> Handler a)
-    -> TraceNamed IO
+    -> TraceNamed WalletWebMode
     -> ProtocolMagic
     -> Diffusion WalletWebMode
     -> TVar NtpStatus
