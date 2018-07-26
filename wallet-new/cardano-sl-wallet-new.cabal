@@ -239,6 +239,10 @@ executable cardano-node
   ghc-options:         -threaded -rtsopts
                        -Wall
                        -O2
+  if os(darwin)
+      ghc-options:
+                       -optl-Wl,-dead_strip_dylibs
+
   build-depends:       base
                      , cardano-sl
                      , cardano-sl-core
@@ -282,6 +286,9 @@ executable cardano-generate-swagger-file
                        -Wall
                        -fno-warn-orphans
                        -O2
+  if os(darwin)
+      ghc-options:
+                       -optl-Wl,-dead_strip_dylibs
 
   build-depends:       base
                      , bytestring
@@ -310,6 +317,10 @@ executable wal-integr-test
   ghc-options:         -threaded -rtsopts
                        -Wall
                        -O2
+  if os(darwin)
+      ghc-options:
+                       -optl-Wl,-dead_strip_dylibs
+
   other-modules:       CLI
                        Types
                        Functions
