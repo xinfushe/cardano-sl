@@ -489,8 +489,8 @@ license = stdenv.lib.licenses.bsd3;
 mkDerivation {
 
 pname = "Chart-diagrams";
-version = "1.8.2";
-sha256 = "ca181dec04bac1029101dd75951f48710ebc42f5333e06c57943e3245bba9f41";
+version = "1.8.3";
+sha256 = "beed1e3d4ef96be26921d058bc8d3510641514eb3c4539258e8ecf1efabc3adc";
 enableSeparateDataOutput = true;
 libraryHaskellDepends = [
 base
@@ -25593,10 +25593,8 @@ license = stdenv.lib.licenses.bsd3;
 mkDerivation {
 
 pname = "diagrams-lib";
-version = "1.4.2";
-sha256 = "e9d41742ed3a92b9dff847c3936746e5a95cc4e187b7e4c35c3e3068c842afe5";
-revision = "1";
-editedCabalFile = "0vz16br2gn4agi35k92qw84cja2dqj63g7q3ak64jhc8r99bd4a1";
+version = "1.4.2.1";
+sha256 = "2728508742ca0b5a84fdc351a3f33f3a9eeb4fcb4bf18d89bf6d1a0c3593759f";
 libraryHaskellDepends = [
 active
 adjunctions
@@ -25648,7 +25646,6 @@ license = stdenv.lib.licenses.bsd3;
 , diagrams-core
 , diagrams-lib
 , dlist
-, filepath
 , hashable
 , lens
 , monoid-extras
@@ -25661,10 +25658,10 @@ license = stdenv.lib.licenses.bsd3;
 mkDerivation {
 
 pname = "diagrams-postscript";
-version = "1.4";
-sha256 = "fe58f0010520716f66802adb0c1f70f48e77e9c4fcea5441e5343f4c1a5f8db4";
+version = "1.4.1";
+sha256 = "a758191d99c30bd663dc0df2dedef13cd735a33c143e77906aa88baceb282c9c";
 revision = "1";
-editedCabalFile = "0vmiv3b74nml0ahb7dicq0m0vz2lahzfapln9aby0jb2saa0sf58";
+editedCabalFile = "0z0rh7lwyr3vx6llq6q9s5f1vzqk4zxpcg5ibfn5jdp274kfd7r1";
 libraryHaskellDepends = [
 base
 containers
@@ -25672,7 +25669,6 @@ data-default-class
 diagrams-core
 diagrams-lib
 dlist
-filepath
 hashable
 lens
 monoid-extras
@@ -25737,8 +25733,10 @@ license = stdenv.lib.licenses.bsd3;
 mkDerivation {
 
 pname = "diagrams-svg";
-version = "1.4.1.1";
-sha256 = "c80668c6ac1bf62b108016d36bfe3e603897ca8e331522b0e80b77152915daaa";
+version = "1.4.2";
+sha256 = "5455b68d92826a5405d51490976870cc0fa5b8b56aef0a8f56982b5f48efded2";
+revision = "1";
+editedCabalFile = "1mb2fdfvy0c1v7nahspq2cisfqrn37xjh4a6xhqr3b36pfz8rwnd";
 libraryHaskellDepends = [
 base
 base64-bytestring
@@ -30544,8 +30542,8 @@ license = stdenv.lib.licenses.bsd3;
 mkDerivation {
 
 pname = "fgl";
-version = "5.6.0.0";
-sha256 = "94722e1eb3dca66069e26a2d4b072c558bc896816ee016fc99521f3e16b9ccc4";
+version = "5.5.4.0";
+sha256 = "5176891dc0a898a87df53e1b27db5eba7474f08207405a1ea06c988c09a97211";
 libraryHaskellDepends = [
 array
 base
