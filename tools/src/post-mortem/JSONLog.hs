@@ -5,35 +5,40 @@ module JSONLog
     , runParseLogs
     ) where
 
+import           Universum
+
+import           Conduit (MonadResource)
 import           Data.Attoparsec.Text (Parser, parseOnly, takeTill)
-import           Pipes
-import           Pipes.ByteString (fromHandle)
-import           Pipes.Interleave (interleave)
-import qualified Pipes.Prelude as P
+import           Data.Conduit (ConduitT, (.|))
+import qualified Data.Conduit.Combinators as C
+import           Data.Conduit.TMChan (mergeSources)
+-- import           Pipes
+-- import           Pipes.ByteString (fromHandle)
+-- import           Pipes.Interleave (interleave)
+-- import qualified Pipes.Prelude as P
 import           System.Directory (listDirectory)
 import           System.FilePath ((</>))
+import           UnliftIO (MonadUnliftIO)
 
 import           Pos.Infra.Util.JsonLog.Events (JLEvent, JLTimedEvent (..))
 import           Types
-import           Universum
 import           Util.Aeson (parseJSONP)
-import           Util.Safe (runWithFiles)
 
-jsonLogs :: FilePath -> IO [(Text, FilePath)]
+jsonLogs :: MonadIO m => FilePath -> m [(NodeId, FilePath)]
 jsonLogs logDir = do
-    files <- listDirectory logDir
+    files <- liftIO (listDirectory logDir)
     return $ map (second (logDir </>)) $ mapMaybe f files
   where
-    f :: FilePath -> Maybe (Text, FilePath)
+    f :: FilePath -> Maybe (NodeId, FilePath)
     f logFile = case parseOnly nodeIndexParser $ toText logFile of
         Right name -> Just (name, logFile)
         Left _     -> Nothing
 
-nodeIndexParser :: Parser Text
+nodeIndexParser :: Parser NodeId
 nodeIndexParser = takeTill (== '.') <* ".json"
 
-parseLogP :: MonadIO m => Handle -> Producer JLTimedEvent m ()
-parseLogP h = fromHandle h >-> parseJSONP
+parseLogP :: MonadResource m => FilePath -> ConduitT () JLTimedEvent m ()
+parseLogP fp = C.sourceFile fp .| parseJSONP
 
 data IndexedJLTimedEvent = IndexedJLTimedEvent
     { ijlNode      :: !NodeId
@@ -49,13 +54,17 @@ instance Ord IndexedJLTimedEvent where
 
     compare = compare `on` ijlTimestamp
 
-runParseLogs :: FilePath -> (Producer IndexedJLTimedEvent IO () -> IO r) -> IO r
+runParseLogs :: forall m r.
+                (MonadResource m, MonadUnliftIO m)
+             => FilePath -> (ConduitT () IndexedJLTimedEvent m () -> m r)
+             -> m r
 runParseLogs logDir f = do
     xs <- jsonLogs logDir
-    runWithFiles xs ReadMode $ \ys -> f $ interleave (map (uncurry producer) ys)
+    sources <- mergeSources (map (uncurry producer) xs) 20
+    f sources
   where
-    producer :: NodeId -> Handle -> Producer IndexedJLTimedEvent IO ()
-    producer n h = parseLogP h >-> P.map (\JLTimedEvent{..} ->
+    producer :: NodeId -> FilePath -> ConduitT () IndexedJLTimedEvent m ()
+    producer n fp = parseLogP fp .| C.map (\JLTimedEvent{..} ->
         IndexedJLTimedEvent { ijlNode      = n
                             , ijlTimestamp = fromIntegral jlTimestamp
                             , ijlEvent     = jlEvent

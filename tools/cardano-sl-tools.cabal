@@ -351,8 +351,7 @@ executable cardano-post-mortem
                      , Statistics.Tx
                      , Types
                      , Util.Aeson
-                     , Util.Pipes
-                     , Util.Safe
+                     , Util.Conduit
   if flag(postmortem) && !flag(for-installer)
     buildable: True
     build-depends:       Chart
@@ -368,6 +367,7 @@ executable cardano-post-mortem
                        , cardano-sl-infra
                        , cardano-sl-txp
                        , cardano-sl-util
+                       , conduit
                        , containers
                        , cassava
                        , directory
@@ -376,15 +376,13 @@ executable cardano-post-mortem
                        , foldl
                        , graphviz
                        , optparse-applicative
-                       , pipes
-                       , pipes-bytestring
-                       , pipes-interleave
-                       , pipes-safe
                        , process
                        , random
+                       , stm-conduit
                        , text
                        , time-units
                        , universum >= 0.1.11
+                       , unliftio
   else
     buildable: False
   default-language:    Haskell2010

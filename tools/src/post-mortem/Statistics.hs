@@ -29,7 +29,7 @@ import           Statistics.Throughput
 import           Statistics.Tx
 import           Types
 import           Universum
-import           Util.Pipes (fold')
+import           Util.Conduit (fold')
 
 runJSONFold :: FilePath -> Fold IndexedJLTimedEvent a -> IO a
 runJSONFold logDir fd = runParseLogs logDir $ fold' fd
