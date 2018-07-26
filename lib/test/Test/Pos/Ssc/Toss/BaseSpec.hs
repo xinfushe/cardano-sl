@@ -38,6 +38,7 @@ import           Pos.Ssc (MultiRichmenStakes, PureTossWithEnv,
                      supplyPureTossEnv)
 import           Pos.Ssc.Base (deleteSignedCommitment, verifyCommitment,
                      verifyCommitmentSignature, verifyOpening)
+import           Pos.Util.Trace (noTrace)
 import           Test.Pos.Lrc.Arbitrary (GenesisMpcThd, ValidRichmenStakes (..))
 import           Test.Pos.Util.QuickCheck.Property (qcElem, qcFail, qcIsRight)
 
@@ -66,7 +67,7 @@ spec = withDefConfiguration $ \_ -> describe "Ssc.Base" $ do
         prop description_checksBadOpeningsPayload checksBadOpeningsPayload
     describe "checkSharesPayload" $ do
         prop description_emptyPayload
-            (\e mrs hm -> emptyPayload (checkSharesPayload e) $ HM.insert e hm mrs)
+            (\e mrs hm -> emptyPayload (checkSharesPayload noTrace e) $ HM.insert e hm mrs)
         prop description_checksGoodSharesPayload checksGoodSharesPayload
         prop description_checksBadSharesPayload checksBadSharesPayload
     describe "checkCertificatesPayload" $ do
@@ -425,7 +426,7 @@ instance HasConfiguration => Arbitrary GoodSharesPayload where
 --make the already non-trivial arbitrary instance for 'GoodSharesPayload' unmanageable.
 checksGoodSharesPayload :: HasConfiguration => GoodSharesPayload -> Bool
 checksGoodSharesPayload (GoodPayload epoch sgs sharesMap mrs) =
-    case tossRunner mrs sgs $ checkSharesPayload epoch sharesMap of
+    case tossRunner mrs sgs $ checkSharesPayload noTrace epoch sharesMap of
         Left (DecrSharesNotMatchCommitment _) -> True
         Right _                               -> True
         _                                     -> False
@@ -454,11 +455,11 @@ checksBadSharesPayload (GoodPayload epoch g@SscGlobalState {..} sm mrs) pk ne ce
 
         mrsWithMissingEpoch = HM.delete epoch mrs
         noRichmen =
-            tossRunner mrsWithMissingEpoch sgs $ checkSharesPayload epoch sharesMap
+            tossRunner mrsWithMissingEpoch sgs $ checkSharesPayload noTrace epoch sharesMap
         res1 = noRichmen === Left (NoRichmen epoch)
 
         newSharesMap = HM.insert sid mempty sharesMap
-        sharesNotRichmen = tossRunner mrs sgs $ checkSharesPayload epoch newSharesMap
+        sharesNotRichmen = tossRunner mrs sgs $ checkSharesPayload noTrace epoch newSharesMap
         res2 = case sharesNotRichmen of
             Left (SharesNotRichmen nes) -> sid `qcElem` nes
             _ -> qcFail $ "expected " <> show sharesNotRichmen <>
@@ -466,7 +467,7 @@ checksBadSharesPayload (GoodPayload epoch g@SscGlobalState {..} sm mrs) pk ne ce
 
         newerSharesMap = fmap (HM.insert sid ne) sharesMap
         internalShareWithoutComm =
-            tossRunner mrs sgs $ checkSharesPayload epoch newerSharesMap
+            tossRunner mrs sgs $ checkSharesPayload noTrace epoch newerSharesMap
         res3 = case internalShareWithoutComm of
             Left (InternalShareWithoutCommitment nes) -> sid `qcElem` nes
             _ -> qcFail $ "expected " <> show internalShareWithoutComm <>
@@ -482,7 +483,7 @@ checksBadSharesPayload (GoodPayload epoch g@SscGlobalState {..} sm mrs) pk ne ce
                          vcd { certs = fst $ insertVss cert' certs}
         mrs' = HM.update (Just . HM.insert sid (mkCoin 0)) epoch mrs
         sharesAlreadySent =
-            tossRunner mrs' sgs' $ checkSharesPayload epoch newestSharesMap
+            tossRunner mrs' sgs' $ checkSharesPayload noTrace epoch newestSharesMap
         res4 = case sharesAlreadySent of
             Left (SharesAlreadySent nes) -> sid `qcElem` nes
             _ -> qcFail $ "expected " <> show sharesAlreadySent <>

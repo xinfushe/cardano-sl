@@ -27,6 +27,7 @@ import           Pos.Ssc (SscGlobalState (..), VssCertData (..), delete, empty,
                      expiryEoS, filter, insert, keys, lookup, member,
                      rollbackSsc, runPureToss, setLastKnownSlot,
                      sgsVssCertificates)
+import           Pos.Util.Trace (noTrace)
 
 import           Test.Pos.Configuration (withDefConfiguration)
 import           Test.Pos.Core.Arbitrary ()
@@ -203,7 +204,7 @@ verifyRollback (Rollback oldSscGlobalState rollbackEoS vssCerts) = do
             oldSscGlobalState & sgsVssCertificates %~ certAdder
     (_, SscGlobalState _ _ _ rolledVssCertData, _) <-
         runPureToss newSscGlobalState $
-        rollbackSsc rollbackEoS (NewestFirst [])
+        rollbackSsc noTrace rollbackEoS (NewestFirst [])
     pure $ conjoin $ vssCerts <&> \cert ->
         let id = getCertId cert in
         counterexample ("haven't found cert with id " <>
