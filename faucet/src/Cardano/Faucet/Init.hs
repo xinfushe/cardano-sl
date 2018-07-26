@@ -50,7 +50,7 @@ import           System.Wlog (CanLog, HasLoggerName, LoggerNameBox (..),
                      liftLogIO, logDebug, logError, logInfo, withSublogger)
 
 import           Cardano.Wallet.API.V1.Types (Account (..), Address,
-                     AssuranceLevel (NormalAssurance), BackupPhrase (..),
+                     AssuranceLevel (NormalAssurance),
                      NewWallet (..), NodeInfo (..), Payment (..),
                      PaymentDistribution (..), PaymentSource (..),
                      SyncPercentage, V1 (..), Wallet (..), WalletAddress (..),
@@ -89,8 +89,9 @@ readGeneratedWallet fp = catch (first JSONDecodeError <$> readJSON fp) $ \e ->
 --------------------------------------------------------------------------------
 
 {- develop branch version
-generateBackupPhrase :: IO (Mnemonic 12)
-generateBackupPhrase = entropyToMnemonic <$> genEntropy
+import Cardano.Wallet.API.V1.Types (BackupPhrase (..))
+generateBackupPhrase :: IO BackupPhrase
+generateBackupPhrase = BackupPhrase . entropyToMnemonic <$> genEntropy
 -}
 
 -- release/1.3.1 branch version
@@ -179,7 +180,7 @@ createWallet client = do
     where
         mkWallet = do
           phrase <- liftIO generateBackupPhrase
-          let w = NewWallet (BackupPhrase phrase) Nothing NormalAssurance "Faucet-Wallet" CreateWallet
+          let w = NewWallet (V1 phrase) Nothing NormalAssurance "Faucet-Wallet" CreateWallet
           runExceptT $ do
               wId <- walId <$> (runClient WalletCreationError $ postWallet client w)
               let wIdLog = Text.pack $ show wId
