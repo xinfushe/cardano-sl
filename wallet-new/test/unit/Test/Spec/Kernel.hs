@@ -10,6 +10,7 @@ import qualified Cardano.Wallet.Kernel as Kernel
 import qualified Cardano.Wallet.Kernel.Diffusion as Kernel
 import qualified Cardano.Wallet.Kernel.Keystore as Keystore
 import           Pos.Core (Coeff (..), TxSizeLinear (..))
+import           Pos.Util.Trace (Trace, noTrace)
 
 import           Test.Infrastructure.Generator
 import           Test.Pos.Configuration (withDefConfiguration)
@@ -70,14 +71,15 @@ spec =
 -- | Initialize passive wallet in a manner suitable for the unit tests
 bracketPassiveWallet :: (Kernel.PassiveWallet -> IO a) -> IO a
 bracketPassiveWallet postHook = do
-      Keystore.bracketTestKeystore $ \keystore ->
+      Keystore.bracketTestKeystore noTrace $ \keystore ->
           Kernel.bracketPassiveWallet logMessage keystore postHook
   where
    -- TODO: Decide what to do with logging.
    -- For now we are not logging them to stdout to not alter the output of
    -- the test runner, but in the future we could store them into a mutable
    -- reference or a TBQueue and perform assertions on them.
-    logMessage _ _  = return ()
+    logMessage :: Trace IO a
+    logMessage = noTrace
 
 -- | Initialize active wallet in a manner suitable for generator-based testing
 bracketActiveWallet :: (Kernel.ActiveWallet -> IO a) -> IO a

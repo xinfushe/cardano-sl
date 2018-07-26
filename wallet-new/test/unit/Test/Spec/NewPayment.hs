@@ -15,13 +15,13 @@ import qualified Data.Map.Strict as M
 
 import           Data.Acid (update)
 import           Formatting (build, formatToString, sformat)
-import           System.Wlog (Severity)
 import           Test.Pos.Configuration (withDefConfiguration)
 
 import           Pos.Core (Address, Coin (..), IsBootstrapEraAddr (..),
                      TxOut (..), TxOutAux (..), deriveLvl2KeyPair, mkCoin)
 import           Pos.Crypto (EncryptedSecretKey, ShouldCheckPassphrase (..),
                      safeDeterministicKeyGen)
+import           Pos.Util.Trace (Trace, noTrace)
 
 import           Test.Spec.CoinSelection.Generators (InitialBalance (..),
                      Pay (..), genPayee, genUtxoWithAtLeast)
@@ -61,8 +61,8 @@ import           Servant.Server
 {-# ANN module ("HLint: ignore Reduce duplication" :: Text) #-}
 
 -- | Do not pollute the test runner output with logs.
-devNull :: Severity -> Text -> IO ()
-devNull _ _ = return ()
+devNull :: Trace IO a
+devNull = noTrace
 
 data Fixture = Fixture {
       fixtureHdRootId  :: HdRootId
@@ -126,7 +126,7 @@ withFixture :: MonadIO m
             -> (Keystore.Keystore -> ActiveWalletLayer m -> Fixture -> IO a) -> PropertyM IO a
 withFixture initialBalance toPay cc = do
     generateFixtures <- prepareFixtures initialBalance toPay
-    liftIO $ Keystore.bracketTestKeystore $ \keystore -> do
+    liftIO $ Keystore.bracketTestKeystore noTrace $ \keystore -> do
         WalletLayer.bracketKernelPassiveWallet devNull keystore $ \passiveLayer passiveWallet -> do
             withDefConfiguration $ \pm -> do
                 WalletLayer.bracketKernelActiveWallet pm passiveLayer passiveWallet diffusion $ \activeLayer activeWallet -> do
