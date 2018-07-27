@@ -11,11 +11,8 @@ import           Formatting (build, sformat, stext, string, (%))
 import           System.Directory (createDirectoryIfMissing)
 import           System.FilePath ((</>))
 import           System.FilePath.Glob (glob)
-import           System.Wlog (WithLogger, debugPlus, logInfo, productionB,
-                     setupLogging, termSeveritiesOutB, usingLoggerName)
 import qualified Text.JSON.Canonical as CanonicalJSON
 
-import qualified Pos.Util.Log as Log
 
 import           Pos.Binary (asBinary, serialize')
 import qualified Pos.Client.CLI as CLI
@@ -27,6 +24,10 @@ import           Pos.Crypto (EncryptedSecretKey (..), SecretKey (..),
                      VssKeyPair, fullPublicKeyF, hashHexF, noPassEncrypt,
                      redeemPkB64F, toPublic, toVssPublicKey)
 import           Pos.Launcher (HasConfigurations, withConfigurations)
+import qualified Pos.Util.Log as Log
+import           Pos.Util.LoggerConfig (defaultInteractiveConfiguration)
+import           Pos.Util.Trace.Named (TraceNamed, appendName, logInfo,
+                     namedTrace)
 import           Pos.Util.UserSecret (readUserSecret, takeUserSecret, usKeys,
                      usPrimKey, usVss, usWallet, writeUserSecretRelease,
                      wusRootKey)
@@ -40,9 +41,9 @@ import           KeygenOptions (DumpAvvmSeedsOptions (..), GenKeysOptions (..),
 -- Helpers
 ----------------------------------------------------------------------------
 
-rearrangeKeyfile :: (MonadIO m, MonadThrow m, Log.WithLogger m) => FilePath -> m ()
-rearrangeKeyfile fp = do
-    us <- takeUserSecret fp
+rearrangeKeyfile :: (MonadIO m, MonadThrow m) => TraceNamed m -> FilePath -> m ()
+rearrangeKeyfile logTrace fp = do
+    us <- takeUserSecret logTrace fp
     let sk = maybeToList $ us ^. usPrimKey
     writeUserSecretRelease $
         us & usKeys %~ (++ map noPassEncrypt sk)
@@ -51,15 +52,19 @@ rearrangeKeyfile fp = do
 -- Commands
 ----------------------------------------------------------------------------
 
-rearrange :: (MonadIO m, MonadThrow m, Log.WithLogger m) => FilePath -> m ()
-rearrange msk = mapM_ rearrangeKeyfile =<< liftIO (glob msk)
+rearrange :: (MonadIO m, MonadThrow m) => TraceNamed m -> FilePath -> m ()
+rearrange logTrace msk = mapM_ (rearrangeKeyfile logTrace) =<< liftIO (glob msk)
 
-genPrimaryKey :: (HasConfigurations, MonadIO m, MonadThrow m, Log.WithLogger m, MonadRandom m) => FilePath -> m ()
-genPrimaryKey path = do
+genPrimaryKey
+    :: (MonadIO m, MonadThrow m)
+    => TraceNamed m
+    -> FilePath
+    -> m ()
+genPrimaryKey logTrace path = do
     rs <- liftIO generateRichSecrets
-    dumpRichSecrets path rs
+    dumpRichSecrets logTrace path rs
     let pk = toPublic (rsPrimaryKey rs)
-    Log.logInfo $
+    logInfo logTrace $
         sformat
             ("Successfully generated primary key and dumped to "%string%
              ", stakeholder id: "%hashHexF%
@@ -68,19 +73,19 @@ genPrimaryKey path = do
             (addressHash pk)
             pk
 
-readKey :: (MonadIO m, MonadThrow m, Log.WithLogger m) => FilePath -> m ()
-readKey path = do
-    us <- readUserSecret path
-    Log.logInfo $ maybe "No Primary key"
+readKey :: MonadIO m => TraceNamed m -> FilePath -> m ()
+readKey logTrace path = do
+    us <- readUserSecret logTrace path
+    logInfo logTrace $ maybe "No Primary key"
                     (("Primary: " <>) . showKeyWithAddressHash) $
                     view usPrimKey us
-    Log.logInfo $ maybe "No wallet set"
+    logInfo logTrace $ maybe "No wallet set"
                     (("Wallet set: " <>) . showKeyWithAddressHash . decryptESK . view wusRootKey) $
                     view usWallet us
-    Log.logInfo $ "Keys: " <> (T.concat $ L.intersperse "\n" $
+    logInfo logTrace $ "Keys: " <> (T.concat $ L.intersperse "\n" $
                            map (showKeyWithAddressHash . decryptESK) $
                            view usKeys us)
-    Log.logInfo $ maybe "No vss"
+    logInfo logTrace $ maybe "No vss"
                     (("Vss PK: " <>) . showPvssKey) $
                     view usVss us
 
@@ -99,10 +104,10 @@ decryptESK :: EncryptedSecretKey -> SecretKey
 decryptESK (EncryptedSecretKey sk _) = SecretKey sk
 
 dumpAvvmSeeds
-    :: (MonadIO m, Log.WithLogger m)
-    => DumpAvvmSeedsOptions -> m ()
-dumpAvvmSeeds DumpAvvmSeedsOptions{..} = do
-    Log.logInfo $ "Generating fake avvm data into " <> fromString dasPath
+    :: MonadIO m
+    => TraceNamed m -> DumpAvvmSeedsOptions -> m ()
+dumpAvvmSeeds logTrace DumpAvvmSeedsOptions{..} = do
+    logInfo logTrace $ "Generating fake avvm data into " <> fromString dasPath
     liftIO $ createDirectoryIfMissing True dasPath
 
     when (dasNumber <= 0) $ error $
@@ -117,24 +122,24 @@ dumpAvvmSeeds DumpAvvmSeedsOptions{..} = do
         \(rPk,i) -> writeFile (dasPath </> "key"<>show i<>".pk")
                               (sformat redeemPkB64F rPk)
 
-    Log.logInfo $ "Seeds were generated"
+    logInfo logTrace $ "Seeds were generated"
 
 generateKeysByGenesis
-    :: (HasConfigurations, MonadIO m, Log.WithLogger m, MonadThrow m, MonadRandom m)
-    => GenKeysOptions -> m ()
-generateKeysByGenesis GenKeysOptions{..} = do
+    :: (HasConfigurations, MonadIO m, MonadThrow m)
+    => TraceNamed m -> GenKeysOptions -> m ()
+generateKeysByGenesis logTrace GenKeysOptions{..} = do
     case ccGenesis coreConfiguration of
         GCSrc {} ->
             error $ "Launched source file conf"
         GCSpec {} -> do
-            dumpGeneratedGenesisData (gkoOutDir, gkoKeyPattern)
-            Log.logInfo (toText gkoOutDir <> " generated successfully")
+            dumpGeneratedGenesisData logTrace (gkoOutDir, gkoKeyPattern)
+            logInfo logTrace (toText gkoOutDir <> " generated successfully")
 
 genVssCert
-    :: (HasConfigurations, Log.WithLogger m, MonadIO m)
-    => FilePath -> m ()
-genVssCert path = do
-    us <- readUserSecret path
+    :: (HasConfigurations, MonadIO m)
+    => TraceNamed m -> ProtocolMagic -> FilePath -> m ()
+genVssCert logTrace pm path = do
+    us <- readUserSecret logTrace path
     let primKey = fromMaybe (error "No primary key") (us ^. usPrimKey)
         vssKey  = fromMaybe (error "No VSS key") (us ^. usVss)
     let cert = mkVssCertificate
@@ -156,22 +161,18 @@ genVssCert path = do
 main :: IO ()
 main = do
     KeygenOptions{..} <- getKeygenOptions
+    lh <- Log.setupLogging $ defaultInteractiveConfiguration Log.Debug
+    let logTrace = appendName "keygen" $ namedTrace lh
+    Log.loggerBracket lh "keygen" $
+        withConfigurations logTrace Nothing koConfigurationOptions $ \_ pm -> do
 
-{-
-    setupLogging Nothing $ productionB <> termSeveritiesOutB debugPlus
-    usingLoggerName "keygen" $ withConfigurations koConfigurationOptions $ \_ -> do
--}
-
-    Log.loggerBracket Log.Info "keygen" $ do
-
-          Log.logInfo "Processing command"
-          case koCommand of
-              --RearrangeMask msk       -> rearrange msk
-              GenerateKey path -> genPrimaryKey path
-              --GenerateVss path        -> genVssCert path
-              -- --ReadKey path            -> readKey path
-              -- --DumpAvvmSeeds opts      -> dumpAvvmSeeds opts
-              -- GenerateKeysBySpec gkbg -> generateKeysByGenesis gkbg
-              --DumpGenesisData dgdPath dgdCanonical
-                                    -- -> CLI.dumpGenesisData dgdCanonical dgdPath
-              _                -> Log.logWarning "command not understood"
+        logInfo logTrace "Processing command"
+        case koCommand of
+            RearrangeMask msk       -> rearrange logTrace msk
+            GenerateKey path        -> genPrimaryKey logTrace path
+            GenerateVss path        -> genVssCert logTrace pm path
+            ReadKey path            -> readKey logTrace path
+            DumpAvvmSeeds opts      -> dumpAvvmSeeds logTrace opts
+            GenerateKeysBySpec gkbg -> generateKeysByGenesis logTrace gkbg
+            DumpGenesisData dgdPath dgdCanonical
+                                    -> CLI.dumpGenesisData logTrace dgdCanonical dgdPath
