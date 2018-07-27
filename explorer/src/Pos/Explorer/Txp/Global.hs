@@ -36,7 +36,7 @@ import           Pos.Explorer.Txp.Toil.Monad (ExplorerExtraM)
 explorerTxpGlobalSettings
     :: HasConfiguration
     -- :: (MonadIO m, HasConfiguration)
-    => TraceNamed ExplorerExtraM
+    => TraceNamed IO --ExplorerExtraM
     -> ProtocolMagic
     -> TxpGlobalSettings
 explorerTxpGlobalSettings logTrace pm =
@@ -49,7 +49,7 @@ explorerTxpGlobalSettings logTrace pm =
 
 applySettings ::
        TxpGlobalApplyMode ctx m
-    => TraceNamed ExplorerExtraM
+    => TraceNamed IO --ExplorerExtraM
     -> ProcessBlundsSettings ExplorerExtraLookup ExplorerExtraModifier m
 applySettings _{-logTrace-} =
     ProcessBlundsSettings
@@ -63,7 +63,7 @@ applySettings _{-logTrace-} =
 
 rollbackSettings ::
        TxpGlobalRollbackMode m
-    => TraceNamed ExplorerExtraM
+    => TraceNamed IO --ExplorerExtraM
     -> ProcessBlundsSettings ExplorerExtraLookup ExplorerExtraModifier m
 rollbackSettings _ = -- logTrace =
     ProcessBlundsSettings

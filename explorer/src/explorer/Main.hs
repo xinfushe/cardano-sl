@@ -58,20 +58,20 @@ main = do
     let logTrace = appendName loggerName $ namedTrace lh
     Log.loggerBracket lh loggerName . logException loggerName $ do
         Log.logInfo "[Attention] Software is built with explorer part"
-        action logTrace args
+        action (natTrace liftIO logTrace) args
 
 action
     :: ( MonadIO m
-       , MonadThrow m
+       , MonadCatch m
        , Log.WithLogger m
        )
-    => TraceNamed m
+    => TraceNamed IO
     -> ExplorerNodeArgs
     -> m ()
 action logTrace (ExplorerNodeArgs (cArgs@CommonNodeArgs{..}) ExplorerArgs{..}) =
-    withConfigurations logTrace blPath conf $ \ntpConfig pm ->
+    withConfigurations logTrace' blPath conf $ \ntpConfig pm ->
     withCompileInfo $ do
-        CLI.printInfoOnStart logTrace cArgs ntpConfig
+        CLI.printInfoOnStart logTrace' cArgs ntpConfig
         Log.logInfo $ "Explorer is enabled!"
         currentParams <- getNodeParams loggerName cArgs nodeArgs
 
@@ -82,13 +82,15 @@ action logTrace (ExplorerNodeArgs (cArgs@CommonNodeArgs{..}) ExplorerArgs{..}) =
             plugins =
                 [ explorerPlugin logTrace webPort
                 , notifierPlugin logTrace NotifierSettings{ nsPort = notifierPort }
-                , updateTriggerWorker logTrace
+                , updateTriggerWorker (natTrace liftIO logTrace)
                 ]
-        bracketNodeResources logTrace currentParams sscParams
+        liftIO $ bracketNodeResources logTrace currentParams sscParams
             (explorerTxpGlobalSettings logTrace pm)
             (explorerInitDB pm epochSlots) $ \nr@NodeResources {..} ->
-                runExplorerRealMode logTrace pm nr (runNode logTrace pm nr plugins)
+                runExplorerRealMode pm nr (runNode logTrace pm nr plugins)
   where
+
+    logTrace' = natTrace liftIO logTrace
 
     blPath :: Maybe AssetLockPath
     blPath = AssetLockPath <$> cnaAssetLockPath
@@ -98,16 +100,15 @@ action logTrace (ExplorerNodeArgs (cArgs@CommonNodeArgs{..}) ExplorerArgs{..}) =
 
     runExplorerRealMode
         :: (HasConfigurations,HasCompileInfo)
-        => TraceNamed IO
-        -> ProtocolMagic
+        => ProtocolMagic
         -> NodeResources ExplorerExtraModifier
         -> (Diffusion ExplorerProd -> ExplorerProd ())
         -> IO ()
-    runExplorerRealMode logTrace' pm nr@NodeResources{..} go =
+    runExplorerRealMode pm nr@NodeResources{..} go =
         let NodeContext {..} = nrContext
             extraCtx = makeExtraCtx
             explorerModeToRealMode  = runExplorerProd extraCtx
-         in runRealMode logTrace' pm nr $ \diffusion ->
+         in runRealMode logTrace pm nr $ \diffusion ->
                 explorerModeToRealMode (go (hoistDiffusion (lift . lift) explorerModeToRealMode diffusion))
 
     nodeArgs :: NodeArgs

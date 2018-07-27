@@ -33,6 +33,7 @@ import           Pos.Update.Configuration (HasUpdateConfiguration,
                      curSoftwareVersion, lastKnownBlockVersion, ourSystemTag)
 import           Pos.Util.AssertMode (inAssertMode)
 import           Pos.Util.CompileInfo (HasCompileInfo, compileInfo)
+import           Pos.Util.Trace (natTrace)
 import           Pos.Util.Trace.Named (TraceNamed, logInfo, logInfoS)
 import           Pos.Worker (allWorkers)
 import           Pos.WorkMode.Class (WorkMode)
@@ -106,14 +107,14 @@ runNode
        , HasTxpConfiguration
        , WorkMode ctx m
        )
-    => TraceNamed m
+    => TraceNamed IO
     -> ProtocolMagic
     -> NodeResources ext
     -> [Diffusion m -> m ()]
     -> Diffusion m -> m ()
-runNode logTrace pm nr plugins = runNode' logTrace nr workers' plugins
+runNode logTrace pm nr plugins = runNode' (natTrace liftIO logTrace) nr workers' plugins
   where
-    workers' = allWorkers logTrace pm nr
+    workers' = allWorkers (natTrace liftIO logTrace) pm nr
 
 -- | This function prints a very useful message when node is started.
 nodeStartMsg :: HasUpdateConfiguration => TraceNamed m -> m ()

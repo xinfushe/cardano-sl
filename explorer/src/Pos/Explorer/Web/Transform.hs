@@ -18,7 +18,6 @@ import           Universum
 
 import qualified Control.Exception.Safe as E
 import           Control.Monad.Except (MonadError (throwError))
-import           Control.Monad.Morph (generalize)
 import qualified Control.Monad.Reader as Mtl
 import           Servant.Server (Handler, hoistServer)
 
@@ -89,7 +88,7 @@ type HasExplorerConfiguration =
 
 notifierPlugin
     :: HasExplorerConfiguration
-    => TraceNamed Identity
+    => TraceNamed IO
     -> NotifierSettings
     -> Diffusion ExplorerProd
     -> ExplorerProd ()
@@ -97,7 +96,7 @@ notifierPlugin logTrace settings _ = notifierApp logTrace settings
 
 explorerPlugin
     :: HasExplorerConfiguration
-    => TraceNamed Identity
+    => TraceNamed IO
     -> Word16
     -> Diffusion ExplorerProd
     -> ExplorerProd ()
@@ -105,13 +104,13 @@ explorerPlugin logTrace = flip $ explorerServeWebReal logTrace
 
 explorerServeWebReal
     :: HasExplorerConfiguration
-    => TraceNamed Identity
+    => TraceNamed IO
     -> Diffusion ExplorerProd
     -> Word16
     -> ExplorerProd ()
 explorerServeWebReal logTrace diffusion port = do
     rctx <- ask
-    let handlers = explorerHandlers (natTrace generalize logTrace) diffusion
+    let handlers = explorerHandlers (natTrace liftIO logTrace) diffusion
         server = hoistServer explorerApi (convertHandler rctx) handlers
         app = explorerApp (pure server)
     explorerServeImpl app port

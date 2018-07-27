@@ -82,12 +82,11 @@ actionWithWallet logTrace pm sscParams nodeParams ntpConfig wArgs@WalletBackendP
                     ntpStatus <- withNtpClient (ntpClientSettings ntpConfig)
                     runWRealMode logTrace pm db conn syncQueue nr (mainAction ntpStatus nr)
   where
-    logTrace' = natTrace liftIO logTrace
     mainAction ntpStatus = runNodeWithInit ntpStatus $ do
         when (walletFlushDb walletDbOptions) $ do
-            logInfo logTrace' "Flushing wallet db..."
+            liftIO $ logInfo logTrace "Flushing wallet db..."
             askWalletDB >>= flushWalletStorage
-            logInfo logTrace' "Resyncing wallets with blockchain..."
+            liftIO $ logInfo logTrace "Resyncing wallets with blockchain..."
 
         -- NOTE(adn): Sync the wallets anyway. The old implementation was skipping syncing in
         -- case `walletFlushDb` was not set, but was still calling it before starting the Servant
@@ -96,7 +95,7 @@ actionWithWallet logTrace pm sscParams nodeParams ntpConfig wArgs@WalletBackendP
 
     runNodeWithInit ntpStatus init' nr diffusion = do
         _ <- init'
-        runNode logTrace' pm nr (plugins ntpStatus) diffusion
+        runNode logTrace pm nr (plugins ntpStatus) diffusion
 
     syncWallets :: WalletWebMode ()
     syncWallets = do

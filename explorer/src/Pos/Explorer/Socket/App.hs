@@ -16,7 +16,6 @@ import           Universum hiding (on)
 
 import qualified Control.Concurrent.STM as STM
 import           Control.Lens ((<<.=))
-import           Control.Monad.Morph (generalize)
 import           Control.Monad.State.Class (MonadState (..))
 import qualified Data.Set as S
 import           Data.Time.Units (Millisecond)
@@ -41,8 +40,7 @@ import           Pos.Core (addressF, siEpoch)
 import           Pos.Core.Conc (withAsync)
 import qualified Pos.GState as DB
 import           Pos.Infra.Slotting (MonadSlots (getCurrentSlot))
-import qualified Pos.Util.Log as Log
-import           Pos.Util.Trace (natTrace, noTrace)
+import           Pos.Util.Trace (natTrace)
 import           Pos.Util.Trace.Named (TraceNamed, appendName, logDebug,
                      logInfo, logWarning)
 
@@ -70,8 +68,8 @@ data NotifierSettings = NotifierSettings
     } deriving (Show)
 
 -- TODO(ks): Add logging, currently it's missing.
-toConfig :: NotifierSettings -> Log.LoggerName -> Settings
-toConfig NotifierSettings{..} _ =
+toConfig :: NotifierSettings -> Settings
+toConfig NotifierSettings{..} =
    setPort (fromIntegral nsPort) defaultSettings
 
 newtype NotifierLogger a = NotifierLogger { runNotifierLogger :: (StateT ConnectionsState STM) a }
@@ -80,23 +78,28 @@ newtype NotifierLogger a = NotifierLogger { runNotifierLogger :: (StateT Connect
 instance MonadState ConnectionsState NotifierLogger where
     get = NotifierLogger $ get
     put newState = NotifierLogger $ put newState
+instance MonadIO NotifierLogger where
+    liftIO = liftIO
 
 notifierHandler
-    :: (MonadState RoutingTable m, MonadReader Socket m, MonadIO m)
-    => TraceNamed m -> ConnectionsVar -> Log.LoggerName -> m ()
-notifierHandler _ connVar _ = do
-    _ <- asHandler' (startSession noTrace)
-    on  (Subscribe SubAddr)             $ asHandler  $ subscribeAddr noTrace
-    on_ (Subscribe SubBlockLastPage)    $ asHandler_ $ subscribeBlocksLastPage noTrace
-    on_ (Subscribe SubTx)               $ asHandler_ $ subscribeTxs noTrace
-    on_ (Subscribe SubEpochsLastPage)   $ asHandler_ $ subscribeEpochsLastPage noTrace
-    on_ (Unsubscribe SubAddr)           $ asHandler_ $ unsubscribeAddr noTrace
-    on_ (Unsubscribe SubBlockLastPage)  $ asHandler_ $ unsubscribeBlocksLastPage noTrace
-    on_ (Unsubscribe SubTx)             $ asHandler_ $ unsubscribeTxs noTrace
-    on_ (Unsubscribe SubEpochsLastPage) $ asHandler_ $ unsubscribeEpochsLastPage noTrace
+    :: ( MonadState RoutingTable m
+       , MonadReader Socket m
+       , MonadIO m
+       )
+    => TraceNamed IO -> ConnectionsVar -> m ()
+notifierHandler logTrace connVar = do
+    _ <- asHandler' (startSession logTrace)
+    on  (Subscribe SubAddr)             $ asHandler  $ subscribeAddr logTrace
+    on_ (Subscribe SubBlockLastPage)    $ asHandler_ $ subscribeBlocksLastPage logTrace
+    on_ (Subscribe SubTx)               $ asHandler_ $ subscribeTxs logTrace
+    on_ (Subscribe SubEpochsLastPage)   $ asHandler_ $ subscribeEpochsLastPage logTrace
+    on_ (Unsubscribe SubAddr)           $ asHandler_ $ unsubscribeAddr logTrace
+    on_ (Unsubscribe SubBlockLastPage)  $ asHandler_ $ unsubscribeBlocksLastPage logTrace
+    on_ (Unsubscribe SubTx)             $ asHandler_ $ unsubscribeTxs logTrace
+    on_ (Unsubscribe SubEpochsLastPage) $ asHandler_ $ unsubscribeEpochsLastPage logTrace
 
     on_ CallMe                         $ emitJSON CallYou empty
-    appendDisconnectHandler . void     $ asHandler_ $ finishSession noTrace
+    appendDisconnectHandler . void     $ asHandler_ $ finishSession logTrace
  where
     -- handlers provide context for logging and `ConnectionsVar` changes
     asHandler
@@ -113,22 +116,21 @@ notifierHandler _ connVar _ = do
         -> m ()
     inHandlerCtx =
         -- currently @NotifierError@s aren't caught
-        void . {-Log.usingLoggerName loggerName .-} withConnState connVar . runNotifierLogger
+        void . withConnState connVar . runNotifierLogger
 
 notifierServer
     :: MonadIO m
-    => NotifierSettings
+    => TraceNamed IO
+    -> NotifierSettings
     -> ConnectionsVar
     -> m ()
-notifierServer notifierSettings connVar = do
-
-    let loggerName = "This will be removed as Trace will be passed to notifierHandler"
+notifierServer logTrace notifierSettings connVar = do
 
     let settings :: Settings
-        settings = toConfig notifierSettings loggerName
+        settings = toConfig notifierSettings
 
     liftIO $ do
-        handler <- initialize waiAPI $ notifierHandler noTrace connVar loggerName
+        handler <- initialize waiAPI $ notifierHandler logTrace connVar
         runSettings settings (addRequestCORSHeaders . app $ handler)
 
   where
@@ -165,10 +167,12 @@ notifierServer notifierSettings connVar = do
 periodicPollChanges
     :: forall ctx m.
        (ExplorerMode ctx m)
-    => TraceNamed Identity -> ConnectionsVar -> m ()
+    => TraceNamed IO -> ConnectionsVar -> m ()
 periodicPollChanges logTrace connVar =
+    let logTrace' = natTrace liftIO logTrace
+    in
     -- Runs every 5 seconds.
-    runPeriodically (natTrace generalize logTrace) (5000 :: Millisecond) (Nothing, mempty) $ do
+    runPeriodically (natTrace liftIO logTrace) (5000 :: Millisecond) (Nothing, mempty) $ do
         curBlock   <- DB.getTip
         mempoolTxs <- lift $ S.fromList <$> getMempoolTxs @ctx
 
@@ -183,7 +187,7 @@ periodicPollChanges logTrace connVar =
                         mBlocks <- lift $ getBlundsFromTo @ctx curBlock wasBlock
                         case mBlocks of
                             Nothing     -> do
-                                logWarning noTrace "Failed to fetch blocks from db"
+                                logWarning logTrace' "Failed to fetch blocks from db"
                                 return []
                             Just blocks -> return blocks
             let newBlunds = fromMaybe [] mNewBlunds
@@ -195,7 +199,7 @@ periodicPollChanges logTrace connVar =
                 -- 2. last page of epochs
                 mSlotId <- lift $ getCurrentSlot @ctx
                 whenJust mSlotId $ (notifyEpochsLastPageSubscribers logTrace) . siEpoch
-                logDebug noTrace $ sformat ("Blockchain updated ("%int%" blocks)")
+                logDebug logTrace' $ sformat ("Blockchain updated ("%int%" blocks)")
                     (length newBlunds)
 
             newBlockchainTxs <- lift $ concatForM newBlunds (getBlockTxs @ctx . fst)
@@ -208,23 +212,23 @@ periodicPollChanges logTrace connVar =
             -- notify about transactions
             forM_ txInfos $ \(addr, cTxBriefs) -> do
                 notifyAddrSubscribers @ctx logTrace addr cTxBriefs
-                logDebug noTrace $ sformat ("Notified address "%addressF%" about "
+                logDebug logTrace' $ sformat ("Notified address "%addressF%" about "
                            %int%" transactions") addr (length cTxBriefs)
 
             -- notify about transactions
             unless (null cTxEntries) $ do
                 notifyTxsSubscribers @ctx logTrace cTxEntries
-                logDebug noTrace $ sformat ("Broadcasted transactions: "%listJson)
+                logDebug logTrace' $ sformat ("Broadcasted transactions: "%listJson)
                            (cteId <$> cTxEntries)
 
 -- | Starts notification server. Kill current thread to stop it.
 notifierApp
     :: forall ctx m.
-       (ExplorerMode ctx m)
-    => TraceNamed Identity -> NotifierSettings -> m ()
+       ( ExplorerMode ctx m )
+    => TraceNamed IO -> NotifierSettings -> m ()
 notifierApp logTrace settings = do
     let logTrace' = appendName "notifier.socket-io" logTrace
-    generalize $ logInfo logTrace' "Starting"
+    logInfo (natTrace liftIO logTrace') "Starting"
     connVar <- liftIO $ STM.newTVarIO mkConnectionsState
-    withAsync (periodicPollChanges (natTrace generalize logTrace') connVar)
-              (\_async -> notifierServer settings connVar)
+    withAsync (periodicPollChanges logTrace' connVar)
+              (\_async -> notifierServer logTrace' settings connVar)

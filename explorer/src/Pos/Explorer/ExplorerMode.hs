@@ -288,9 +288,8 @@ runSubTestMode :: ConnectionsState -> SubscriptionTestMode a -> IO (a, Connectio
 runSubTestMode connectionsState m =
     runStateT (runSubscriptionTestMode m) connectionsState
 
--- instance HasLoggerName SubscriptionTestMode where
---     askLoggerName        = pure "explorer-subscription-test"
---     modifyLoggerName _ a = a
+instance MonadIO SubscriptionTestMode where
+    liftIO = liftIO
 
 ----------------------------------------------------------------------------
 -- Property
