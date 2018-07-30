@@ -232,14 +232,9 @@ loggerBracket lh name action = do
     mayle <- liftIO $ Internal.getLogEnv lh
     case mayle of
             Nothing -> error "logging not yet initialized. Abort."
-            Just le -> mask $ \unmasked -> do
-                           res <- (unmasked $ body le) `onException` (finalizer le)
-                           finalizer le
-                           return res
+            Just le -> bracket (return le) finalizer body
     where
-      finalizer le_ = do
-          _ <- liftIO $ K.closeScribes le_
-          return ()
+      finalizer le_ = void $ liftIO $ K.closeScribes le_
       body le_ = K.runKatipContextT le_ () (Internal.s2kname name) $ action
 
 -- | for compatibility (TODO check if still referenced)

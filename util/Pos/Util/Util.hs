@@ -56,7 +56,6 @@ module Pos.Util.Util
        , buildListBounds
        , multilineBounds
        , logException
-       , bracketWithLogging
        , bracketWithTrace
 
        -- * Misc
@@ -337,22 +336,6 @@ logException name = E.handleAsync (\e -> handler e >> E.throw e)
         Log.logError message `E.catchAny` \loggingExc -> do
             putStrLn message
             putStrLn $ "logException failed to use logging: " <> pretty loggingExc
-
--- | 'bracket' which logs given message after acquiring the resource
--- and before calling the callback with 'Info' severity.
-bracketWithLogging ::
-       (MonadMask m, Log.WithLogger m)
-    => Text
-    -> m a
-    -> (a -> m b)
-    -> (a -> m c)
-    -> m c
-bracketWithLogging msg acquire release = bracket acquire release . addLogging
-  where
-    addLogging callback resource = do
-        Log.logInfo $ "<bracketWithLogging:before> " <> msg
-        callback resource <*
-            Log.logInfo ("<bracketWithLogging:after> " <> msg)
 
 -- | 'bracket' which logs given message after acquiring the resource
 -- and before calling the callback with 'Info' severity.
