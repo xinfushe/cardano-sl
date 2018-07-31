@@ -71,6 +71,7 @@ import           Pos.Launcher (HasConfigurations)
 import           Pos.Recovery ()
 import           Pos.Util (postfixLFields)
 import qualified Pos.Util.Modifier as MM
+import           Pos.Util.Trace (natTrace)
 import           Pos.Util.UserSecret (HasUserSecret (..))
 import           Pos.Util.Util (HasLens (..))
 import           Pos.Wallet.Web.Tracking.Types (SyncQueue)
@@ -255,8 +256,8 @@ instance HasConfiguration => MonadGState WalletWebMode where
 
 instance (HasConfiguration)
        => MonadBListener WalletWebMode where
-    onApplyBlocks = onApplyBlocksWebWallet
-    onRollbackBlocks = onRollbackBlocksWebWallet
+    onApplyBlocks tr = onApplyBlocksWebWallet $ natTrace liftIO tr
+    onRollbackBlocks tr = onRollbackBlocksWebWallet $ natTrace liftIO tr
 
 instance MonadUpdates WalletWebMode where
     waitForUpdate = waitForUpdateWebWallet
