@@ -14,21 +14,23 @@ import qualified Data.Map as Map
 import           Formatting (build, int, sformat, stext, (%))
 import qualified Text.JSON.Canonical as CanonicalJSON
 
+import           Pos.Chain.Txp (TxpConfiguration)
+import           Pos.Chain.Update (BlockVersionModifier (..))
 import           Pos.Client.KeyStorage (addSecretKey, getSecretKeysPlain)
 import           Pos.Client.Txp.Balances (getBalance)
-import           Pos.Core (AddrStakeDistribution (..), Address,
-                     HeavyDlgIndex (..), SoftwareVersion (..), StakeholderId,
+import           Pos.Core (AddrStakeDistribution (..), Address, StakeholderId,
                      addressHash, mkMultiKeyDistr, unsafeGetCoin)
 import           Pos.Core.Common (AddrAttributes (..), AddrSpendingData (..),
                      makeAddress)
 import           Pos.Core.Configuration (genesisSecretKeys)
+import           Pos.Core.Delegation (HeavyDlgIndex (..))
 import           Pos.Core.Txp (TxOut (..))
+import           Pos.Core.Update (SoftwareVersion (..))
 import           Pos.Crypto (ProtocolMagic, PublicKey, emptyPassphrase,
                      encToPublic, fullPublicKeyF, hashHexF, noPassEncrypt,
                      safeCreatePsk, unsafeCheatingHashCoerce, withSafeSigner)
 import           Pos.DB.Class (MonadGState (..))
 import           Pos.Infra.Diffusion.Types (Diffusion (..))
-import           Pos.Update (BlockVersionModifier (..))
 import           Pos.Util.Trace.Named (TraceNamed, logError, logInfo,
                      logWarning)
 import           Pos.Util.UserSecret (WalletUserSecret (..), readUserSecret,
@@ -63,11 +65,12 @@ createCommandProcs ::
        forall m. MonadIO m
     => TraceNamed m
     -> Maybe ProtocolMagic
+    -> Maybe TxpConfiguration
     -> Maybe (Dict (MonadAuxxMode m))
     -> PrintAction m
     -> Maybe (Diffusion m)
     -> [CommandProc m]
-createCommandProcs logTrace mpm hasAuxxMode printAction mDiffusion = rights . fix $ \commands -> [
+createCommandProcs logTrace mpm mTxpConfig hasAuxxMode printAction mDiffusion = rights . fix $ \commands -> [
 
     return CommandProc
     { cpName = "L"
@@ -402,6 +405,7 @@ createCommandProcs logTrace mpm hasAuxxMode printAction mDiffusion = rights . fi
     let name = "generate-blocks" in
     needsProtocolMagic name >>= \pm ->
     needsAuxxMode name >>= \Dict ->
+    needsTxpConfig name >>= \txpConfig ->
     return CommandProc
     { cpName = name
     , cpArgumentPrepare = identity
@@ -410,7 +414,7 @@ createCommandProcs logTrace mpm hasAuxxMode printAction mDiffusion = rights . fi
         bgoSeed <- getArgOpt tyInt "seed"
         return GenBlocksParams{..}
     , cpExec = \params -> do
-        generateBlocks logTrace pm params
+        generateBlocks logTrace pm txpConfig params
         return ValueUnit
     , cpHelp = "generate <n> blocks"
     },
@@ -488,7 +492,7 @@ createCommandProcs logTrace mpm hasAuxxMode printAction mDiffusion = rights . fi
                          "          pk hash:   "%hashHexF%"\n"%
                          "          HD addr:   "%build)
                     i addr pk (addressHash pk) addrHD
-        walletMB <- (^. usWallet) <$> (view userSecret >>= atomically . readTVar)
+        walletMB <- (^. usWallet) <$> (view userSecret >>= readTVarIO)
         whenJust walletMB $ \wallet -> do
             addrHD <- deriveHDAddressAuxx (_wusRootKey wallet)
             printAction $
@@ -518,6 +522,9 @@ createCommandProcs logTrace mpm hasAuxxMode printAction mDiffusion = rights . fi
     needsProtocolMagic :: Name -> Either UnavailableCommand ProtocolMagic
     needsProtocolMagic name =
         maybe (Left $ UnavailableCommand name "ProtocolMagic is not available") Right mpm
+    needsTxpConfig :: Name -> Either UnavailableCommand TxpConfiguration
+    needsTxpConfig name =
+        maybe (Left $ UnavailableCommand name "TxpConfiguration is not available") Right mTxpConfig
 
 procConst :: Applicative m => Name -> Value -> CommandProc m
 procConst name value =

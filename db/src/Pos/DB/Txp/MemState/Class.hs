@@ -28,16 +28,15 @@ import qualified Control.Concurrent.STM as STM
 import           Data.Default (Default (..))
 import qualified Data.HashMap.Strict as HM
 
-import           Pos.Core (HeaderHash)
+import           Pos.Chain.Txp (MemPool (..), ToilVerFailure, TxpConfiguration,
+                     UndoMap, UtxoModifier)
+import           Pos.Core.Block (HeaderHash)
 import           Pos.Core.Reporting (MonadReporting)
 import           Pos.Core.Slotting (MonadSlots (..))
 import           Pos.Core.Txp (TxAux, TxId)
 import           Pos.Crypto (ProtocolMagic)
 import           Pos.DB.Class (MonadDBRead, MonadGState (..))
 import           Pos.DB.Txp.MemState.Types (GenericTxpLocalData (..))
-import           Pos.Txp.Configuration (HasTxpConfiguration)
-import           Pos.Txp.Toil.Failure (ToilVerFailure)
-import           Pos.Txp.Toil.Types (MemPool (..), UndoMap, UtxoModifier)
 import           Pos.Util.Trace.Named (TraceNamed)
 import           Pos.Util.Util (HasLens (..))
 
@@ -120,8 +119,8 @@ clearTxpMemPool txpData = do
 type family MempoolExt (m :: * -> *) :: *
 
 class Monad m => MonadTxpLocal m where
-    txpNormalize :: TraceNamed m -> ProtocolMagic -> m ()
-    txpProcessTx :: TraceNamed m -> ProtocolMagic -> (TxId, TxAux) -> m (Either ToilVerFailure ())
+    txpNormalize :: TraceNamed m -> ProtocolMagic -> TxpConfiguration -> m ()
+    txpProcessTx :: TraceNamed m -> ProtocolMagic -> TxpConfiguration -> (TxId, TxAux) -> m (Either ToilVerFailure ())
 
 type TxpLocalWorkMode ctx m =
     ( MonadIO m
@@ -131,5 +130,4 @@ type TxpLocalWorkMode ctx m =
     , MonadTxpMem (MempoolExt m) ctx m
     , MonadMask m
     , MonadReporting m
-    , HasTxpConfiguration
     )

@@ -16,15 +16,22 @@ import           Control.Monad.Except (MonadError, runExceptT)
 import           Data.Default (Default (def))
 import           UnliftIO (MonadUnliftIO)
 
-import           Pos.Core (ApplicationName, BlockVersion, ComponentBlock (..),
-                     HasCoreConfiguration, HasProtocolConstants,
-                     NumSoftwareVersion, ProtocolMagic, SoftwareVersion (..),
-                     StakeholderId, addressHash, blockVersionL, epochIndexL,
-                     headerHashG, headerLeaderKeyL, headerSlotL)
+import           Pos.Chain.Update (BlockVersionState, ConfirmedProposalState,
+                     HasUpdateConfiguration, MonadPoll, PollModifier (..),
+                     PollT, PollVerFailure, ProposalState, USUndo, execPollT,
+                     execRollT, getAdoptedBV, lastKnownBlockVersion,
+                     reportUnexpectedError, runPollT)
+import           Pos.Core (HasCoreConfiguration, HasProtocolConstants,
+                     ProtocolMagic, StakeholderId, addressHash, epochIndexL)
+import           Pos.Core.Block (ComponentBlock (..), headerHashG,
+                     headerLeaderKeyL, headerSlotL)
 import           Pos.Core.Chrono (NE, NewestFirst, OldestFirst)
+import           Pos.Core.Exception (traceFatalError)
 import           Pos.Core.Reporting (MonadReporting)
 import           Pos.Core.Slotting (MonadSlotsData, SlottingData, slottingVar)
-import           Pos.Core.Update (BlockVersionData, UpId, UpdatePayload)
+import           Pos.Core.Update (ApplicationName, BlockVersion,
+                     BlockVersionData, NumSoftwareVersion,
+                     SoftwareVersion (..), UpId, UpdatePayload, blockVersionL)
 import qualified Pos.DB.BatchOp as DB
 import qualified Pos.DB.Class as DB
 import           Pos.DB.Lrc (HasLrcContext)
@@ -35,13 +42,6 @@ import           Pos.DB.Update.Poll.Logic.Base (canCreateBlockBV)
 import           Pos.DB.Update.Poll.Logic.Rollback (rollbackUS)
 import           Pos.DB.Update.Poll.Logic.Softfork (processGenesisBlock,
                      recordBlockIssuance)
-import           Pos.Exception (traceFatalError)
-import           Pos.Update.Configuration (HasUpdateConfiguration,
-                     lastKnownBlockVersion)
-import           Pos.Update.Poll (BlockVersionState, ConfirmedProposalState,
-                     MonadPoll, PollModifier (..), PollT, PollVerFailure,
-                     ProposalState, USUndo, execPollT, execRollT, getAdoptedBV,
-                     reportUnexpectedError, runPollT)
 import           Pos.Util.AssertMode (inAssertMode)
 import qualified Pos.Util.Modifier as MM
 import           Pos.Util.Trace (natTrace)
@@ -102,22 +102,23 @@ usApplyBlocks
        )
     => TraceNamed m
     -> ProtocolMagic
+    -> BlockVersion
     -> OldestFirst NE UpdateBlock
     -> Maybe PollModifier
     -> m [DB.SomeBatchOp]
-usApplyBlocks logTrace0 pm blocks modifierMaybe =
+usApplyBlocks logTrace0 pm bv blocks modifierMaybe =
     processModifier =<<
-      case modifierMaybe of
-          Nothing -> do
-              verdict <- usVerifyBlocks logTrace pm False blocks
-              either onFailure (return . fst) verdict
-          Just modifier -> do
-              -- TODO: I suppose such sanity checks should be done at higher
-              -- level.
-              inAssertMode $ do
-                  verdict <- usVerifyBlocks logTrace pm False blocks
-                  whenLeft verdict $ \v -> onFailure v
-              return modifier
+    case modifierMaybe of
+        Nothing -> do
+            verdict <- usVerifyBlocks logTrace pm False bv blocks
+            either onFailure (return . fst) verdict
+        Just modifier -> do
+            -- TODO: I suppose such sanity checks should be done at higher
+            -- level.
+            inAssertMode $ do
+                verdict <- usVerifyBlocks logTrace pm False bv blocks
+                whenLeft verdict $ \v -> onFailure v
+            return modifier
   where
     logTrace = withUSLogger logTrace0
     onFailure failure = do
@@ -172,16 +173,16 @@ usVerifyBlocks ::
     => TraceNamed m
     -> ProtocolMagic
     -> Bool
+    -> BlockVersion
     -> OldestFirst NE UpdateBlock
     -> m (Either PollVerFailure (PollModifier, OldestFirst NE USUndo))
-usVerifyBlocks logTrace0 pm verifyAllIsKnown blocks =
+usVerifyBlocks logTrace0 pm verifyAllIsKnown adoptedBV blocks =
     reportUnexpectedError $
       processRes <$> run (runExceptT action)
   where
     logTrace = withUSLogger logTrace0
     action = do
-        lastAdopted <- getAdoptedBV
-        mapM (verifyBlock (natTrace (lift . lift . lift) logTrace) pm lastAdopted verifyAllIsKnown) blocks
+        mapM (verifyBlock (natTrace (lift . lift . lift) logTrace) pm adoptedBV verifyAllIsKnown) blocks
     run :: PollT (DBPoll n) a -> n (a, PollModifier)
     run = runDBPoll . runPollT def
     processRes ::
@@ -193,8 +194,8 @@ usVerifyBlocks logTrace0 pm verifyAllIsKnown blocks =
 verifyBlock
     :: (USGlobalVerifyMode ctx m, MonadPoll m, MonadError PollVerFailure m, HasProtocolConstants)
     => TraceNamed m -> ProtocolMagic -> BlockVersion -> Bool -> UpdateBlock -> m USUndo
-verifyBlock _ _ _ _ (ComponentBlockGenesis genBlk) =
-    execRollT $ processGenesisBlock (genBlk ^. epochIndexL)
+verifyBlock logTrace _ _ _ (ComponentBlockGenesis genBlk) =
+    execRollT $ processGenesisBlock (natTrace lift logTrace) (genBlk ^. epochIndexL)
 verifyBlock logTrace pm lastAdopted verifyAllIsKnown (ComponentBlockMain header payload) =
     execRollT $ do
         verifyAndApplyUSPayload

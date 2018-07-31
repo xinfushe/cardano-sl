@@ -54,22 +54,21 @@ import           Pos.DB.Class (MonadDBRead)
 import           Pos.Infra.Diffusion.Types (Diffusion)
 
 import           Pos.Binary.Class (biSize)
-import           Pos.Block.Types (Blund, Undo)
+import           Pos.Chain.Block (Blund, Undo)
+import           Pos.Chain.Txp (TxMap, mpLocalTxs, topsortTxs)
 import           Pos.Core (AddrType (..), Address (..), Coin, EpochIndex,
-                     HeaderHash, Timestamp, coinToInteger, difficultyL,
-                     gbHeader, gbhConsensus, getChainDifficulty,
+                     Timestamp, coinToInteger, difficultyL, getChainDifficulty,
                      isUnknownAddressType, makeRedeemAddress, siEpoch, siSlot,
                      sumCoins, timestampToPosix, unsafeAddCoin,
                      unsafeIntegerToCoin, unsafeSubCoin)
-import           Pos.Core.Block (Block, MainBlock, mainBlockSlot,
-                     mainBlockTxPayload, mcdSlot)
+import           Pos.Core.Block (Block, HeaderHash, MainBlock, gbHeader,
+                     gbhConsensus, mainBlockSlot, mainBlockTxPayload, mcdSlot)
 import           Pos.Core.Chrono (NewestFirst (..))
 import           Pos.Core.Txp (Tx (..), TxAux, TxId, TxOutAux (..), taTx,
                      txOutValue, txpTxs, _txOutputs)
 import           Pos.DB.Txp (MonadTxpMem, getLocalTxs, getMemPool,
                      withTxpLocalData)
 import           Pos.Infra.Slotting (MonadSlots (..), getSlotStart)
-import           Pos.Txp (TxMap, mpLocalTxs, topsortTxs)
 import           Pos.Util (divRoundUp, maybeThrow)
 import           Pos.Util.Trace.Named (TraceNamed, logDebug)
 import           Pos.Web (serveImpl)

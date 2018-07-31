@@ -312,7 +312,7 @@ main =
                       set ltMinSeverity Log.Debug
     let logTrace = appendName "keygen" $ namedTrace lh
     Log.usingLoggerName lh loggerName . logException loggerName $
-        withConfigurations (natTrace liftIO logTrace) Nothing loConfiguration $ \_ pm -> do
+        withConfigurations (natTrace liftIO logTrace) Nothing loConfiguration $ \pm _ _ -> do
 
         -- Generate TLS certificates as needed
         liftIO $ generateTlsCertificates logTrace loConfiguration loX509ToolPath loTlsPath

@@ -113,6 +113,7 @@ library
                        Pos.DB.Block.Logic.Creation
                        Pos.DB.Block.Logic.Header
                        Pos.DB.Block.Logic.Internal
+                       Pos.DB.Block.Logic.Types
                        Pos.DB.Block.Logic.Util
                        Pos.DB.Block.Logic.VAR
                        Pos.DB.Block.Lrc
@@ -123,14 +124,9 @@ library
                      , base
                      , bytestring
                      , cardano-sl-binary
-                     , cardano-sl-block
+                     , cardano-sl-chain
                      , cardano-sl-core
                      , cardano-sl-crypto
-                     , cardano-sl-delegation
-                     , cardano-sl-lrc
-                     , cardano-sl-ssc
-                     , cardano-sl-txp
-                     , cardano-sl-update
                      , cardano-sl-util
                      , concurrent-extra
                      , conduit

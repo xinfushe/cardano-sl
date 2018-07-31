@@ -46,12 +46,12 @@ import qualified Data.HashMap.Strict as HMS
 import qualified Ether
 import           Formatting (sformat)
 
-import           Pos.Core (EpochIndex (..), HasConfiguration, HeaderHash,
-                     SlotId (..), gbHeader, gbhPrevBlock, getSlotIndex,
-                     headerHash, headerHashF, mkLocalSlotIndex)
-import           Pos.Core.Block (Block, mainBlockTxPayload)
+import           Pos.Core (EpochIndex (..), HasConfiguration, SlotId (..),
+                     getSlotIndex, mkLocalSlotIndex)
+import           Pos.Core.Block (Block, HeaderHash, gbHeader, gbhPrevBlock,
+                     headerHash, headerHashF, mainBlockTxPayload)
 import           Pos.Core.Block.Genesis (genBlockEpoch)
-import           Pos.Core.Block.Main (mainBlockSlot)
+import           Pos.Core.Block.Union (mainBlockSlot)
 import           Pos.Core.JsonLog.CanJsonLog (CanJsonLog)
 import           Pos.Core.JsonLog.JsonLogT (JsonLogConfig (..))
 import qualified Pos.Core.JsonLog.JsonLogT as JL

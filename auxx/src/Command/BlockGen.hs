@@ -11,8 +11,10 @@ import           Data.Default (def)
 import           System.Random (mkStdGen, randomIO)
 
 import           Pos.AllSecrets (mkAllSecretsSimple)
+import           Pos.Chain.Txp (TxpConfiguration)
 import           Pos.Client.KeyStorage (getSecretKeysPlain)
-import           Pos.Core (gdBootStakeholders, genesisData)
+import           Pos.Core (genesisData)
+import           Pos.Core.Genesis (gdBootStakeholders)
 import           Pos.Crypto (ProtocolMagic, encToSecret)
 import           Pos.DB.Txp (txpGlobalSettings)
 import           Pos.Generator.Block (BlockGenParams (..), genBlocks,
@@ -27,13 +29,12 @@ import           Lang.Value (GenBlocksParams (..))
 import           Mode (MonadAuxxMode)
 
 
-generateBlocks
-    :: MonadAuxxMode m
-    => TraceNamed m
-    -> ProtocolMagic
-    -> GenBlocksParams
-    -> m ()                                                  -- JSON logging Trace
-generateBlocks logTrace pm GenBlocksParams{..} = withStateLock noTrace HighPriority ApplyBlock $ \_ -> do
+generateBlocks :: MonadAuxxMode m
+               => TraceNamed m
+               -> ProtocolMagic
+               -> TxpConfiguration
+               -> GenBlocksParams -> m ()
+generateBlocks logTrace pm txpConfig GenBlocksParams{..} = withStateLock noTrace HighPriority ApplyBlock $ \_ -> do
     seed <- liftIO $ maybe randomIO pure bgoSeed
     logInfo logTrace $ "Generating with seed " <> show seed
 
@@ -48,9 +49,9 @@ generateBlocks logTrace pm GenBlocksParams{..} = withStateLock noTrace HighPrior
                 , _bgpTxGenParams     = def & tgpTxCountRange .~ (0,0)
                 , _bgpInplaceDB       = True
                 , _bgpSkipNoKey       = True
-                , _bgpTxpGlobalSettings = txpGlobalSettings pm
+                , _bgpTxpGlobalSettings = txpGlobalSettings pm txpConfig
                 }
-    withCompileInfo $ evalRandT (genBlocks logTrace pm bgenParams (const ())) (mkStdGen seed)
+    withCompileInfo $ evalRandT (genBlocks logTrace pm txpConfig bgenParams (const ())) (mkStdGen seed)
     -- We print it twice because there can be a ton of logs and
     -- you don't notice the first message.
     logInfo logTrace $ "Generated with seed " <> show seed

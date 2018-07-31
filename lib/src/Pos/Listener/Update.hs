@@ -15,6 +15,7 @@ import           Universum
 import           Formatting (build, sformat, (%))
 import           UnliftIO (MonadUnliftIO)
 
+import           Pos.Chain.Update (HasUpdateConfiguration, UpdateParams)
 import           Pos.Core (ProtocolMagic)
 import           Pos.Core.StateLock (StateLock)
 import           Pos.Core.Update (UpdateProposal (..), UpdateVote (..))
@@ -25,8 +26,6 @@ import           Pos.Infra.Recovery.Info (MonadRecoveryInfo)
 import           Pos.Infra.Reporting (MonadReporting)
 import           Pos.Infra.Shutdown.Class (HasShutdownContext)
 import           Pos.Infra.Slotting (MonadSlots)
-import           Pos.Update.Configuration (HasUpdateConfiguration)
-import           Pos.Update.Params (UpdateParams)
 import           Pos.Util.Trace.Named (TraceNamed, logNotice, logWarning)
 import           Pos.Util.Util (HasLens (..))
 
@@ -45,7 +44,7 @@ type UpdateMode ctx m =
       , HasShutdownContext ctx
       , HasUpdateConfiguration
       , MonadReporting m
-      , MonadRecoveryInfo m
+      , MonadRecoveryInfo ctx m
       , MonadSlots ctx m
       )
 

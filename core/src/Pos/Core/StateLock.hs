@@ -35,7 +35,7 @@ import           Data.Aeson.Types (ToJSON (..), Value)
 import           Data.Time.Units (Microsecond)
 import           System.Mem (getAllocationCounter)
 
-import           Pos.Core (HeaderHash)
+import           Pos.Core.Block (HeaderHash)
 import           Pos.Core.Conc (currentTime)
 import           Pos.Util.Concurrent (modifyMVar, withMVar)
 import           Pos.Util.Concurrent.PriorityLock (Priority (..), PriorityLock,

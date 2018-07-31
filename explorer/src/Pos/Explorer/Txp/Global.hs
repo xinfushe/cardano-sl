@@ -9,8 +9,10 @@ import           Universum
 
 import qualified Data.HashMap.Strict as HM
 
-import           Pos.Core (ComponentBlock (..), HasConfiguration, HeaderHash,
-                     SlotId (..), epochIndexL, headerHash, headerSlotL)
+import           Pos.Chain.Txp (TxpConfiguration)
+import           Pos.Core (HasConfiguration, SlotId (..), epochIndexL)
+import           Pos.Core.Block (ComponentBlock (..), HeaderHash, headerHash,
+                     headerSlotL)
 import           Pos.Core.Chrono (NewestFirst (..))
 import           Pos.Core.Txp (TxAux, TxUndo)
 import           Pos.Crypto (ProtocolMagic)
@@ -26,30 +28,26 @@ import           Pos.Util.Trace.Named (TraceNamed)
 
 import qualified Pos.Explorer.DB as GS
 import           Pos.Explorer.Txp.Common (buildExplorerExtraLookup)
--- import           Pos.Explorer.Txp.Toil (EGlobalToilM, ExplorerExtraLookup (..),
---                      ExplorerExtraModifier (..), eApplyToil)
 import           Pos.Explorer.Txp.Toil (EGlobalToilM, ExplorerExtraLookup (..),
                      ExplorerExtraModifier (..), eApplyToil, eRollbackToil)
 import           Pos.Explorer.Txp.Toil.Monad (ExplorerExtraM)
 
 -- | Settings used for global transactions data processing used by explorer.
-explorerTxpGlobalSettings
-    :: HasConfiguration
-    -- :: (MonadIO m, HasConfiguration)
-    => TraceNamed IO --ExplorerExtraM
-    -> ProtocolMagic
-    -> TxpGlobalSettings
-explorerTxpGlobalSettings logTrace pm =
+explorerTxpGlobalSettings :: HasConfiguration
+                          => TraceNamed IO
+                          -> ProtocolMagic
+                          -> TxpConfiguration
+                          -> TxpGlobalSettings
+explorerTxpGlobalSettings logTrace pm txpConfig =
     -- verification is same
-    (txpGlobalSettings pm)
-    { tgsApplyBlocks = \tr -> applyBlocksWith tr pm (applySettings logTrace)
-    --TODO applySettings could take the Trace inside applyBlocksWith
+    (txpGlobalSettings pm txpConfig)
+    { tgsApplyBlocks = \tr -> applyBlocksWith tr pm txpConfig (applySettings logTrace)
     , tgsRollbackBlocks = \_ -> processBlunds (rollbackSettings logTrace) . getNewestFirst
     }
 
 applySettings ::
        TxpGlobalApplyMode ctx m
-    => TraceNamed IO --ExplorerExtraM
+    => TraceNamed IO
     -> ProcessBlundsSettings ExplorerExtraLookup ExplorerExtraModifier m
 applySettings _{-logTrace-} =
     ProcessBlundsSettings
@@ -63,7 +61,7 @@ applySettings _{-logTrace-} =
 
 rollbackSettings ::
        TxpGlobalRollbackMode m
-    => TraceNamed IO --ExplorerExtraM
+    => TraceNamed IO
     -> ProcessBlundsSettings ExplorerExtraLookup ExplorerExtraModifier m
 rollbackSettings _ = -- logTrace =
     ProcessBlundsSettings

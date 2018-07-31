@@ -19,24 +19,27 @@ import           Serokell.Util (enumerate, listJson, pairF)
 import qualified System.Metrics.Label as Label
 import           System.Random (randomRIO)
 
-import           Pos.Block.Configuration (HasBlockConfiguration, criticalCQ,
+import           Pos.Chain.Block (HasBlockConfiguration, criticalCQ,
                      criticalCQBootstrap, fixedTimeCQSec, networkDiameter,
-                     nonCriticalCQ, nonCriticalCQBootstrap)
-import           Pos.Block.Slog (scCQFixedMonitorState, scCQOverallMonitorState,
+                     nonCriticalCQ, nonCriticalCQBootstrap,
+                     scCQFixedMonitorState, scCQOverallMonitorState,
                      scCQkMonitorState, scCrucialValuesLabel,
                      scDifficultyMonitorState, scEpochMonitorState,
                      scGlobalSlotMonitorState, scLocalSlotMonitorState)
-import           Pos.Core (BlockVersionData (..), ChainDifficulty, FlatSlotId,
-                     HasProtocolConstants, SlotId (..), Timestamp (Timestamp),
-                     addressHash, blkSecurityParam, difficultyL,
-                     epochOrSlotToSlot, epochSlots, flattenSlotId, gbHeader,
-                     getEpochOrSlot, getOurPublicKey, getSlotIndex, slotIdF,
-                     unflattenSlotId)
+import           Pos.Chain.Delegation (ProxySKBlockInfo)
+import           Pos.Chain.Txp (TxpConfiguration)
+import           Pos.Core (ChainDifficulty, FlatSlotId, HasProtocolConstants,
+                     SlotId (..), Timestamp (Timestamp), addressHash,
+                     blkSecurityParam, difficultyL, epochOrSlotToSlot,
+                     epochSlots, flattenSlotId, getEpochOrSlot,
+                     getOurPublicKey, getSlotIndex, slotIdF, unflattenSlotId)
+import           Pos.Core.Block (gbHeader)
 import           Pos.Core.Chrono (OldestFirst (..))
 import           Pos.Core.Conc (delay)
 --import           Pos.Core.JsonLog (CanJsonLog (..))
 import           Pos.Core.Reporting (HasMisbehaviorMetrics, MetricMonitor (..),
                      MetricMonitorState, noReportMonitor, recordValue)
+import           Pos.Core.Update (BlockVersionData (..))
 import           Pos.Crypto (ProtocolMagic, ProxySecretKey (pskDelegatePk))
 import           Pos.DB (gsIsBootstrapEra)
 import           Pos.DB.Block (calcChainQualityFixedTime, calcChainQualityM,
@@ -46,7 +49,6 @@ import qualified Pos.DB.BlockIndex as DB
 import           Pos.DB.Delegation (getDlgTransPsk, getPskByIssuer)
 import qualified Pos.DB.Lrc as LrcDB (getLeadersForEpoch)
 import           Pos.DB.Update (getAdoptedBVData)
-import           Pos.Delegation.Types (ProxySKBlockInfo)
 import           Pos.Infra.Diffusion.Types (Diffusion)
 import qualified Pos.Infra.Diffusion.Types as Diffusion
                      (Diffusion (announceBlockHeader))
@@ -76,11 +78,13 @@ blkWorkers
        , HasMisbehaviorMetrics ctx
        )
     => TraceNamed m
-    -> ProtocolMagic -> [Diffusion m -> m ()]
-blkWorkers logTrace pm =
-    [ blkCreatorWorker logTrace pm
+    -> ProtocolMagic
+    -> TxpConfiguration
+    -> [Diffusion m -> m ()]
+blkWorkers logTrace pm txpConfig =
+    [ blkCreatorWorker logTrace pm txpConfig
     , informerWorker logTrace
-    , retrievalWorker logTrace pm
+    , retrievalWorker logTrace pm txpConfig
     , recoveryTriggerWorker logTrace pm
     ]
 
@@ -116,11 +120,13 @@ blkCreatorWorker
        , HasMisbehaviorMetrics ctx
        )
     => TraceNamed m
-    -> ProtocolMagic -> Diffusion m -> m ()
-blkCreatorWorker logTrace pm =
+    -> ProtocolMagic
+    -> TxpConfiguration
+    -> Diffusion m -> m ()
+blkCreatorWorker logTrace pm txpConfig =
     \diffusion -> onNewSlot logTrace onsp $ \slotId ->
         recoveryCommGuard logTrace "onNewSlot worker, blkCreatorWorker" $
-        blockCreator logTrace pm slotId diffusion `catchAny` onBlockCreatorException
+        blockCreator logTrace pm txpConfig slotId diffusion `catchAny` onBlockCreatorException
   where
     onBlockCreatorException = reportOrLogE logTrace "blockCreator failed: "
     onsp :: OnNewSlotParams
@@ -133,11 +139,14 @@ blockCreator
        , HasMisbehaviorMetrics ctx
        )
     => TraceNamed m
-    -> ProtocolMagic -> SlotId -> Diffusion m -> m ()
-blockCreator logTrace pm (slotId@SlotId {..}) diffusion = do
+    -> ProtocolMagic
+    -> TxpConfiguration
+    -> SlotId
+    -> Diffusion m -> m ()
+blockCreator logTrace pm txpConfig (slotId@SlotId {..}) diffusion = do
 
     -- First of all we create genesis block if necessary.
-    mGenBlock <- createGenesisBlockAndApply logTrace pm siEpoch
+    mGenBlock <- createGenesisBlockAndApply logTrace pm txpConfig siEpoch
     whenJust mGenBlock $ \createdBlk -> do
         logInfo logTrace $ sformat ("Created genesis block:\n" %build) createdBlk
         -- TODO jsonLog $ jlCreatedBlock (Left createdBlk)
@@ -189,10 +198,10 @@ blockCreator logTrace pm (slotId@SlotId {..}) diffusion = do
                   "delegated by heavy psk: "%build)
                  ourHeavyPsk
            | weAreLeader ->
-                 onNewSlotWhenLeader logTrace pm slotId Nothing diffusion
+                 onNewSlotWhenLeader logTrace pm txpConfig slotId Nothing diffusion
            | heavyWeAreDelegate ->
                  let pske = swap <$> dlgTransM
-                 in onNewSlotWhenLeader logTrace pm slotId pske diffusion
+                 in onNewSlotWhenLeader logTrace pm txpConfig slotId pske diffusion
            | otherwise -> pass
 
 onNewSlotWhenLeader
@@ -200,11 +209,12 @@ onNewSlotWhenLeader
        )
     => TraceNamed m
     -> ProtocolMagic
+    -> TxpConfiguration
     -> SlotId
     -> ProxySKBlockInfo
     -> Diffusion m
     -> m ()
-onNewSlotWhenLeader logTrace pm slotId pske diffusion = do
+onNewSlotWhenLeader logTrace pm txpConfig slotId pske diffusion = do
     let logReason =
             sformat ("I have a right to create a block for the slot "%slotIdF%" ")
                     slotId
@@ -224,7 +234,7 @@ onNewSlotWhenLeader logTrace pm slotId pske diffusion = do
   where
     onNewSlotWhenLeaderDo = do
         logInfoS logTrace "It's time to create a block for current slot"
-        createdBlock <- createMainBlockAndApply logTrace pm slotId pske
+        createdBlock <- createMainBlockAndApply logTrace pm txpConfig slotId pske
         either whenNotCreated whenCreated createdBlock
         logInfoS logTrace "onNewSlotWhenLeader: done"
     whenCreated createdBlk = do

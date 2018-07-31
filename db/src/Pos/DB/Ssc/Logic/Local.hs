@@ -29,34 +29,31 @@ import           Formatting (int, sformat, (%))
 import           Serokell.Util (magnify')
 
 import           Pos.Binary.Class (biSize)
-import           Pos.Core (BlockVersionData (..), EpochIndex, HasGenesisData,
-                     HasProtocolConstants, SlotId (..), StakeholderId,
-                     VssCertificate, epochIndexL,
-                     mkVssCertificatesMapSingleton)
+import           Pos.Chain.Lrc (RichmenStakes)
+import           Pos.Chain.Ssc (HasSscConfiguration, MonadSscMem, PureToss,
+                     SscGlobalState, SscLocalData (..), SscLocalQuery,
+                     SscLocalUpdate, SscTag (..), SscVerifyError (..), TossT,
+                     askSscMem, evalPureTossWithLogger, evalTossT, execTossT,
+                     hasCertificateToss, hasCommitmentToss, hasOpeningToss,
+                     hasSharesToss, isCommitmentIdx, isGoodSlotForTag,
+                     isOpeningIdx, isSharesIdx, ldEpoch, ldModifier, ldSize,
+                     normalizeToss, pureTossWithEnvTrace, refreshToss,
+                     sscGlobal, sscRunGlobalQuery, sscRunLocalQuery,
+                     sscRunLocalSTM, supplyPureTossEnv, tmCertificates,
+                     tmCommitments, tmOpenings, tmShares,
+                     verifyAndApplySscPayload)
+import           Pos.Core (EpochIndex, HasGenesisData, HasProtocolConstants,
+                     SlotId (..), StakeholderId, epochIndexL)
 import           Pos.Core.Slotting (MonadSlots (getCurrentSlot))
 import           Pos.Core.Ssc (InnerSharesMap, Opening, SignedCommitment,
-                     SscPayload (..), mkCommitmentsMap)
+                     SscPayload (..), VssCertificate, mkCommitmentsMap,
+                     mkVssCertificatesMapSingleton)
+import           Pos.Core.Update (BlockVersionData (..))
 import           Pos.Crypto (ProtocolMagic)
 import           Pos.DB (MonadBlockDBRead, MonadDBRead,
                      MonadGState (gsAdoptedBVData))
 import           Pos.DB.BlockIndex (getTipHeader)
 import           Pos.DB.Lrc (HasLrcContext, getSscRichmen, tryGetSscRichmen)
-import           Pos.Lrc.Types (RichmenStakes)
-import           Pos.Ssc.Base (isCommitmentIdx, isOpeningIdx, isSharesIdx)
-import           Pos.Ssc.Configuration (HasSscConfiguration)
-import           Pos.Ssc.Error (SscVerifyError (..))
-import           Pos.Ssc.Mem (MonadSscMem, SscLocalQuery, SscLocalUpdate,
-                     askSscMem, sscRunGlobalQuery, sscRunLocalQuery,
-                     sscRunLocalSTM)
-import           Pos.Ssc.Toss (PureToss, SscTag (..), TossT,
-                     evalPureTossWithLogger, evalTossT, execTossT,
-                     hasCertificateToss, hasCommitmentToss, hasOpeningToss,
-                     hasSharesToss, isGoodSlotForTag, normalizeToss,
-                     pureTossWithEnvTrace, refreshToss, supplyPureTossEnv,
-                     tmCertificates, tmCommitments, tmOpenings, tmShares,
-                     verifyAndApplySscPayload)
-import           Pos.Ssc.Types (SscGlobalState, SscLocalData (..), ldEpoch,
-                     ldModifier, ldSize, sscGlobal)
 import           Pos.Util.Trace (natTrace)
 import           Pos.Util.Trace.Named (TraceNamed, logWarning)
 import           Pos.Util.Trace.Writer (writerTrace)
@@ -113,11 +110,11 @@ sscNormalize logTrace pm = do
     bvd <- gsAdoptedBVData
     globalVar <- sscGlobal <$> askSscMem
     --localVar <- sscLocal <$> askSscMem
-    gs <- atomically $ readTVar globalVar
+    gs <- readTVarIO globalVar
     seed <- Rand.drgNew
 
     sscRunLocalSTM logTrace $
-        --syncingStateWith localVar  $
+        --syncingStateWith localVar $    -- this is included in 'sscRunLocalSTM'
         executeMonadBaseRandom seed $
         sscNormalizeU pm (tipEpoch, richmenData) bvd gs
   where

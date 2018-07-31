@@ -12,17 +12,19 @@ import           Universum
 
 import           Data.Maybe (fromJust)
 
+import           Ntp.Client (NtpConfiguration)
+
 import           Pos.Binary ()
+import           Pos.Chain.Ssc (SscParams)
+import           Pos.Chain.Txp (TxpConfiguration)
 import           Pos.Client.CLI (CommonNodeArgs (..), NodeArgs (..),
                      SimpleNodeArgs (..))
 import qualified Pos.Client.CLI as CLI
 import           Pos.Crypto (ProtocolMagic)
-import           Pos.Infra.Ntp.Configuration (NtpConfiguration)
 import           Pos.Launcher (HasConfigurations, NodeParams (..), runNodeReal,
                      withConfigurations)
 import           Pos.Launcher.Configuration (AssetLockPath (..))
 import           Pos.Launcher.Resource (getRealLoggerConfig)
-import           Pos.Ssc.Types (SscParams)
 import           Pos.Util (logException)
 import           Pos.Util.CompileInfo (HasCompileInfo, withCompileInfo)
 import qualified Pos.Util.Log as Log
@@ -43,11 +45,12 @@ actionWithoutWallet
        )
     => TraceNamed IO
     -> ProtocolMagic
+    -> TxpConfiguration
     -> SscParams
     -> NodeParams
     -> m ()
-actionWithoutWallet logTrace pm sscParams nodeParams =
-    liftIO $ runNodeReal logTrace pm nodeParams sscParams
+actionWithoutWallet logTrace pm txpConfig sscParams nodeParams =
+    liftIO $ runNodeReal logTrace pm txpConfig nodeParams sscParams
         [updateTriggerWorker (natTrace (lift . liftIO) logTrace)]
 
 action
@@ -58,18 +61,19 @@ action
        )
     => TraceNamed IO
     -> SimpleNodeArgs
-    -> NtpConfiguration
     -> ProtocolMagic
+    -> TxpConfiguration
+    -> NtpConfiguration
     -> m ()
-action logTrace0 (SimpleNodeArgs (cArgs@CommonNodeArgs {..}) (nArgs@NodeArgs {..})) ntpConfig pm = do
-    CLI.printInfoOnStart logTrace cArgs ntpConfig
+action logTrace0 (SimpleNodeArgs (cArgs@CommonNodeArgs {..}) (nArgs@NodeArgs {..})) pm txpConfig ntpConfig = do
+    CLI.printInfoOnStart logTrace cArgs ntpConfig txpConfig
     logInfo logTrace "Wallet is disabled, because software is built w/o it"
     currentParams <- CLI.getNodeParams loggerName cArgs nArgs
 
     let vssSK = fromJust $ npUserSecret currentParams ^. usVss
     let sscParams = CLI.gtSscParams cArgs vssSK (npBehaviorConfig currentParams)
 
-    actionWithoutWallet logTrace0 pm sscParams currentParams
+    actionWithoutWallet logTrace0 pm txpConfig sscParams currentParams
       where
         logTrace = natTrace liftIO logTrace0
 

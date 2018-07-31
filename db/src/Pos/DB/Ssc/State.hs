@@ -10,9 +10,9 @@ import           Universum
 
 import qualified Control.Concurrent.STM as STM
 
+import           Pos.Chain.Ssc (SscState (..))
 import           Pos.Core.Slotting (MonadSlots)
 import           Pos.DB (MonadDBRead)
-import           Pos.Ssc.Types (SscState (..))
 
 -- Reexports
 import           Pos.DB.Ssc.State.Global

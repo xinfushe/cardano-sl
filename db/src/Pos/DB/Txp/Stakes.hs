@@ -33,6 +33,7 @@ import qualified Formatting.Buildable
 import           Serokell.Util (Color (Red), colorize)
 import           UnliftIO (MonadUnliftIO)
 
+import           Pos.Chain.Txp (GenesisUtxo (..), utxoToStakes)
 import           Pos.Core (Coin, HasCoreConfiguration, StakeholderId, StakesMap,
                      coinF, mkCoin, sumCoins, unsafeAddCoin,
                      unsafeIntegerToCoin)
@@ -43,8 +44,6 @@ import           Pos.DB (DBError (..), DBTag (GStateDB), IterType, MonadDB,
 import           Pos.DB.GState.Common (gsPutBi)
 import           Pos.DB.GState.Stakes (StakeIter, ftsStakeKey, ftsSumKey,
                      getRealTotalStake)
-import           Pos.Txp.Toil.Types (GenesisUtxo (..))
-import           Pos.Txp.Toil.Utxo (utxoToStakes)
 import           Pos.Util.Trace.Named (TraceNamed, logError)
 
 ----------------------------------------------------------------------------

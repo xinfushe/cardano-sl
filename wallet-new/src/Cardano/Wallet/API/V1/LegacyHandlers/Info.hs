@@ -38,7 +38,7 @@ getInfo :: ( MonadIO m
         -> TVar NtpStatus
         -> m (WalletResponse NodeInfo)
 getInfo logTrace Diffusion{..} ntpStatus = do
-    subscribers <- atomically $ readTVar (ssMap subscriptionStates)
+    subscribers <- readTVarIO (ssMap subscriptionStates)
     spV0 <- V0.syncProgress logTrace
     syncProgress   <- migrate spV0
     timeDifference <- V0.localTimeDifference ntpStatus

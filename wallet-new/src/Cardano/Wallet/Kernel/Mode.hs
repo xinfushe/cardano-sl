@@ -11,8 +11,8 @@ module Cardano.Wallet.Kernel.Mode
 import           Control.Lens (makeLensesWith)
 import           Universum
 
-import           Pos.Block.Slog
-import           Pos.Block.Types
+import           Pos.Chain.Block
+import           Pos.Chain.Txp
 import           Pos.Context
 import           Pos.Core
 import           Pos.Core.Chrono
@@ -30,7 +30,6 @@ import           Pos.Infra.Shutdown
 import           Pos.Infra.Slotting
 --import           Pos.Infra.Util.JsonLog.Events
 import           Pos.Launcher
-import           Pos.Txp.Configuration
 import           Pos.Util
 import           Pos.Util.Trace (noTrace)
 import           Pos.Util.Trace.Named (TraceNamed)
@@ -100,12 +99,13 @@ instance MonadBListener WalletMode where
 runWalletMode :: forall a. (HasConfigurations, HasCompileInfo)
               => TraceNamed IO
               -> ProtocolMagic
+              -> TxpConfiguration
               -> NodeResources ()
               -> PassiveWalletLayer IO
               -> (Diffusion WalletMode -> WalletMode a)
               -> IO a
-runWalletMode logTrace pm nr wallet action =
-    runRealMode logTrace pm nr $ \diffusion ->
+runWalletMode logTrace pm txpConfig nr wallet action =
+    runRealMode logTrace pm txpConfig nr $ \diffusion ->
         walletModeToRealMode wallet (action (hoistDiffusion realModeToWalletMode (walletModeToRealMode wallet) diffusion))
 
 walletModeToRealMode :: forall a. PassiveWalletLayer IO -> WalletMode a -> RealMode () a
@@ -201,7 +201,7 @@ instance HasConfiguration => MonadGState WalletMode where
 instance {-# OVERLAPPING #-} CanJsonLog WalletMode where
   jsonLog = jsonLogDefault
 -}
-instance (HasConfiguration, HasTxpConfiguration)
+instance HasConfiguration
       => MonadTxpLocal WalletMode where
   txpNormalize = txNormalize
   txpProcessTx logTrace = txProcessTransaction logTrace noTrace

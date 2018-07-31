@@ -21,16 +21,15 @@ import           Control.Monad.Except (MonadError (throwError))
 import qualified Control.Monad.Reader as Mtl
 import           Servant.Server (Handler, hoistServer)
 
-import           Pos.Block.Configuration (HasBlockConfiguration)
+import           Pos.Chain.Block (HasBlockConfiguration)
+import           Pos.Chain.Ssc (HasSscConfiguration)
+import           Pos.Chain.Update (HasUpdateConfiguration)
 import           Pos.Configuration (HasNodeConfiguration)
 import           Pos.Core (HasConfiguration)
 import           Pos.DB.Txp (MempoolExt, MonadTxpLocal (..))
 import           Pos.Infra.Diffusion.Types (Diffusion)
 import           Pos.Infra.Reporting (MonadReporting (..))
 import           Pos.Recovery ()
-import           Pos.Ssc.Configuration (HasSscConfiguration)
-import           Pos.Txp (HasTxpConfiguration)
-import           Pos.Update.Configuration (HasUpdateConfiguration)
 import           Pos.Util.CompileInfo (HasCompileInfo)
 import           Pos.Util.Trace (natTrace)
 import           Pos.Util.Trace.Named (TraceNamed)
@@ -56,15 +55,15 @@ type ExplorerProd = ExtraContextT (ExplorerBListener RealModeE)
 
 type instance MempoolExt ExplorerProd = ExplorerExtraModifier
 
-instance (HasConfiguration, HasTxpConfiguration) =>
+instance HasConfiguration =>
          MonadTxpLocal RealModeE where
     txpNormalize = eTxNormalize
     txpProcessTx = eTxProcessTransaction
 
-instance (HasConfiguration, HasTxpConfiguration) =>
+instance HasConfiguration =>
          MonadTxpLocal ExplorerProd where
-    txpNormalize = {-lift . lift . -}txpNormalize
-    txpProcessTx logTrace pm = {-lift . lift . -}txpProcessTx logTrace pm
+    txpNormalize = txpNormalize
+    txpProcessTx logTrace pm txpConfig = txpProcessTx logTrace pm txpConfig
 
 -- | Use the 'RealMode' instance.
 -- FIXME instance on a type synonym.

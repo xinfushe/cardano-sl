@@ -17,6 +17,7 @@ import           Formatting (build, sformat, (%))
 import           Node.Message.Class (Message)
 import           Universum
 
+import           Pos.Chain.Txp (TxpConfiguration)
 import           Pos.Core.Txp (TxAux (..), TxId, TxMsgContents (..))
 import           Pos.Crypto (ProtocolMagic, hash)
 import           Pos.DB.Txp.MemState (MempoolExt, MonadTxpLocal, MonadTxpMem,
@@ -34,12 +35,13 @@ handleTxDo
     => TraceNamed m     -- ^ How to log transactions
     -> Trace m JLTxR    -- ^ JSON log
     -> ProtocolMagic
+    -> TxpConfiguration
     -> TxAux            -- ^ Incoming transaction to be processed
     -> m Bool
-handleTxDo logTrace0 jsonLogTrace pm txAux = do
+handleTxDo logTrace0 jsonLogTrace pm txpConfig txAux = do
     let logTrace = appendName "handleTxDo" logTrace0
     let txId = hash (taTx txAux)
-    res <- txpProcessTx logTrace pm (txId, txAux)
+    res <- txpProcessTx logTrace pm txpConfig (txId, txAux)
     let json me = traceWith jsonLogTrace $ JLTxR
             { jlrTxId     = sformat build txId
             , jlrError    = me

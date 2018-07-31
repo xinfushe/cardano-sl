@@ -41,8 +41,11 @@ import           Serokell.Util (Color (Red), colorize, mapJson)
 import           UnliftIO (MonadUnliftIO)
 
 import           Pos.Binary.Class (serialize')
+import           Pos.Chain.Txp (GenesisUtxo (..), genesisUtxo, utxoF,
+                     utxoToAddressCoinPairs)
 import           Pos.Core (Address, Coin, EpochIndex (..), HasConfiguration,
-                     HeaderHash, SlotCount, coinToInteger, unsafeAddCoin)
+                     SlotCount, coinToInteger, unsafeAddCoin)
+import           Pos.Core.Block (HeaderHash)
 import           Pos.Core.Chrono (NewestFirst (..))
 import           Pos.Core.Txp (Tx, TxId, TxOut (..), TxOutAux (..))
 import           Pos.Crypto (ProtocolMagic)
@@ -53,8 +56,6 @@ import           Pos.DB.DB (initNodeDBs)
 import           Pos.DB.GState.Common (gsGetBi, gsPutBi, writeBatchGState)
 import           Pos.DB.Txp (getAllPotentiallyHugeUtxo, utxoSource)
 import           Pos.Explorer.Core (AddrHistory, TxExtra (..))
-import           Pos.Txp.GenesisUtxo (genesisUtxo)
-import           Pos.Txp.Toil (GenesisUtxo (..), utxoF, utxoToAddressCoinPairs)
 import           Pos.Util.Trace.Named (TraceNamed, logError)
 import           Pos.Util.Util (maybeThrow)
 

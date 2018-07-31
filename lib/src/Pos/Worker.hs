@@ -11,7 +11,7 @@ import           Universum
 
 import           Pos.Worker.Block (blkWorkers)
 -- Message instances.
-import           Pos.Communication.Message ()
+import           Pos.Chain.Txp (TxpConfiguration)
 import           Pos.Context (NodeContext (..))
 import           Pos.Crypto (ProtocolMagic)
 import           Pos.Infra.Diffusion.Types (Diffusion)
@@ -19,7 +19,6 @@ import           Pos.Infra.Network.CLI (launchStaticConfigMonitoring)
 import           Pos.Infra.Network.Types (NetworkConfig (..))
 import           Pos.Infra.Slotting (logNewSlotWorker)
 import           Pos.Launcher.Resource (NodeResources (..))
-import           Pos.Txp.Configuration (HasTxpConfiguration)
 import           Pos.Util.Trace.Named (TraceNamed)
 import           Pos.Worker.Delegation (dlgWorkers)
 import           Pos.Worker.Ssc (sscWorkers)
@@ -29,16 +28,16 @@ import           Pos.WorkMode (WorkMode)
 
 -- | All, but in reality not all, workers used by full node.
 allWorkers
-    :: forall ext ctx m .
-       (HasTxpConfiguration, WorkMode ctx m)
+    :: forall ext ctx m . WorkMode ctx m
     => TraceNamed m
     -> ProtocolMagic
+    -> TxpConfiguration
     -> NodeResources ext
     -> [Diffusion m -> m ()]
-allWorkers logTrace pm NodeResources {..} = mconcat
+allWorkers logTrace pm txpConfig NodeResources {..} = mconcat
     [ sscWorkers logTrace pm
     , usWorkers logTrace
-    , blkWorkers logTrace pm
+    , blkWorkers logTrace pm txpConfig
     , dlgWorkers logTrace
     , [properSlottingWorker, staticConfigMonitoringWorker]
     ]

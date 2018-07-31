@@ -24,13 +24,13 @@ import           Data.String.Conv (toS)
 import           Data.Time (diffUTCTime, getCurrentTime)
 import           GHC.Generics (Generic)
 
+import           Pos.Chain.Txp (Tx (..), TxId, TxIn (..), TxOut (..),
+                     TxOutAux (..), utxoToModifier)
 import           Pos.Client.Txp (TxHistoryEntry (..))
 import           Pos.Core (Address, Coin, mkCoin)
-import           Pos.Data.Attributes (mkAttributes)
+import           Pos.Core.Attributes (mkAttributes)
 import           Pos.DB.GState.Common (getTip)
 import           Pos.Infra.StateLock (StateLock (..))
-import           Pos.Txp (Tx (..), TxId, TxIn (..), TxOut (..), TxOutAux (..))
-import           Pos.Txp.Toil.Types (utxoToModifier)
 import           Pos.Util.Mnemonic (Mnemonic, entropyToMnemonic, genEntropy)
 import           Pos.Util.Servant (decodeCType)
 import           Pos.Util.Trace (natTrace)
@@ -284,7 +284,7 @@ generateFakeTxs logTrace (SimpleTxsHistory txsCount numOutgoingAddress) aId = do
     -- We don't generate all txs at once since we could run out of memory.
     -- That's why we use batching so GC can clear the memory behind us in
     -- batches.
-    void $ replicateM batches (generateNFakeTxs logTrace batchSize numOutgoingAddress aId)
+    replicateM_ batches (generateNFakeTxs logTrace batchSize numOutgoingAddress aId)
     generateNFakeTxs logTrace remainder numOutgoingAddress aId
 
 

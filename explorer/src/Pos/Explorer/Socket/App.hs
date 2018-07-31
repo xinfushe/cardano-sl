@@ -35,7 +35,7 @@ import           Network.Wai.Middleware.Cors (CorsResourcePolicy, Origin, cors,
                      corsOrigins, simpleCorsResourcePolicy)
 import           Serokell.Util.Text (listJson)
 
-import           Pos.Block.Types (Blund)
+import           Pos.Chain.Block (Blund)
 import           Pos.Core (addressF, siEpoch)
 import           Pos.Core.Conc (withAsync)
 import qualified Pos.GState as DB

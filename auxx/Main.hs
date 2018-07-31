@@ -10,6 +10,9 @@ import           Formatting (sformat, shown, (%))
 import qualified Network.Transport.TCP as TCP (TCPAddr (..))
 import qualified System.IO.Temp as Temp
 
+import           Ntp.Client (NtpConfiguration)
+
+import           Pos.Chain.Txp (TxpConfiguration)
 import qualified Pos.Client.CLI as CLI
 import           Pos.Context (NodeContext (..))
 import           Pos.Core (ConfigurationError, epochSlots)
@@ -20,7 +23,6 @@ import           Pos.Infra.Diffusion.Types (Diffusion, hoistDiffusion)
 import           Pos.Infra.Network.Types (NetworkConfig (..), Topology (..),
                      topologyDequeuePolicy, topologyEnqueuePolicy,
                      topologyFailurePolicy)
-import           Pos.Infra.Ntp.Configuration (NtpConfiguration)
 import           Pos.Launcher (HasConfigurations, NodeParams (..),
                      NodeResources (..), bracketNodeResources, lpConsoleLog,
                      runNode, runRealMode, withConfigurations)
@@ -78,12 +80,13 @@ correctNodeParams logTrace AuxxOptions {..} np = do
 runNodeWithSinglePlugin ::
        (HasConfigurations, HasCompileInfo)
     => TraceNamed IO
+    -> TxpConfiguration
     -> ProtocolMagic
     -> NodeResources EmptyMempoolExt
     -> (Diffusion AuxxMode -> AuxxMode ())
     -> Diffusion AuxxMode -> AuxxMode ()
 runNodeWithSinglePlugin logTrace pm nr plugin =
-    runNode (natTrace liftIO logTrace) pm nr [plugin]
+    runNode (natTrace liftIO logTrace) pm txpConfig nr [plugin]
 
 action
     :: HasCompileInfo
@@ -111,12 +114,12 @@ action logTrace opts@AuxxOptions {..} command = do
     runWithConfig
         :: HasConfigurations
         => PrintAction IO
-        -> NtpConfiguration
         -> ProtocolMagic
+        -> TxpConfiguration -> NtpConfiguration
         -> IO ()
-    runWithConfig printAction ntpConfig pm = do
+    runWithConfig printAction pm txpConfig ntpConfig = do
         printAction "Mode: with-config"
-        CLI.printInfoOnStart logTrace aoCommonNodeArgs ntpConfig
+        CLI.printInfoOnStart logTrace aoCommonNodeArgs ntpConfig txpConfig
         (nodeParams, tempDbUsed) <-
             correctNodeParams logTrace opts =<< CLI.getNodeParams loggerName cArgs nArgs
 
@@ -135,10 +138,10 @@ action logTrace opts@AuxxOptions {..} command = do
         bracketNodeResources logTrace nodeParams sscParams (txpGlobalSettings pm) (initNodeDBs pm epochSlots) $ \nr ->
             let NodeContext {..} = nrContext nr
                 modifier = if aoStartMode == WithNode
-                           then runNodeWithSinglePlugin logTrace pm nr
+                           then runNodeWithSinglePlugin logTrace pm txpConfig nr
                            else identity
-                auxxModeAction = modifier (auxxPlugin (natTrace liftIO logTrace) pm opts command)
-             in runRealMode logTrace pm nr $ \diffusion ->
+                auxxModeAction = modifier (auxxPlugin (natTrace liftIO logTrace) pm txpConfig opts command)
+             in runRealMode logTrace pm txpConfig nr $ \diffusion ->
                     toRealMode (auxxModeAction (hoistDiffusion realModeToAuxx toRealMode diffusion))
 
     cArgs@CLI.CommonNodeArgs {..} = aoCommonNodeArgs

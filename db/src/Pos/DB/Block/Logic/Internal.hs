@@ -32,14 +32,20 @@ import           Formatting (sformat, (%))
 import           Serokell.Util.Text (listJson)
 import           UnliftIO (MonadUnliftIO)
 
-import           Pos.Block.Types (Blund, Undo (undoDlg, undoTx, undoUS))
-import           Pos.Core (ComponentBlock (..), IsGenesisHeader, epochIndexL,
-                     gbHeader, headerHash, mainBlockDlgPayload,
-                     mainBlockSscPayload, mainBlockTxPayload,
-                     mainBlockUpdatePayload)
-import           Pos.Core.Block (Block, GenesisBlock, MainBlock)
+import           Pos.Chain.Block (Blund, Undo (undoDlg, undoTx, undoUS))
+import           Pos.Chain.Delegation (DlgBlock, DlgBlund, MonadDelegation)
+import           Pos.Chain.Ssc (HasSscConfiguration, MonadSscMem, SscBlock)
+import           Pos.Chain.Txp (TxpConfiguration)
+import           Pos.Chain.Update (PollModifier)
+import           Pos.Core (epochIndexL)
+import           Pos.Core.Block (Block, ComponentBlock (..), GenesisBlock,
+                     IsGenesisHeader, MainBlock, gbHeader, headerHash,
+                     mainBlockDlgPayload, mainBlockSscPayload,
+                     mainBlockTxPayload, mainBlockUpdatePayload)
 import           Pos.Core.Chrono (NE, NewestFirst (..), OldestFirst (..))
+import           Pos.Core.Exception (assertionFailed)
 import           Pos.Core.Reporting (MonadReporting)
+import           Pos.Core.Update (BlockVersion, BlockVersionData)
 import           Pos.Crypto (ProtocolMagic)
 import           Pos.DB (MonadDB, MonadDBRead, MonadGState, SomeBatchOp (..))
 import           Pos.DB.Block.BListener (MonadBListener)
@@ -57,14 +63,6 @@ import           Pos.DB.Txp.Settings (TxpBlock, TxpBlund,
                      TxpGlobalSettings (..))
 import           Pos.DB.Update (UpdateBlock, UpdateContext, usApplyBlocks,
                      usNormalize, usRollbackBlocks)
-import           Pos.Delegation.Class (MonadDelegation)
-import           Pos.Delegation.Types (DlgBlock, DlgBlund)
-import           Pos.Exception (assertionFailed)
-import           Pos.Ssc.Configuration (HasSscConfiguration)
-import           Pos.Ssc.Mem (MonadSscMem)
-import           Pos.Ssc.Types (SscBlock)
-import           Pos.Txp.Configuration (HasTxpConfiguration)
-import           Pos.Update.Poll (PollModifier)
 import           Pos.Util (Some (..), spanSafe)
 import           Pos.Util.Trace (noTrace)
 import           Pos.Util.Trace.Named (TraceNamed)
@@ -126,13 +124,18 @@ type MonadMempoolNormalization ctx m
       )
 
 -- | Normalize mempool.
-normalizeMempool :: MonadMempoolNormalization ctx m => TraceNamed m -> ProtocolMagic -> m ()
-normalizeMempool logTrace pm = do
+normalizeMempool
+    :: MonadMempoolNormalization ctx m
+    => TraceNamed m
+    -> ProtocolMagic
+    -> TxpConfiguration
+    -> m ()
+normalizeMempool logTrace pm txpConfig = do
     -- We normalize all mempools except the delegation one.
     -- That's because delegation mempool normalization is harder and is done
     -- within block application.
     sscNormalize logTrace pm
-    txpNormalize logTrace pm
+    txpNormalize logTrace pm txpConfig
     usNormalize logTrace
 
 -- | Applies a definitely valid prefix of blocks. This function is unsafe,
@@ -142,15 +145,16 @@ normalizeMempool logTrace pm = do
 -- Invariant: all blocks have the same epoch.
 applyBlocksUnsafe
     :: ( MonadBlockApply ctx m
-       , HasTxpConfiguration
        )
     => TraceNamed m
     -> ProtocolMagic
+    -> BlockVersion
+    -> BlockVersionData
     -> ShouldCallBListener
     -> OldestFirst NE Blund
     -> Maybe PollModifier
     -> m ()
-applyBlocksUnsafe logTrace pm scb blunds pModifier = do
+applyBlocksUnsafe logTrace pm bv bvd scb blunds pModifier = do
     -- Check that all blunds have the same epoch.
     unless (null nextEpoch) $ assertionFailed noTrace $
         sformat ("applyBlocksUnsafe: tried to apply more than we should"%
@@ -170,33 +174,34 @@ applyBlocksUnsafe logTrace pm scb blunds pModifier = do
         (b@(Left _,_):|(x:xs)) -> app' (b:|[]) >> app' (x:|xs)
         _                      -> app blunds
   where
-    app x = applyBlocksDbUnsafeDo logTrace pm scb x pModifier
+    app x = applyBlocksDbUnsafeDo logTrace pm bv bvd scb x pModifier
     app' = app . OldestFirst
     (thisEpoch, nextEpoch) =
         spanSafe ((==) `on` view (_1 . epochIndexL)) $ getOldestFirst blunds
 
 applyBlocksDbUnsafeDo
     :: ( MonadBlockApply ctx m
-       , HasTxpConfiguration
        )
     => TraceNamed m
     -> ProtocolMagic
+    -> BlockVersion
+    -> BlockVersionData
     -> ShouldCallBListener
     -> OldestFirst NE Blund
     -> Maybe PollModifier
     -> m ()
-applyBlocksDbUnsafeDo logTrace pm scb blunds pModifier = do
+applyBlocksDbUnsafeDo logTrace pm bv bvd scb blunds pModifier = do
     let blocks = fmap fst blunds
     -- Note: it's important to do 'slogApplyBlocks' first, because it
     -- puts blocks in DB.
     slogBatch <- slogApplyBlocks logTrace scb blunds
     TxpGlobalSettings {..} <- view (lensOf @TxpGlobalSettings)
-    usBatch <- SomeBatchOp <$> usApplyBlocks noTrace pm (map toUpdateBlock blocks) pModifier
+    usBatch <- SomeBatchOp <$> usApplyBlocks noTrace pm bv (map toUpdateBlock blocks) pModifier
     delegateBatch <- SomeBatchOp <$> dlgApplyBlocks noTrace (map toDlgBlund blunds)
     txpBatch <- tgsApplyBlocks noTrace $ map toTxpBlund blunds
     sscBatch <- SomeBatchOp <$>
         -- TODO: pass not only 'Nothing'
-        sscApplyBlocks noTrace pm (map toSscBlock blocks) Nothing
+        sscApplyBlocks noTrace pm bvd (map toSscBlock blocks) Nothing
     GS.writeBatchGState
         [ delegateBatch
         , usBatch

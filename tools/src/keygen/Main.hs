@@ -17,9 +17,11 @@ import qualified Text.JSON.Canonical as CanonicalJSON
 import           Pos.Binary (asBinary, serialize')
 import qualified Pos.Client.CLI as CLI
 import           Pos.Core (CoreConfiguration (..), GenesisConfiguration (..),
-                     ProtocolMagic, RichSecrets (..), addressHash, ccGenesis,
-                     coreConfiguration, generateFakeAvvm, generateRichSecrets,
-                     mkVssCertificate, vcSigningKey, vssMaxTTL)
+                     ProtocolMagic, addressHash, ccGenesis, coreConfiguration,
+                     vssMaxTTL)
+import           Pos.Core.Genesis (RichSecrets (..), generateFakeAvvm,
+                     generateRichSecrets)
+import           Pos.Core.Ssc (mkVssCertificate, vcSigningKey)
 import           Pos.Crypto (EncryptedSecretKey (..), SecretKey (..),
                      VssKeyPair, fullPublicKeyF, hashHexF, noPassEncrypt,
                      redeemPkB64F, toPublic, toVssPublicKey)
@@ -164,7 +166,7 @@ main = do
     lh <- Log.setupLogging $ defaultInteractiveConfiguration Log.Debug
     let logTrace = appendName "keygen" $ namedTrace lh
     Log.loggerBracket lh "keygen" $
-        withConfigurations logTrace Nothing koConfigurationOptions $ \_ pm -> do
+        withConfigurations logTrace Nothing koConfigurationOptions $ \pm _ _ -> do
 
         logInfo logTrace "Processing command"
         case koCommand of

@@ -21,18 +21,29 @@ import           UnliftIO (MonadUnliftIO)
 import qualified Crypto.Random as Rand
 
 import           Pos.Binary.Class (AsBinary, asBinary, fromBinary)
+import           Pos.Chain.Lrc (RichmenStakes)
+import           Pos.Chain.Security (SecurityParams)
+import           Pos.Chain.Ssc (HasSscConfiguration, HasSscContext (..),
+                     MonadSscMem, SscBehavior (..), SscOpeningParams (..),
+                     SscSharesParams (..), SscTag (..), computeParticipants,
+                     computeSharesDistrPure, getOurShares, hasCommitment,
+                     hasOpening, hasShares, isCommitmentIdx, isOpeningIdx,
+                     isSharesIdx, mkSignedCommitment, mpcSendInterval,
+                     scBehavior, scParticipateSsc, scVssKeyPair,
+                     sgsCommitments, vssThreshold)
 import           Pos.Core (EpochIndex, HasPrimaryKey, SlotId (..),
-                     StakeholderId, Timestamp (..), VssCertificate (..),
-                     VssCertificatesMap (..), blkSecurityParam, bvdMpcThd,
+                     StakeholderId, Timestamp (..), blkSecurityParam,
                      getOurSecretKey, getOurStakeholderId, getSlotIndex,
-                     lookupVss, memberVss, mkLocalSlotIndex, mkVssCertificate,
-                     slotSecurityParam, vssMaxTTL)
+                     mkLocalSlotIndex, slotSecurityParam, vssMaxTTL)
 import           Pos.Core.Conc (currentTime, delay)
 --import           Pos.Core.JsonLog (CanJsonLog)
 import           Pos.Core.Reporting (HasMisbehaviorMetrics (..),
                      MisbehaviorMetrics (..), MonadReporting)
 import           Pos.Core.Ssc (InnerSharesMap, Opening, SignedCommitment,
-                     getCommitmentsMap, randCommitmentAndOpening)
+                     VssCertificate (..), VssCertificatesMap (..),
+                     getCommitmentsMap, lookupVss, memberVss, mkVssCertificate,
+                     randCommitmentAndOpening)
+import           Pos.Core.Update (bvdMpcThd)
 import           Pos.Crypto (ProtocolMagic, SecretKey, VssKeyPair, VssPublicKey,
                      randomNumber, randomNumberInRange, runSecureRandom,
                      vssKeyGen)
@@ -49,23 +60,7 @@ import           Pos.Infra.Diffusion.Types (Diffusion (..))
 import           Pos.Infra.Recovery.Info (MonadRecoveryInfo, recoveryCommGuard)
 import           Pos.Infra.Shutdown (HasShutdownContext)
 import           Pos.Infra.Slotting (MonadSlots, defaultOnNewSlotParams,
-                     getCurrentSlot, getSlotStartEmpatically,
-                     onNewSlotNoLogging)
-import           Pos.Lrc.Types (RichmenStakes)
-import           Pos.Security.Params (SecurityParams)
-import           Pos.Ssc.Base (isCommitmentIdx, isOpeningIdx, isSharesIdx,
-                     mkSignedCommitment)
-import           Pos.Ssc.Behavior (SscBehavior (..), SscOpeningParams (..),
-                     SscSharesParams (..))
-import           Pos.Ssc.Configuration (HasSscConfiguration, mpcSendInterval)
-import           Pos.Ssc.Functions (hasCommitment, hasOpening, hasShares,
-                     vssThreshold)
-import           Pos.Ssc.Mem (MonadSscMem)
-import           Pos.Ssc.Message (SscTag (..))
-import           Pos.Ssc.Shares (getOurShares)
-import           Pos.Ssc.Toss (computeParticipants, computeSharesDistrPure)
-import           Pos.Ssc.Types (HasSscContext (..), scBehavior,
-                     scParticipateSsc, scVssKeyPair, sgsCommitments)
+                     getCurrentSlot, getSlotStartEmpatically, onNewSlot)
 import           Pos.Util.AssertMode (inAssertMode)
 import           Pos.Util.Trace.Named (TraceNamed, appendName, logDebugS,
                      logErrorS, logInfoS, logWarningS)
@@ -82,7 +77,7 @@ type SscMode ctx m
       , MonadGState m
       , MonadDB m
       , MonadSscMem ctx m
-      , MonadRecoveryInfo m
+      , MonadRecoveryInfo ctx m
       , HasShutdownContext ctx
       , MonadReader ctx m
       , HasSscContext ctx
@@ -106,7 +101,7 @@ shouldParticipate :: SscMode ctx m => TraceNamed m -> EpochIndex -> m Bool
 shouldParticipate logTrace epoch = do
     richmen <- getSscRichmen "shouldParticipate" epoch
     participationEnabled <- view sscContext >>=
-        atomically . readTVar . scParticipateSsc
+        (readTVarIO . scParticipateSsc)
     ourId <- getOurStakeholderId
     let enoughStake = ourId `HM.member` richmen
     when (participationEnabled && not enoughStake) $
@@ -122,12 +117,12 @@ onNewSlotSsc
     -> ProtocolMagic
     -> Diffusion m
     -> m ()
-onNewSlotSsc logTrace0 pm = \diffusion -> onNewSlotNoLogging defaultOnNewSlotParams $ \slotId ->
+onNewSlotSsc logTrace0 pm = \diffusion -> onNewSlot logTrace defaultOnNewSlotParams $ \slotId ->
     recoveryCommGuard logTrace "onNewSlot worker in SSC" $ do
         sscGarbageCollectLocalData slotId
         whenM (shouldParticipate logTrace $ siEpoch slotId) $ do
             behavior <- view sscContext >>=
-                atomically . readTVar . scBehavior
+                (readTVarIO . scBehavior)
             checkNSendOurCert logTrace pm (sendSscCert diffusion)
             onNewSlotCommitment logTrace pm slotId (sendSscCommitment diffusion)
             onNewSlotOpening logTrace pm (sbSendOpening behavior) slotId (sendSscOpening diffusion)
@@ -462,7 +457,7 @@ checkForIgnoredCommitmentsWorker
     -> m ()
 checkForIgnoredCommitmentsWorker logTrace = \_ -> do
     counter <- newTVarIO 0
-    onNewSlotNoLogging defaultOnNewSlotParams (checkForIgnoredCommitmentsWorkerImpl logTrace counter)
+    onNewSlot logTrace defaultOnNewSlotParams (checkForIgnoredCommitmentsWorkerImpl logTrace counter)
 
 -- This worker checks whether our commitments appear in blocks. This check
 -- is done only if we actually should participate in SSC. It's triggered if

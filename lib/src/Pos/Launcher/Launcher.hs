@@ -9,6 +9,8 @@ module Pos.Launcher.Launcher
 
 import           Universum
 
+import           Pos.Chain.Ssc (SscParams)
+import           Pos.Chain.Txp (TxpConfiguration)
 import           Pos.Core.Configuration (epochSlots)
 import           Pos.Crypto (ProtocolMagic)
 import           Pos.DB.DB (initNodeDBs)
@@ -20,7 +22,6 @@ import           Pos.Launcher.Resource (NodeResources (..),
                      bracketNodeResources)
 import           Pos.Launcher.Runner (runRealMode)
 import           Pos.Launcher.Scenario (runNode)
-import           Pos.Ssc.Types (SscParams)
 import           Pos.Util.CompileInfo (HasCompileInfo)
 import           Pos.Util.Trace (natTrace)
 import           Pos.Util.Trace.Named (TraceNamed)
@@ -38,14 +39,15 @@ runNodeReal
        )
     => TraceNamed IO
     -> ProtocolMagic
+    -> TxpConfiguration
     -> NodeParams
     -> SscParams
     -> [Diffusion (RealMode EmptyMempoolExt) -> RealMode EmptyMempoolExt ()]
     -> IO ()
-runNodeReal logTrace pm np sscnp plugins =
-    bracketNodeResources (natTrace liftIO logTrace) np sscnp (txpGlobalSettings pm) (initNodeDBs pm epochSlots)
+runNodeReal logTrace pm txpConfig np sscnp plugins =
+    bracketNodeResources (natTrace liftIO logTrace) np sscnp (txpGlobalSettings pm txpConfig) (initNodeDBs pm epochSlots)
         action
   where
     action :: NodeResources EmptyMempoolExt -> IO ()
     action nr@NodeResources {..} =
-      runRealMode logTrace pm nr (runNode (natTrace liftIO logTrace) pm nr plugins)
+      runRealMode logTrace pm txpConfig nr (runNode (natTrace liftIO logTrace) pm txpConfig nr plugins)

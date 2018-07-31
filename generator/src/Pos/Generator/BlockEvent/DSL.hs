@@ -34,9 +34,10 @@ import           Control.Monad.Random.Strict (RandT, mapRandT)
 import qualified Data.Map as Map
 
 import           Pos.AllSecrets (AllSecrets)
-import           Pos.Core (GenesisWStakeholders)
+import           Pos.Chain.Txp (TxpConfiguration)
 import           Pos.Core.Chrono (NE, NewestFirst (..), OldestFirst (..),
                      toOldestFirst, _NewestFirst)
+import           Pos.Core.Genesis (GenesisWStakeholders)
 import           Pos.Crypto (ProtocolMagic)
 import           Pos.Generator.Block (BlockTxpGenMode, MonadBlockGen)
 import           Pos.Generator.BlockEvent (BlockApplyResult (..),
@@ -47,7 +48,6 @@ import           Pos.Generator.BlockEvent (BlockApplyResult (..),
                      PathSegment, SnapshotId, SnapshotOperation (..), byChance,
                      enrichWithSnapshotChecking, genBlocksInStructure,
                      pathSequence)
-import           Pos.Txp.Configuration (HasTxpConfiguration)
 import           Pos.Util.Trace.Named (TraceNamed)
 
 data BlockEventGenState = BlockEventGenState
@@ -117,16 +117,17 @@ snapshotEq snapshotId = emitEvent $
     BlkEvSnap (SnapshotEq snapshotId)
 
 runBlockEventGenT
-    :: (MonadIO m, HasTxpConfiguration, BlockTxpGenMode g ctx m)
+    :: (MonadIO m, BlockTxpGenMode g ctx m)
     => TraceNamed m
     -> ProtocolMagic
+    -> TxpConfiguration
     -> AllSecrets
     -> GenesisWStakeholders
     -> BlockEventGenT g m ()
     -> RandT g m BlockScenario
-runBlockEventGenT logTrace pm secrets genStakeholders m = do
+runBlockEventGenT logTrace pm txpConfig secrets genStakeholders m = do
     (annotations, preBlockScenario) <- runBlockEventGenT' m
-    genBlocksInStructure logTrace pm secrets genStakeholders annotations preBlockScenario
+    genBlocksInStructure logTrace pm txpConfig secrets genStakeholders annotations preBlockScenario
 
 runBlockEventGenT' ::
     (MonadBlockGen ctx m) =>

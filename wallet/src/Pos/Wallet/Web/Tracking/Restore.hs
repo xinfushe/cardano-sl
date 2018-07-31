@@ -6,14 +6,14 @@ import           UnliftIO (MonadUnliftIO)
 
 import qualified Data.Map as M
 
-import           Pos.Core (Address, HasConfiguration, HasDifficulty (..),
-                     headerHash)
+import           Pos.Chain.Txp (genesisUtxo, unGenesisUtxo, utxoToModifier)
+import           Pos.Core (Address, HasConfiguration, HasDifficulty (..))
+import           Pos.Core.Block (headerHash)
 import           Pos.Core.Txp (TxIn, TxOut (..), TxOutAux (..))
 import qualified Pos.DB.BlockIndex as DB
 import           Pos.DB.Class (MonadDBRead (..))
 import           Pos.DB.Txp.Utxo (filterUtxo)
 import           Pos.Infra.Slotting (MonadSlotsData)
-import           Pos.Txp (genesisUtxo, unGenesisUtxo, utxoToModifier)
 import           Pos.Util (HasLens (..))
 import           Pos.Util.Trace.Named (TraceNamed, appendName, logInfo)
 

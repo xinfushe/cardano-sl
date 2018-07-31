@@ -11,6 +11,7 @@ module Pos.Wallet.Web.Server.Handlers
 import           Universum
 
 import           Ntp.Client (NtpStatus)
+
 import           Pos.Wallet.Web.Swagger.Spec (swaggerSpecForWalletApi)
 import           Servant.API ((:<|>) ((:<|>)))
 import           Servant.Generic (AsServerT, GenericProduct, ToServant,
@@ -18,9 +19,10 @@ import           Servant.Generic (AsServerT, GenericProduct, ToServant,
 import           Servant.Server (Handler, Server, ServerT, hoistServer)
 import           Servant.Swagger.UI (swaggerSchemaUIServer)
 
+import           Pos.Chain.Txp (TxpConfiguration)
+import           Pos.Chain.Update (curSoftwareVersion)
 import           Pos.Core.Txp (TxAux)
 import           Pos.Crypto (ProtocolMagic)
-import           Pos.Update.Configuration (curSoftwareVersion)
 import           Pos.Util.CompileInfo (HasCompileInfo)
 import           Pos.Util.Trace.Named (TraceNamed)
 
@@ -40,12 +42,13 @@ servantHandlersWithSwagger
        )
     => TraceNamed m
     -> ProtocolMagic
+    -> TxpConfiguration
     -> TVar NtpStatus
     -> (TxAux -> m Bool)
     -> (forall x. m x -> Handler x)
     -> Server A.WalletSwaggerApi
-servantHandlersWithSwagger logTrace pm ntpStatus submitTx nat =
-    hoistServer A.walletApi nat (servantHandlers logTrace pm ntpStatus submitTx)
+servantHandlersWithSwagger logTrace pm txpConfig ntpStatus submitTx nat =
+    hoistServer A.walletApi nat (servantHandlers logTrace pm txpConfig ntpStatus submitTx)
    :<|>
     swaggerSchemaUIServer swaggerSpecForWalletApi
 
@@ -59,18 +62,19 @@ servantHandlers
        )
     => TraceNamed m
     -> ProtocolMagic
+    -> TxpConfiguration
     -> TVar NtpStatus
     -> (TxAux -> m Bool)
     -> ServerT A.WalletApi m
-servantHandlers logTrace pm ntpStatus submitTx = toServant' A.WalletApiRecord
+servantHandlers logTrace pm txpConfig ntpStatus submitTx = toServant' A.WalletApiRecord
     { _test        = testHandlers
     , _wallets     = walletsHandlers logTrace
     , _accounts    = accountsHandlers logTrace
     , _addresses   = addressesHandlers logTrace
     , _profile     = profileHandlers
-    , _txs         = txsHandlers logTrace pm submitTx
+    , _txs         = txsHandlers logTrace pm txpConfig submitTx
     , _update      = updateHandlers logTrace
-    , _redemptions = redemptionsHandlers logTrace pm submitTx
+    , _redemptions = redemptionsHandlers logTrace pm txpConfig submitTx
     , _reporting   = reportingHandlers
     , _settings    = settingsHandlers logTrace ntpStatus
     , _backup      = backupHandlers logTrace
@@ -123,11 +127,12 @@ txsHandlers
     :: MonadFullWalletWebMode ctx m
     => TraceNamed m
     -> ProtocolMagic
+    -> TxpConfiguration
     -> (TxAux -> m Bool)
     -> ServerT A.WTxsApi m
-txsHandlers logTrace pm submitTx = toServant' A.WTxsApiRecord
-    { _newPayment                = M.newPayment logTrace pm submitTx
-    , _newPaymentBatch           = M.newPaymentBatch logTrace pm submitTx
+txsHandlers logTrace pm txpConfig submitTx = toServant' A.WTxsApiRecord
+    { _newPayment                = M.newPayment logTrace pm txpConfig submitTx
+    , _newPaymentBatch           = M.newPaymentBatch logTrace pm txpConfig submitTx
     , _txFee                     = M.getTxFee pm
     , _resetFailedPtxs           = M.resetAllFailedPtxs
     , _cancelApplyingPtxs        = M.cancelAllApplyingPtxs
@@ -147,11 +152,12 @@ redemptionsHandlers
     :: MonadFullWalletWebMode ctx m
     => TraceNamed m
     -> ProtocolMagic
+    -> TxpConfiguration
     -> (TxAux -> m Bool)
     -> ServerT A.WRedemptionsApi m
-redemptionsHandlers logTrace pm submitTx = toServant' A.WRedemptionsApiRecord
-    { _redeemADA          = M.redeemAda logTrace pm submitTx
-    , _redeemADAPaperVend = M.redeemAdaPaperVend logTrace pm submitTx
+redemptionsHandlers logTrace pm txpConfig submitTx = toServant' A.WRedemptionsApiRecord
+    { _redeemADA          = M.redeemAda logTrace pm txpConfig submitTx
+    , _redeemADAPaperVend = M.redeemAdaPaperVend logTrace pm txpConfig submitTx
     }
 
 reportingHandlers :: MonadFullWalletWebMode ctx m => ServerT A.WReportingApi m

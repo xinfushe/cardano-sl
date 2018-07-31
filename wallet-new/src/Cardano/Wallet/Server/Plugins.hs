@@ -44,6 +44,7 @@ import           Network.Wai.Middleware.Cors (cors, corsMethods,
                      corsRequestHeaders, simpleCorsResourcePolicy,
                      simpleMethods)
 import           Ntp.Client (NtpStatus)
+import           Pos.Chain.Txp (TxpConfiguration)
 import           Pos.Infra.Diffusion.Types (Diffusion (..))
 import           Pos.Wallet.Web (cleanupAcidStatePeriodically)
 import           Pos.Wallet.Web.Pending.Worker (startPendingTxsResubmitter)
@@ -115,13 +116,8 @@ walletDocumentation logTrace WalletBackendParams {..} = pure $ \_ ->
     logTrace' = appendName "walletDocumentation" logTrace
     application :: WalletWebMode Application
     application = do
-        let app =
-                if isDebugMode walletRunMode then
-                    Servant.serveWithContext API.walletDevDocAPI (logTrace' :. EmptyContext) LegacyServer.walletDevDocServer
-                else
-                    Servant.serveWithContext API.walletDocAPI (logTrace' :. EmptyContext) LegacyServer.walletDocServer
+        let app = Servant.serveWithContext API.walletDocAPI (logTrace' :. EmptyContext) LegacyServer.walletDocServer
         return $ withMiddleware walletRunMode app
-
     tls =
         if isDebugMode walletRunMode then Nothing else walletTLSParams
 
@@ -129,10 +125,11 @@ walletDocumentation logTrace WalletBackendParams {..} = pure $ \_ ->
 legacyWalletBackend :: (HasConfigurations, HasCompileInfo)
                     => TraceNamed IO
                     -> ProtocolMagic
+                    -> TxpConfiguration
                     -> WalletBackendParams
                     -> TVar NtpStatus
                     -> Plugin WalletWebMode
-legacyWalletBackend logTrace0 pm WalletBackendParams {..} ntpStatus = pure $ \diffusion -> do
+legacyWalletBackend logTrace0 pm txpConfig WalletBackendParams {..} ntpStatus = pure $ \diffusion -> do
       logInfo logTrace $ sformat ("Production mode for API: "%build)
           walletProductionApi
       logInfo logTrace $ sformat ("Transaction submission disabled: "%build)
@@ -154,28 +151,21 @@ legacyWalletBackend logTrace0 pm WalletBackendParams {..} ntpStatus = pure $ \di
     -- Gets the Wai `Application` to run.
     getApplication :: Diffusion WalletWebMode -> WalletWebMode Application
     getApplication diffusion = do
-      logInfo logTrace "Wallet Web API has STARTED!"
-      wsConn <- getWalletWebSockets
-      ctx <- V0.walletWebModeContext
-      let app :: Application
-          app = upgradeApplicationWS logTrace' wsConn $
-            if isDebugMode walletRunMode then
-              Servant.serveWithContext API.walletDevAPI (logTrace' :. EmptyContext) $ LegacyServer.walletDevServer
+        logInfo logTrace "Wallet Web API has STARTED!"
+        wsConn <- getWalletWebSockets
+        ctx <- V0.walletWebModeContext
+        return
+            $ withMiddleware walletRunMode
+            $ upgradeApplicationWS logTrace' wsConn
+            $ Servant.serveWithContext API.walletAPI (logTrace' :. EmptyContext)
+            $ LegacyServer.walletServer
                 (V0.convertHandler ctx)
                 logTrace
                 pm
+                txpConfig
                 diffusion
                 ntpStatus
                 walletRunMode
-            else
-              Servant.serveWithContext API.walletAPI (logTrace' :. EmptyContext) $ LegacyServer.walletServer
-                (V0.convertHandler ctx)
-                logTrace
-                pm
-                diffusion
-                ntpStatus
-
-      return $ withMiddleware walletRunMode app
 
     exceptionHandler :: SomeException -> Response
     exceptionHandler se =
@@ -240,18 +230,19 @@ walletBackend logTrace protocolMagic (NewWalletBackendParams WalletBackendParams
     getApplication active = do
       logInfo (natTrace lift logTrace) "New wallet API has STARTED!"
       return $ withMiddleware walletRunMode $
-        if isDebugMode walletRunMode then
-          Servant.serveWithContext API.walletDevAPI (logTrace' :. EmptyContext) $ Server.walletDevServer active walletRunMode
-        else
-          Servant.serveWithContext API.walletAPI (logTrace' :. EmptyContext) $ Server.walletServer active
+        Servant.serveWithContext API.walletAPI (logTrace' :. EmptyContext) $ Server.walletServer active walletRunMode
 
     lower :: env -> ReaderT env IO a -> IO a
     lower env m = runReaderT m env
 
 -- | A @Plugin@ to resubmit pending transactions.
-resubmitterPlugin :: HasConfigurations => TraceNamed IO -> ProtocolMagic -> Plugin WalletWebMode
-resubmitterPlugin logTrace pm = [\diffusion -> askWalletDB >>= \db ->
-                        startPendingTxsResubmitter (natTrace liftIO logTrace) pm db (sendTx diffusion)]
+resubmitterPlugin :: HasConfigurations
+                  => TraceNamed IO
+                  -> ProtocolMagic
+                  -> TxpConfiguration
+                  -> Plugin WalletWebMode
+resubmitterPlugin logTrace pm txpConfig = [\diffusion -> askWalletDB >>= \db ->
+                        startPendingTxsResubmitter (natTrace liftIO logTrace) pm txpConfig db (sendTx diffusion)]
 
 -- | A @Plugin@ to notify frontend via websockets.
 notifierPlugin :: HasConfigurations => TraceNamed IO -> Plugin WalletWebMode

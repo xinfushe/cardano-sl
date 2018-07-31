@@ -21,8 +21,8 @@ import           Cardano.Wallet.API.V1.Migration
 import           Cardano.Wallet.API.V1.Types as V1
 import qualified Cardano.Wallet.API.V1.Wallets as Wallets
 import qualified Data.IxSet.Typed as IxSet
+import           Pos.Chain.Update ()
 import qualified Pos.Core as Core
-import           Pos.Update.Configuration ()
 
 import           Pos.Util (HasLens (..))
 import           Pos.Util.Trace.Named (TraceNamed)
@@ -86,7 +86,7 @@ newWallet logTrace NewWallet{..} = do
     let newWalletHandler CreateWallet  = V0.newWallet logTrace
         newWalletHandler RestoreWallet = V0.restoreWalletFromSeed logTrace
         (V1 spendingPassword) = fromMaybe (V1 mempty) newwalSpendingPassword
-        (V1 backupPhrase) = newwalBackupPhrase
+        (BackupPhrase backupPhrase) = newwalBackupPhrase
     initMeta <- V0.CWalletMeta <$> pure newwalName
                               <*> migrate newwalAssuranceLevel
                               <*> pure 0

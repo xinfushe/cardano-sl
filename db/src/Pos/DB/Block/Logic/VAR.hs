@@ -20,12 +20,15 @@ import           Control.Lens (_Wrapped)
 import           Control.Monad.Except (ExceptT (ExceptT),
                      MonadError (throwError), runExceptT, withExceptT)
 import qualified Data.List.NonEmpty as NE
+import           Formatting (sformat, shown, (%))
 
-import           Pos.Block.Error (ApplyBlocksException (..),
-                     RollbackException (..), VerifyBlocksException (..))
-import           Pos.Block.Types (Blund, Undo (..))
-import           Pos.Core (Block, HeaderHash, epochIndexL, headerHashG,
-                     prevBlockL)
+import           Pos.Chain.Block (ApplyBlocksException (..), Blund,
+                     RollbackException (..), Undo (..),
+                     VerifyBlocksException (..))
+import           Pos.Chain.Txp (TxpConfiguration)
+import           Pos.Chain.Update (PollModifier)
+import           Pos.Core (epochIndexL)
+import           Pos.Core.Block (Block, HeaderHash, headerHashG, prevBlockL)
 import           Pos.Core.Chrono (NE, NewestFirst (..), OldestFirst (..),
                      toNewestFirst, toOldestFirst)
 import           Pos.Core.Reporting (HasMisbehaviorMetrics)
@@ -35,6 +38,8 @@ import           Pos.DB.Block.Logic.Internal (BypassSecurityCheck (..),
                      MonadMempoolNormalization, applyBlocksUnsafe,
                      normalizeMempool, rollbackBlocksUnsafe, toSscBlock,
                      toTxpBlock, toUpdateBlock)
+import           Pos.DB.Block.Logic.Types (VerifyBlocksContext (..),
+                     getVerifyBlocksContext)
 import           Pos.DB.Block.Lrc (LrcModeFull, lrcSingleShot)
 import           Pos.DB.Block.Slog.Logic (ShouldCallBListener (..),
                      mustDataBeKnown, slogVerifyBlocks)
@@ -43,9 +48,7 @@ import qualified Pos.DB.GState.Common as GS (getTip)
 import           Pos.DB.Ssc (sscVerifyBlocks)
 import           Pos.DB.Txp.Settings
                      (TxpGlobalSettings (TxpGlobalSettings, tgsVerifyBlocks))
-import           Pos.DB.Update (getAdoptedBV, usVerifyBlocks)
-import           Pos.Txp.Configuration (HasTxpConfiguration)
-import           Pos.Update.Poll (PollModifier)
+import           Pos.DB.Update (getAdoptedBVFull, usVerifyBlocks)
 import           Pos.Util (neZipWith4, spanSafe, _neHead)
 import           Pos.Util.Trace.Named (TraceNamed, appendName, logDebug)
 import           Pos.Util.Util (HasLens (..))
@@ -70,14 +73,14 @@ import           Pos.Util.Util (HasLens (..))
 -- 4.  Return all undos.
 verifyBlocksPrefix
     :: forall ctx m.
-       ( HasTxpConfiguration
-       , MonadBlockVerify ctx m
+       ( MonadBlockVerify ctx m
        )
     => TraceNamed m
     -> ProtocolMagic
+    -> VerifyBlocksContext
     -> OldestFirst NE Block
     -> m (Either VerifyBlocksException (OldestFirst NE Undo, PollModifier))
-verifyBlocksPrefix logTrace0 pm blocks = do
+verifyBlocksPrefix logTrace0 pm ctx blocks = do
   let logTrace = appendName "verifyBlocksPrefix" logTrace0
   runExceptT $ do
     -- This check (about tip) is here just in case, we actually check
@@ -87,23 +90,22 @@ verifyBlocksPrefix logTrace0 pm blocks = do
         throwError $ VerifyBlocksError "the first block isn't based on the tip"
     -- Some verifications need to know whether all data must be known.
     -- We determine it here and pass to all interested components.
-    adoptedBV <- lift getAdoptedBV
-    let dataMustBeKnown = mustDataBeKnown adoptedBV
+    let dataMustBeKnown = mustDataBeKnown (vbcBlockVersion ctx)
 
     -- Run verification of each component.
-    -- 'slogVerifyBlocks' uses 'Pos.Block.Pure.verifyBlocks' which does
+    -- 'slogVerifyBlocks' uses 'Pos.Chain.Block.Pure.verifyBlocks' which does
     -- the internal consistency checks formerly done in the 'Bi' instance
     -- 'decode'.
     slogUndos <- withExceptT VerifyBlocksError $
-        ExceptT $ slogVerifyBlocks pm blocks
+        ExceptT $ slogVerifyBlocks pm ctx blocks
     _ <- withExceptT (VerifyBlocksError . pretty) $
-        ExceptT $ sscVerifyBlocks logTrace pm (map toSscBlock blocks)
+        ExceptT $ sscVerifyBlocks logTrace pm (vbcBlockVersionData ctx) (map toSscBlock blocks)
     TxpGlobalSettings {..} <- view (lensOf @TxpGlobalSettings)
     txUndo <- withExceptT (VerifyBlocksError . pretty) $
         ExceptT $ tgsVerifyBlocks logTrace dataMustBeKnown $ map toTxpBlock blocks
     pskUndo <- withExceptT VerifyBlocksError $ dlgVerifyBlocks pm blocks
     (pModifier, usUndos) <- withExceptT (VerifyBlocksError . pretty) $
-      ExceptT $ usVerifyBlocks logTrace pm dataMustBeKnown (map toUpdateBlock blocks)
+        ExceptT $ usVerifyBlocks logTrace pm dataMustBeKnown (vbcBlockVersion ctx) (map toUpdateBlock blocks)
 
     -- Eventually we do a sanity check just in case and return the result.
     when (length txUndo /= length pskUndo) $
@@ -137,16 +139,18 @@ verifyAndApplyBlocks
        )
     => TraceNamed m
     -> ProtocolMagic
+    -> TxpConfiguration
+    -> VerifyBlocksContext
     -> Bool
     -> OldestFirst NE Block
     -> m (Either ApplyBlocksException (HeaderHash, NewestFirst [] Blund))
-verifyAndApplyBlocks logTrace0 pm rollback blocks = runExceptT $ do
+verifyAndApplyBlocks logTrace0 pm txpConfig ctx rollback blocks = runExceptT $ do
     tip <- lift GS.getTip
     let assumedTip = blocks ^. _Wrapped . _neHead . prevBlockL
     when (tip /= assumedTip) $
         throwError $ ApplyBlocksTipMismatch "verify and apply" tip assumedTip
     hh <- rollingVerifyAndApply [] (spanEpoch blocks)
-    lift $ normalizeMempool logTrace pm
+    lift $ normalizeMempool logTrace pm txpConfig
     pure hh
   where
     logTrace = appendName "verifyAndApplyBlocks" logTrace0
@@ -177,13 +181,17 @@ verifyAndApplyBlocks logTrace0 pm rollback blocks = runExceptT $ do
         -> ExceptT ApplyBlocksException m (HeaderHash, NewestFirst [] Blund)
     applyAMAP e (OldestFirst []) _      True                   = throwError e
     applyAMAP _ (OldestFirst []) blunds False                  = (,blunds) <$> lift GS.getTip
-    applyAMAP e (OldestFirst (block:xs)) blunds nothingApplied =
-        lift (verifyBlocksPrefix logTrace pm (one block)) >>= \case
+    applyAMAP e (OldestFirst (block:xs)) blunds nothingApplied = do
+        lift (verifyBlocksPrefix logTrace pm ctx (one block)) >>= \case
             Left (ApplyBlocksVerifyFailure -> e') ->
                 applyAMAP e' (OldestFirst []) blunds nothingApplied
             Right (OldestFirst (undo :| []), pModifier) -> do
-                lift $ applyBlocksUnsafe
-                    logTrace pm (ShouldCallBListener True) (one (block, undo)) (Just pModifier)
+                lift $ applyBlocksUnsafe logTrace pm
+                    (vbcBlockVersion ctx)
+                    (vbcBlockVersionData ctx)
+                    (ShouldCallBListener True)
+                    (one (block, undo))
+                    (Just pModifier)
                 applyAMAP e (OldestFirst xs) (NewestFirst $ (block, undo) : getNewestFirst blunds) False
             Right _ -> error "verifyAndApplyBlocksInternal: applyAMAP: \
                              \verification of one block produced more than one undo"
@@ -214,11 +222,12 @@ verifyAndApplyBlocks logTrace0 pm rollback blocks = runExceptT $ do
                        <> pretty epochIndex
             lift $ lrcSingleShot logTrace pm epochIndex
         lift $ logDebug' "Rolling: verifying"
-        lift (verifyBlocksPrefix logTrace pm prefix) >>= \case
+        lift (verifyBlocksPrefix logTrace pm ctx prefix) >>= \case
             Left (ApplyBlocksVerifyFailure -> failure)
                 | rollback  -> failWithRollback failure blunds
                 | otherwise -> do
-                      lift $ logDebug' "Rolling: Applying AMAP"
+                      lift $ logDebug' $ sformat ("Rolling: run applyAMAP: apply as much as possible\
+                                                  \ after `verifyBlocksPrefix` failure: "%shown) failure
                       applyAMAP failure
                                    (over _Wrapped toList prefix)
                                    (NewestFirst [])
@@ -228,8 +237,12 @@ verifyAndApplyBlocks logTrace0 pm rollback blocks = runExceptT $ do
                                               getOldestFirst undos
                 let blunds' = toNewestFirst newBlunds : blunds
                 lift $ logDebug' "Rolling: Verification done, applying unsafe block"
-                lift $ applyBlocksUnsafe
-                    logTrace pm (ShouldCallBListener True) newBlunds (Just pModifier)
+                lift $ applyBlocksUnsafe logTrace pm
+                    (vbcBlockVersion ctx)
+                    (vbcBlockVersionData ctx)
+                    (ShouldCallBListener True)
+                    newBlunds
+                    (Just pModifier)
                 case getOldestFirst suffix of
                     [] -> (,concatNE blunds') <$> lift GS.getTip
                     (genesis:xs) -> do
@@ -262,7 +275,8 @@ applyBlocks logTrace pm calculateLrc pModifier blunds = do
         -- caller most definitely should have computed lrc to verify
         -- the sequence beforehand.
         lrcSingleShot logTrace pm (prefixHead ^. epochIndexL)
-    applyBlocksUnsafe logTrace pm (ShouldCallBListener True) prefix pModifier
+    (bv, bvd) <- getAdoptedBVFull
+    applyBlocksUnsafe logTrace pm bv bvd (ShouldCallBListener True) prefix pModifier
     case getOldestFirst suffix of
         []           -> pass
         (genesis:xs) -> applyBlocks logTrace pm calculateLrc pModifier (OldestFirst (genesis:|xs))
@@ -300,10 +314,11 @@ applyWithRollback
        )
     => TraceNamed m
     -> ProtocolMagic
+    -> TxpConfiguration
     -> NewestFirst NE Blund        -- ^ Blocks to rollbck
     -> OldestFirst NE Block        -- ^ Blocks to apply
     -> m (Either ApplyBlocksException HeaderHash)
-applyWithRollback logTrace pm toRollback toApply = runExceptT $ do
+applyWithRollback logTrace pm txpConfig toRollback toApply = runExceptT $ do
     tip <- lift GS.getTip
     when (tip /= newestToRollback) $
         throwError $ ApplyBlocksTipMismatch "applyWithRollback/rollback" tip newestToRollback
@@ -331,7 +346,8 @@ applyWithRollback logTrace pm toRollback toApply = runExceptT $ do
     onBadRollback tip =
         applyBack $> Left (ApplyBlocksTipMismatch "applyWithRollback/apply" tip newestToRollback)
 
-    onGoodRollback =
-        verifyAndApplyBlocks logTrace pm True toApply >>= \case
+    onGoodRollback = do
+        ctx <- getVerifyBlocksContext
+        verifyAndApplyBlocks logTrace pm txpConfig ctx True toApply >>= \case
             Left err           -> applyBack $> Left err
             Right (tipHash, _) -> pure (Right tipHash)

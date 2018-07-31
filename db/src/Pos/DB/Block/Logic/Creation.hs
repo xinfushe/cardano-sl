@@ -23,16 +23,24 @@ import           Formatting (build, fixed, ords, sformat, stext, (%))
 import           Serokell.Data.Memory.Units (Byte, memory)
 
 import           Pos.Binary.Class (biSize)
-import           Pos.Block.Slog (HasSlogGState (..))
-import           Pos.Core (Blockchain (..), EpochIndex, EpochOrSlot (..),
-                     HasProtocolConstants, HeaderHash, SlotId (..),
-                     chainQualityThreshold, epochIndexL, epochSlots,
-                     flattenSlotId, getEpochOrSlot, headerHash)
-import           Pos.Core.Block (BlockHeader (..), GenesisBlock, MainBlock,
-                     MainBlockchain)
+import           Pos.Chain.Block (HasSlogGState (..))
+import           Pos.Chain.Delegation (DelegationVar, DlgPayload (..),
+                     ProxySKBlockInfo)
+import           Pos.Chain.Ssc (MonadSscMem, defaultSscPayload, stripSscPayload)
+import           Pos.Chain.Txp (TxpConfiguration, emptyTxPayload)
+import           Pos.Chain.Update (HasUpdateConfiguration, curSoftwareVersion,
+                     lastKnownBlockVersion)
+import           Pos.Core (EpochIndex, EpochOrSlot (..), HasProtocolConstants,
+                     SlotId (..), chainQualityThreshold, epochIndexL,
+                     epochSlots, flattenSlotId, getEpochOrSlot)
+import           Pos.Core.Block (BlockHeader (..), Blockchain (..),
+                     GenesisBlock, HeaderHash, MainBlock, MainBlockchain,
+                     headerHash)
 import qualified Pos.Core.Block as BC
 import           Pos.Core.Block.Constructors (mkGenesisBlock, mkMainBlock)
 import           Pos.Core.Context (HasPrimaryKey, getOurSecretKey)
+import           Pos.Core.Exception (assertionFailed, traceFatalError)
+--import           Pos.Core.JsonLog (CanJsonLog (..))
 import           Pos.Core.JsonLog.LogEvents (MemPoolModifyReason (..))
 import           Pos.Core.Reporting (HasMisbehaviorMetrics, reportError)
 import           Pos.Core.Ssc (SscPayload)
@@ -43,6 +51,8 @@ import           Pos.Core.Update (UpdatePayload (..))
 import           Pos.Crypto (ProtocolMagic, SecretKey)
 import           Pos.DB.Block.Logic.Internal (MonadBlockApply,
                      applyBlocksUnsafe, normalizeMempool)
+import           Pos.DB.Block.Logic.Types (VerifyBlocksContext (..),
+                     getVerifyBlocksContext)
 import           Pos.DB.Block.Logic.Util (calcChainQualityM)
 import           Pos.DB.Block.Logic.VAR (verifyBlocksPrefix)
 import           Pos.DB.Block.Lrc (LrcModeFull, lrcSingleShot)
@@ -57,14 +67,6 @@ import           Pos.DB.Txp (MempoolExt, MonadTxpLocal (..), MonadTxpMem,
                      clearTxpMemPool, txGetPayload, withTxpLocalData)
 import           Pos.DB.Update (UpdateContext, clearUSMemPool, getMaxBlockSize,
                      usCanCreateBlock, usPreparePayload)
-import           Pos.Delegation (DelegationVar, DlgPayload (..),
-                     ProxySKBlockInfo)
-import           Pos.Exception (assertionFailed, traceFatalError)
-import           Pos.Ssc.Base (defaultSscPayload, stripSscPayload)
-import           Pos.Ssc.Mem (MonadSscMem)
-import           Pos.Txp.Base (emptyTxPayload)
-import           Pos.Update.Configuration (HasUpdateConfiguration,
-                     curSoftwareVersion, lastKnownBlockVersion)
 import           Pos.Util (_neHead)
 import           Pos.Util.Trace (natTrace, noTrace)
 import           Pos.Util.Trace.Named (TraceNamed, logDebug, logInfoS)
@@ -118,11 +120,12 @@ createGenesisBlockAndApply ::
        )
     => TraceNamed m
     -> ProtocolMagic
+    -> TxpConfiguration
     -> EpochIndex
     -> m (Maybe GenesisBlock)
 -- Genesis block for 0-th epoch is hardcoded.
-createGenesisBlockAndApply _ _ 0 = pure Nothing
-createGenesisBlockAndApply logTrace pm epoch = do
+createGenesisBlockAndApply _ _ _ 0 = pure Nothing
+createGenesisBlockAndApply logTrace pm txpConfig epoch = do
     tipHeader <- DB.getTipHeader
     -- preliminary check outside the lock,
     -- must be repeated inside the lock
@@ -131,7 +134,7 @@ createGenesisBlockAndApply logTrace pm epoch = do
         then modifyStateLock noTrace
                  HighPriority
                  ApplyBlock
-                 (\_ -> createGenesisBlockDo logTrace pm epoch)
+                 (\_ -> createGenesisBlockDo logTrace pm txpConfig epoch)
         else return Nothing
 
 createGenesisBlockDo
@@ -141,9 +144,10 @@ createGenesisBlockDo
        )
     => TraceNamed m
     -> ProtocolMagic
+    -> TxpConfiguration
     -> EpochIndex
     -> m (HeaderHash, Maybe GenesisBlock)
-createGenesisBlockDo logTrace pm epoch = do
+createGenesisBlockDo logTrace pm txpConfig epoch = do
     tipHeader <- DB.getTipHeader
     logDebug logTrace $ sformat msgTryingFmt epoch tipHeader
     needCreateGenesisBlock logTrace epoch tipHeader >>= \case
@@ -160,12 +164,18 @@ createGenesisBlockDo logTrace pm epoch = do
             LrcDB.getLeadersForEpoch
         let blk = mkGenesisBlock pm (Right tipHeader) epoch leaders
         let newTip = headerHash blk
-        verifyBlocksPrefix logTrace pm (one (Left blk)) >>= \case
+        ctx <- getVerifyBlocksContext
+        verifyBlocksPrefix logTrace pm ctx (one (Left blk)) >>= \case
             Left err -> traceFatalError logTrace $ pretty err
             Right (undos, pollModifier) -> do
                 let undo = undos ^. _Wrapped . _neHead
-                applyBlocksUnsafe logTrace pm (ShouldCallBListener True) (one (Left blk, undo)) (Just pollModifier)
-                normalizeMempool logTrace pm
+                applyBlocksUnsafe logTrace pm
+                    (vbcBlockVersion ctx)
+                    (vbcBlockVersionData ctx)
+                    (ShouldCallBListener True)
+                    (one (Left blk, undo))
+                    (Just pollModifier)
+                normalizeMempool logTrace pm txpConfig
                 pure (newTip, Just blk)
     logShouldNot =
         logDebug logTrace
@@ -220,16 +230,17 @@ createMainBlockAndApply ::
        )
     => TraceNamed m
     -> ProtocolMagic
+    -> TxpConfiguration
     -> SlotId
     -> ProxySKBlockInfo
     -> m (Either Text MainBlock)
-createMainBlockAndApply logTrace pm sId pske =
+createMainBlockAndApply logTrace pm txpConfig sId pske =
     modifyStateLock noTrace HighPriority ApplyBlock createAndApply
   where
     createAndApply tip =
         createMainBlockInternal logTrace pm sId pske >>= \case
             Left reason -> pure (tip, Left reason)
-            Right blk -> convertRes <$> applyCreatedBlock logTrace pm pske blk
+            Right blk -> convertRes <$> applyCreatedBlock logTrace pm txpConfig pske blk
     convertRes createdBlk = (headerHash createdBlk, Right createdBlk)
 
 ----------------------------------------------------------------------------
@@ -354,15 +365,17 @@ applyCreatedBlock ::
     )
     => TraceNamed m
     -> ProtocolMagic
+    -> TxpConfiguration
     -> ProxySKBlockInfo
     -> MainBlock
     -> m MainBlock
-applyCreatedBlock logTrace pm pske createdBlock = applyCreatedBlockDo False createdBlock
+applyCreatedBlock logTrace pm txpConfig pske createdBlock = applyCreatedBlockDo False createdBlock
   where
     slotId = createdBlock ^. BC.mainBlockSlot
     applyCreatedBlockDo :: Bool -> MainBlock -> m MainBlock
-    applyCreatedBlockDo isFallback blockToApply =
-        verifyBlocksPrefix logTrace pm (one (Right blockToApply)) >>= \case
+    applyCreatedBlockDo isFallback blockToApply = do
+        ctx <- getVerifyBlocksContext
+        verifyBlocksPrefix logTrace pm ctx (one (Right blockToApply)) >>= \case
             Left (pretty -> reason)
                 | isFallback -> onFailedFallback reason
                 | otherwise -> fallback reason
@@ -371,10 +384,12 @@ applyCreatedBlock logTrace pm pske createdBlock = applyCreatedBlockDo False crea
                 applyBlocksUnsafe
                     logTrace
                     pm
+                    (vbcBlockVersion ctx)
+                    (vbcBlockVersionData ctx)
                     (ShouldCallBListener True)
                     (one (Right blockToApply, undo))
                     (Just pollModifier)
-                normalizeMempool logTrace pm
+                normalizeMempool logTrace pm txpConfig
                 pure blockToApply
     clearMempools :: m ()
     clearMempools = do

@@ -17,9 +17,10 @@ import qualified Data.List.NonEmpty as NE
 import           Data.Time.Units (Second)
 import           Formatting (build, int, sformat, (%))
 
-import           Pos.Core (Block, HasHeaderHash (..), HeaderHash, difficultyL,
-                     isMoreDifficult)
-import           Pos.Core.Block (BlockHeader)
+import           Pos.Chain.Txp (TxpConfiguration)
+import           Pos.Core (difficultyL, isMoreDifficult)
+import           Pos.Core.Block (Block, BlockHeader, HasHeaderHash (..),
+                     HeaderHash)
 import           Pos.Core.Chrono (NE, OldestFirst (..), _OldestFirst)
 import           Pos.Core.Conc (delay)
 import           Pos.Core.Reporting (HasMisbehaviorMetrics)
@@ -30,13 +31,13 @@ import qualified Pos.DB.BlockIndex as DB
 import           Pos.Infra.Communication.Protocol (NodeId)
 import           Pos.Infra.Diffusion.Types (Diffusion)
 import qualified Pos.Infra.Diffusion.Types as Diffusion
+import           Pos.Infra.Recovery.Types (RecoveryHeaderTag)
 import           Pos.Infra.Reporting (reportOrLogE, reportOrLogW)
 import           Pos.Network.Block.Logic (BlockNetLogicException (..),
                      handleBlocks, triggerRecovery)
 import           Pos.Network.Block.RetrievalQueue (BlockRetrievalQueueTag,
                      BlockRetrievalTask (..))
 import           Pos.Network.Block.WorkMode (BlockWorkMode)
-import           Pos.Recovery.Types (RecoveryHeaderTag)
 import           Pos.Util.Trace.Named (TraceNamed, logDebug, logError, logInfo,
                      logWarning)
 import           Pos.Util.Util (HasLens (..))
@@ -60,8 +61,10 @@ retrievalWorker
        , HasMisbehaviorMetrics ctx
        )
     => TraceNamed m
-    -> ProtocolMagic -> Diffusion m -> m ()
-retrievalWorker logTrace pm diffusion = do
+    -> ProtocolMagic
+    -> TxpConfiguration
+    -> Diffusion m -> m ()
+retrievalWorker logTrace pm txpConfig diffusion = do
     logInfo logTrace "Starting retrievalWorker loop"
     mainLoop
   where
@@ -113,7 +116,7 @@ retrievalWorker logTrace pm diffusion = do
         logDebug logTrace $ "handleContinues: " <> pretty hHash
         classifyNewHeader pm header >>= \case
             CHContinues ->
-                void $ getProcessBlocks logTrace pm diffusion nodeId (headerHash header) [hHash]
+                void $ getProcessBlocks logTrace pm txpConfig diffusion nodeId (headerHash header) [hHash]
             res -> logDebug logTrace $
                 "processContHeader: expected header to " <>
                 "be continuation, but it's " <> show res
@@ -169,7 +172,7 @@ retrievalWorker logTrace pm diffusion = do
                                         "already present in db"
         logDebug logTrace "handleRecovery: fetching blocks"
         checkpoints <- toList <$> getHeadersOlderExp Nothing
-        void $ streamProcessBlocks logTrace pm diffusion nodeId (headerHash rHeader) checkpoints
+        void $ streamProcessBlocks logTrace pm txpConfig diffusion nodeId (headerHash rHeader) checkpoints
 
 ----------------------------------------------------------------------------
 -- Entering and exiting recovery mode
@@ -284,12 +287,13 @@ getProcessBlocks
        )
     => TraceNamed m
     -> ProtocolMagic
+    -> TxpConfiguration
     -> Diffusion m
     -> NodeId
     -> HeaderHash
     -> [HeaderHash]
     -> m ()
-getProcessBlocks logTrace pm diffusion nodeId desired checkpoints = do
+getProcessBlocks logTrace pm txpConfig diffusion nodeId desired checkpoints = do
     result <- Diffusion.getBlocks diffusion nodeId desired checkpoints
     case OldestFirst <$> nonEmpty (getOldestFirst result) of
       Nothing -> do
@@ -302,7 +306,7 @@ getProcessBlocks logTrace pm diffusion nodeId desired checkpoints = do
           logDebug logTrace $ sformat
               ("Retrieved "%int%" blocks")
               (blocks ^. _OldestFirst . to NE.length)
-          handleBlocks logTrace pm blocks diffusion
+          handleBlocks logTrace pm txpConfig blocks diffusion
           -- If we've downloaded any block with bigger
           -- difficulty than ncRecoveryHeader, we're
           -- gracefully exiting recovery mode.
@@ -330,18 +334,19 @@ streamProcessBlocks
        )
     => TraceNamed m
     -> ProtocolMagic
+    -> TxpConfiguration
     -> Diffusion m
     -> NodeId
     -> HeaderHash
     -> [HeaderHash]
     -> m ()
-streamProcessBlocks logTrace pm diffusion nodeId desired checkpoints = do
+streamProcessBlocks logTrace pm txpConfig diffusion nodeId desired checkpoints = do
     logInfo logTrace "streaming start"
     r <- Diffusion.streamBlocks diffusion nodeId desired checkpoints writeCallback
     case r of
          Nothing -> do
              logInfo logTrace "streaming not supported, reverting to batch mode"
-             getProcessBlocks logTrace pm diffusion nodeId desired checkpoints
+             getProcessBlocks logTrace pm txpConfig diffusion nodeId desired checkpoints
          Just _  -> do
              logInfo logTrace "streaming done"
              return ()
@@ -349,4 +354,4 @@ streamProcessBlocks logTrace pm diffusion nodeId desired checkpoints = do
     writeCallback :: [Block] -> m ()
     writeCallback [] = return ()
     writeCallback (block:blocks) =
-        handleBlocks logTrace pm (OldestFirst (NE.reverse $ block :| blocks)) diffusion
+        handleBlocks logTrace pm txpConfig (OldestFirst (NE.reverse $ block :| blocks)) diffusion

@@ -16,6 +16,7 @@ import           Data.Maybe (fromJust)
 import           ExplorerNodeOptions (ExplorerArgs (..), ExplorerNodeArgs (..),
                      getExplorerNodeOptions)
 import           Pos.Binary ()
+import           Pos.Chain.Txp (TxpConfiguration)
 import           Pos.Client.CLI (CommonNodeArgs (..), NodeArgs (..),
                      getNodeParams)
 import qualified Pos.Client.CLI as CLI
@@ -69,9 +70,9 @@ action
     -> ExplorerNodeArgs
     -> m ()
 action logTrace (ExplorerNodeArgs (cArgs@CommonNodeArgs{..}) ExplorerArgs{..}) =
-    withConfigurations logTrace' blPath conf $ \ntpConfig pm ->
+    withConfigurations logTrace' blPath conf $ \pm txpConfig ntpConfig ->
     withCompileInfo $ do
-        CLI.printInfoOnStart logTrace' cArgs ntpConfig
+        CLI.printInfoOnStart logTrace' cArgs ntpConfig txpConfig
         Log.logInfo $ "Explorer is enabled!"
         currentParams <- getNodeParams loggerName cArgs nodeArgs
 
@@ -85,9 +86,9 @@ action logTrace (ExplorerNodeArgs (cArgs@CommonNodeArgs{..}) ExplorerArgs{..}) =
                 , updateTriggerWorker (natTrace liftIO logTrace)
                 ]
         liftIO $ bracketNodeResources logTrace currentParams sscParams
-            (explorerTxpGlobalSettings logTrace pm)
+            (explorerTxpGlobalSettings logTrace pm txpConfig)
             (explorerInitDB pm epochSlots) $ \nr@NodeResources {..} ->
-                runExplorerRealMode pm nr (runNode logTrace pm nr plugins)
+                runExplorerRealMode pm txpConfig nr (runNode logTrace pm txpConfig nr plugins)
   where
 
     logTrace' = natTrace liftIO logTrace
@@ -101,14 +102,15 @@ action logTrace (ExplorerNodeArgs (cArgs@CommonNodeArgs{..}) ExplorerArgs{..}) =
     runExplorerRealMode
         :: (HasConfigurations,HasCompileInfo)
         => ProtocolMagic
+        -> TxpConfiguration
         -> NodeResources ExplorerExtraModifier
         -> (Diffusion ExplorerProd -> ExplorerProd ())
         -> IO ()
-    runExplorerRealMode pm nr@NodeResources{..} go =
+    runExplorerRealMode pm txpConfig nr@NodeResources{..} go =
         let NodeContext {..} = nrContext
             extraCtx = makeExtraCtx
             explorerModeToRealMode  = runExplorerProd extraCtx
-         in runRealMode logTrace pm nr $ \diffusion ->
+         in runRealMode logTrace pm txpConfig nr $ \diffusion ->
                 explorerModeToRealMode (go (hoistDiffusion (lift . lift) explorerModeToRealMode diffusion))
 
     nodeArgs :: NodeArgs

@@ -16,13 +16,12 @@ module Pos.DB.Txp.Settings
 
 import           Universum
 
-import           Pos.Core (ComponentBlock)
+import           Pos.Chain.Txp (ToilVerFailure)
+import           Pos.Core.Block (ComponentBlock)
 import           Pos.Core.Chrono (NE, NewestFirst, OldestFirst)
 import           Pos.Core.Slotting (MonadSlots)
 import           Pos.Core.Txp (TxPayload, TxpUndo)
 import           Pos.DB (MonadDBRead, MonadGState, SomeBatchOp)
-import           Pos.Txp.Configuration (HasTxpConfiguration)
-import           Pos.Txp.Toil.Failure (ToilVerFailure)
 import           Pos.Util.Trace.Named (TraceNamed)
 
 type TxpCommonMode m =
@@ -31,13 +30,11 @@ type TxpCommonMode m =
     )
 
 type TxpGlobalVerifyMode m =
-    ( HasTxpConfiguration
-    , TxpCommonMode m
+    ( TxpCommonMode m
     )
 
 type TxpGlobalApplyMode ctx m =
-    ( HasTxpConfiguration
-    , TxpCommonMode m
+    ( TxpCommonMode m
     , MonadSlots ctx m  -- TODO: I don't like it (@gromak)
     )
 

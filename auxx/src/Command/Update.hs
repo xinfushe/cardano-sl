@@ -17,15 +17,15 @@ import           Data.List ((!!))
 import           Formatting (sformat, string, (%))
 
 import           Pos.Binary (Raw)
+import           Pos.Chain.Update (SystemTag, UpId, UpdateData (..),
+                     mkUpdateProposalWSign, mkUpdateVoteSafe)
 import           Pos.Client.KeyStorage (getSecretKeysPlain)
 import           Pos.Client.Update.Network (submitUpdateProposal, submitVote)
+import           Pos.Core.Exception (traceFatalError)
 import           Pos.Crypto (Hash, ProtocolMagic, emptyPassphrase, hash,
                      hashHexF, unsafeHash, withSafeSigner, withSafeSigners)
-import           Pos.Exception (traceFatalError)
 import           Pos.Infra.Diffusion.Types (Diffusion (..))
 import           Pos.Network.Update.Download (installerHash)
-import           Pos.Update (SystemTag, UpId, UpdateData (..),
-                     mkUpdateProposalWSign, mkUpdateVoteSafe)
 import           Pos.Util.Trace.Named (TraceNamed, logDebug, logError, logInfo)
 
 import           Lang.Value (ProposeUpdateParams (..), ProposeUpdateSystem (..))

@@ -1,11 +1,13 @@
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 {-# LANGUAGE BangPatterns               #-}
+{-# LANGUAGE CPP                        #-}
 {-# LANGUAGE DeriveDataTypeable         #-}
 {-# LANGUAGE ExistentialQuantification  #-}
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE GADTSyntax                 #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE KindSignatures             #-}
+{-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE NamedFieldPuns             #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE RankNTypes                 #-}
@@ -51,7 +53,7 @@ import           Control.Concurrent.STM
 import           Control.Exception (Exception, SomeAsyncException,
                      SomeException, bracket, catch, finally, fromException,
                      handle, mask, throwIO, try, uninterruptibleMask_)
-import           Control.Monad (forM_, mapM_, when)
+import           Control.Monad (forM_, mapM_, unless, when)
 import           Data.Binary
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Builder as BS
@@ -62,9 +64,12 @@ import           Data.Hashable (Hashable)
 import           Data.Int (Int64)
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
+#if !(MIN_VERSION_base(4,8,0))
 import           Data.Monoid
+#endif
 import           Data.NonEmptySet (NonEmptySet)
 import qualified Data.NonEmptySet as NESet
+import           Data.Semigroup ((<>))
 import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Data.Time.Clock.POSIX (getPOSIXTime)
@@ -789,6 +794,8 @@ waitForRunningHandlers node = getRunningHandlers node >>= mapM_ waitCatchSomeHan
 killRunningHandlers :: Node packingType peerData -> IO ()
 killRunningHandlers node = getRunningHandlers node >>= mapM_ cancelSomeHandler
 
+{-# ANN nodeDispatcher ("HLint: ignore Reduce duplication" :: Text) #-}
+
 -- | The one thread that handles /all/ incoming messages and dispatches them
 -- to various handlers.
 nodeDispatcher
@@ -858,7 +865,7 @@ nodeDispatcher node handlerInOut =
         -- This is *not* a network-transport error; EndPointClosed can be
         -- posted without ConnectionClosed for all open connections, as an
         -- optimization.
-        when (not (null connections)) $ do
+        unless (null connections) $ do
             forM_ connections $ \(_, st) -> case st of
                 (_, FeedingApplicationHandler dumpBytes _) -> do
                     dumpBytes Nothing
@@ -871,7 +878,7 @@ nodeDispatcher node handlerInOut =
             let nonceMaps = Map.elems (_nodeStateOutboundBidirectional st)
             let outbounds = nonceMaps >>= Map.elems
             forM_ outbounds $ \(_, dumpBytes, _, peerDataVar, _, _, acked) -> do
-                when (not acked) $ do
+                unless acked $ do
                    _ <- tryPutMVar peerDataVar (error "no peer data because local node has gone down")
                    dumpBytes Nothing
             return (st, ())
@@ -1389,7 +1396,7 @@ withInOutChannel node@Node{nodeEnvironment, nodeState, nodeTrace} nodeid@(NodeId
     -- A mutable cell for the channel. We'll swap it to Nothing when we don't
     -- want to accept any more bytes (the handler has finished).
     channelVar <- newMVar (Just channel)
-    let dumpBytes mbs = withMVar channelVar $ \mchannel -> case mchannel of
+    let dumpBytes mbs = withMVar channelVar $ \case
             Nothing                  -> pure ()
             Just (ChannelIn channel) -> atomically $ writeTChan channel mbs
         closeChannel = modifyMVar channelVar $ \_ -> pure (Nothing, ())

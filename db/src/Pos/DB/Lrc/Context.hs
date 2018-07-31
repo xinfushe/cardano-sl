@@ -16,11 +16,11 @@ import           Universum
 
 import           Control.Lens (views)
 
+import           Pos.Chain.Lrc (LrcError (..))
 import           Pos.Core (EpochIndex)
+import           Pos.Core.Exception (traceFatalError)
 import           Pos.DB.Class (MonadDBRead)
 import           Pos.DB.Lrc.Common (getEpoch)
-import           Pos.Exception (traceFatalError)
-import           Pos.Lrc.Error (LrcError (..))
 import           Pos.Util.Concurrent (readTVarConditional)
 import           Pos.Util.Trace.Named (TraceNamed)
 import           Pos.Util.Util (HasLens (..), HasLens', maybeThrow)

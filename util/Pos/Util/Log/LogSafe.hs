@@ -5,8 +5,6 @@
 {-# LANGUAGE Rank2Types                #-}
 {-# LANGUAGE TypeFamilies              #-}
 
-{-# OPTIONS_GHC -fno-warn-orphans #-}
-
 -- | Safe/secure logging
 
 module Pos.Util.Log.LogSafe

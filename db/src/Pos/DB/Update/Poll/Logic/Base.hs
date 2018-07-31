@@ -35,31 +35,30 @@ import qualified Data.HashMap.Strict as HM
 import qualified Data.Set as S
 import           Data.Tagged (Tagged, untag)
 import           Data.Time.Units (convertUnit)
-import           Formatting (int, sformat, (%))
+import           Formatting (build, int, sformat, (%))
 
-import           Pos.Core (BlockVersion (..), Coin, CoinPortion (..),
-                     EpochIndex, HasProtocolConstants, HeaderHash,
-                     IsMainHeader (..), SlotId, SoftforkRule (..),
-                     TimeDiff (..), addressHash, applyCoinPortionUp,
-                     coinPortionDenominator, coinToInteger, difficultyL,
-                     epochSlots, getCoinPortion, headerHashG, isBootstrapEra,
-                     sumCoins, unsafeAddCoin, unsafeIntegerToCoin,
-                     unsafeSubCoin)
-import           Pos.Core.Slotting (EpochSlottingData (..), SlottingData,
-                     addEpochSlottingData, getCurrentEpochIndex,
-                     getNextEpochSlottingData)
-import           Pos.Core.Update (BlockVersionData (..),
-                     BlockVersionModifier (..), UpId, UpdateProposal (..),
-                     UpdateVote (..))
-import           Pos.Crypto (PublicKey, hash)
-import           Pos.Update.Poll.Class (MonadPoll (..), MonadPollRead (..))
-import           Pos.Update.Poll.Failure (PollVerFailure (..))
-import           Pos.Update.Poll.Types (BlockVersionState (..),
+import           Pos.Chain.Update (BlockVersionState (..),
                      ConfirmedProposalState (..), DecidedProposalState (..),
-                     DpsExtra (..), ProposalState (..),
+                     DpsExtra (..), MonadPoll (..), MonadPollRead (..),
+                     PollVerFailure (..), ProposalState (..),
                      UndecidedProposalState (..), UpsExtra (..),
                      bvsIsConfirmed, combineVotes, cpsBlockVersion,
                      isPositiveVote, newVoteState)
+import           Pos.Core (Coin, CoinPortion (..), EpochIndex,
+                     HasProtocolConstants, SlotId, TimeDiff (..), addressHash,
+                     applyCoinPortionUp, coinPortionDenominator, coinToInteger,
+                     difficultyL, epochSlots, getCoinPortion, isBootstrapEra,
+                     sumCoins, unsafeAddCoin, unsafeIntegerToCoin,
+                     unsafeSubCoin)
+import           Pos.Core.Block (HeaderHash, IsMainHeader (..), headerHashG)
+import           Pos.Core.Slotting (EpochSlottingData (..), SlottingData,
+                     addEpochSlottingData, getCurrentEpochIndex,
+                     getNextEpochSlottingData)
+import           Pos.Core.Update (BlockVersion (..), BlockVersionData (..),
+                     BlockVersionModifier (..), SoftforkRule (..), UpId,
+                     UpdateProposal (..), UpdateVote (..))
+import           Pos.Crypto (PublicKey, hash, shortHashF)
+import           Pos.Util.Trace.Named (TraceNamed, logNotice)
 
 
 
@@ -182,16 +181,17 @@ canBeAdoptedPure BlockVersion { bvMajor = givenMajor
 -- block version are updated.
 adoptBlockVersion
     :: MonadPoll m
-    => HeaderHash -> BlockVersion -> m ()
-adoptBlockVersion winningBlk bv = do
+    => TraceNamed m
+    -> HeaderHash -> BlockVersion -> m ()
+adoptBlockVersion logTrace winningBlk bv = do
     setAdoptedBV bv
-    -- TODO: logNotice $ sformat logFmt bv winningBlk
+    logNotice logTrace $ sformat logFmt bv winningBlk
     mapM_ processConfirmed =<< getConfirmedProposals
   where
     processConfirmed cps
         | cpsBlockVersion cps /= bv = pass
         | otherwise = addConfirmedProposal cps {cpsAdopted = Just winningBlk}
-    --logFmt = "BlockVersion is adopted: "%build%"; winning block was "%shortHashF
+    logFmt = "BlockVersion is adopted: "%build%"; winning block was "%shortHashF
 
 -- | Update slotting data stored in poll. First argument is epoch for
 -- which currently adopted 'BlockVersion' can be applied. Here we update the

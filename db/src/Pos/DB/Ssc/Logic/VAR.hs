@@ -11,42 +11,38 @@ module Pos.DB.Ssc.Logic.VAR
        ) where
 
 import           Control.Lens ((.=), _Wrapped)
-import           Control.Monad (forM_)
 import           Control.Monad.Except (MonadError (throwError), runExceptT)
 import           Control.Monad.Morph (hoist)
-import           Control.Monad.Writer (tell)
 import qualified Crypto.Random as Rand
 import qualified Data.HashMap.Strict as HM
 
 import           Formatting (build, int, sformat, (%))
 import           Serokell.Util (listJson)
-import           Universum hiding (forM_)
+import           Universum
 
-import           Pos.Core (BlockVersionData, ComponentBlock (..),
-                     HasCoreConfiguration, HasGenesisData,
-                     HasProtocolConstants, HeaderHash, epochIndexL,
-                     epochOrSlotG, headerHash)
+import           Pos.Chain.Lrc (RichmenStakes)
+import           Pos.Chain.Ssc (HasSscConfiguration, MonadSscMem,
+                     MultiRichmenStakes, PureToss, SscBlock,
+                     SscGlobalState (..), SscGlobalUpdate, SscVerifyError (..),
+                     applyGenesisBlock, askSscMem, pureTossTrace,
+                     pureTossWithEnvTrace, rollbackSsc, runPureTossWithLogger,
+                     sscGlobal, sscIsCriticalVerifyError, sscRunGlobalUpdate,
+                     supplyPureTossEnv, verifyAndApplySscPayload)
+import           Pos.Core (HasCoreConfiguration, HasGenesisData,
+                     HasProtocolConstants, epochIndexL, epochOrSlotG)
+import           Pos.Core.Block (ComponentBlock (..), HeaderHash, headerHash)
 import           Pos.Core.Chrono (NE, NewestFirst (..), OldestFirst (..))
+import           Pos.Core.Exception (assertionFailed)
 import           Pos.Core.Reporting (MonadReporting, reportError)
 import           Pos.Core.Ssc (SscPayload (..))
+import           Pos.Core.Update (BlockVersionData)
 import           Pos.Crypto (ProtocolMagic)
-import           Pos.DB (MonadDBRead, MonadGState, SomeBatchOp (..),
-                     gsAdoptedBVData)
+import           Pos.DB (MonadDBRead, MonadGState, SomeBatchOp (..))
 import           Pos.DB.Lrc (HasLrcContext, getSscRichmen)
 import qualified Pos.DB.Ssc.GState as DB
-import           Pos.Exception (assertionFailed)
-import           Pos.Lrc.Types (RichmenStakes)
-import           Pos.Ssc.Configuration (HasSscConfiguration)
-import           Pos.Ssc.Error (SscVerifyError (..), sscIsCriticalVerifyError)
-import           Pos.Ssc.Mem (MonadSscMem, SscGlobalUpdate, askSscMem,
-                     sscRunGlobalUpdate)
-import           Pos.Ssc.Toss (MultiRichmenStakes, PureToss, applyGenesisBlock,
-                     pureTossTrace, pureTossWithEnvTrace, rollbackSsc,
-                     runPureToss, supplyPureTossEnv, verifyAndApplySscPayload)
-import           Pos.Ssc.Types (SscBlock, SscGlobalState (..), sscGlobal)
 import           Pos.Util.AssertMode (inAssertMode)
 import           Pos.Util.Lens (_neHead, _neLast)
-import           Pos.Util.Trace (natTrace, traceWith)
+import           Pos.Util.Trace (natTrace, noTrace)
 import           Pos.Util.Trace.Named (TraceNamed, logDebug)
 
 
@@ -83,9 +79,10 @@ sscVerifyBlocks
     :: SscGlobalVerifyMode ctx m
     => TraceNamed m
     -> ProtocolMagic
+    -> BlockVersionData
     -> OldestFirst NE SscBlock
     -> m (Either SscVerifyError SscGlobalState)
-sscVerifyBlocks logTrace pm blocks = do
+sscVerifyBlocks logTrace pm bvd blocks = do
     let epoch = blocks ^. _Wrapped . _neHead . epochIndexL
     let lastEpoch = blocks ^. _Wrapped . _neLast . epochIndexL
     let differentEpochsMsg =
@@ -96,9 +93,8 @@ sscVerifyBlocks logTrace pm blocks = do
     inAssertMode $ unless (epoch == lastEpoch) $
         assertionFailed logTrace differentEpochsMsg
     richmenSet <- getSscRichmen "sscVerifyBlocks" epoch
-    bvd <- gsAdoptedBVData
     globalVar <- sscGlobal <$> askSscMem
-    gs <- atomically $ readTVar globalVar
+    gs <- readTVarIO globalVar
     res <-
         runExceptT
             (execStateT (sscVerifyAndApplyBlocks (natTrace (lift . lift) logTrace) pm richmenSet bvd blocks) gs)
@@ -120,21 +116,22 @@ sscApplyBlocks
     :: SscGlobalApplyMode ctx m
     => TraceNamed m
     -> ProtocolMagic
+    -> BlockVersionData
     -> OldestFirst NE SscBlock
     -> Maybe SscGlobalState
     -> m [SomeBatchOp]
-sscApplyBlocks logTrace pm blocks (Just newState) = do
+sscApplyBlocks logTrace pm bvd blocks (Just newState) = do
     inAssertMode $ do
         let hashes = map headerHash blocks
-        expectedState <- sscVerifyValidBlocks logTrace pm blocks
+        expectedState <- sscVerifyValidBlocks logTrace pm bvd blocks
         if | newState == expectedState -> pass
            | otherwise -> onUnexpectedVerify logTrace hashes
     sscApplyBlocksFinish logTrace newState
-sscApplyBlocks logTrace pm blocks Nothing =
-    sscApplyBlocksFinish logTrace =<< sscVerifyValidBlocks logTrace pm blocks
+sscApplyBlocks logTrace pm bvd blocks Nothing =
+    sscApplyBlocksFinish logTrace =<< sscVerifyValidBlocks logTrace pm bvd blocks
 
 sscApplyBlocksFinish
-    :: (SscGlobalApplyMode ctx m)
+    :: SscGlobalApplyMode ctx m
     => TraceNamed m -> SscGlobalState -> m [SomeBatchOp]
 sscApplyBlocksFinish logTrace gs = do
     sscRunGlobalUpdate logTrace (put gs)
@@ -147,10 +144,11 @@ sscVerifyValidBlocks
     :: SscGlobalApplyMode ctx m
     => TraceNamed m
     -> ProtocolMagic
+    -> BlockVersionData
     -> OldestFirst NE SscBlock
     -> m SscGlobalState
-sscVerifyValidBlocks logTrace pm blocks =
-    sscVerifyBlocks logTrace pm blocks >>= \case
+sscVerifyValidBlocks logTrace pm bvd blocks =
+    sscVerifyBlocks logTrace pm bvd blocks >>= \case
         Left e -> onVerifyFailedInApply logTrace hashes e
         Right newState -> return newState
   where
@@ -213,7 +211,7 @@ verifyAndApplyMultiRichmen logTrace pm onlyCerts env =
     verifyAndApplyDo (ComponentBlockGenesis header) = applyGenesisBlock $ header ^. epochIndexL
     verifyAndApplyDo (ComponentBlockMain header payload) =
         verifyAndApplySscPayload (natTrace lift pureTossWithEnvTrace) pm (Right header) $
-        filterPayload payload
+            filterPayload payload
     filterPayload payload
         | onlyCerts = leaveOnlyCerts payload
         | otherwise = payload
@@ -253,8 +251,7 @@ sscRollbackU blocks = tossToUpdate $ rollbackSsc pureTossTrace oldestEOS payload
 tossToUpdate :: PureToss a -> SscGlobalUpdate a
 tossToUpdate action = do
     oldState <- use identity
-    (res, newState, logItems) <- runPureToss oldState action
-    tell logItems
+    (res, newState) <- runPureTossWithLogger oldState noTrace action
     (identity .= newState) $> res
 
 tossToVerifier
@@ -264,9 +261,8 @@ tossToVerifier
     -> m a
 tossToVerifier logTrace action = do
     oldState <- use identity
-    (resOrErr, newState, logItems) <-
-        runPureToss oldState $ runExceptT action
-    forM_ logItems (traceWith logTrace)
+    (resOrErr, newState) <-
+        runPureTossWithLogger oldState logTrace $ runExceptT action
     case resOrErr of
         Left e    -> throwError e
         Right res -> (identity .= newState) $> res

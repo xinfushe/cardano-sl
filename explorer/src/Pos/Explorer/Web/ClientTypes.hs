@@ -67,21 +67,21 @@ import           Servant.API (FromHttpApiData (..))
 import           Test.QuickCheck (Arbitrary (..))
 
 import           Pos.Binary (biSize)
-import           Pos.Block.Types (Undo (..))
+import           Pos.Chain.Block (Undo (..))
 import           Pos.Core (Address, Coin, EpochIndex, LocalSlotIndex,
                      SlotId (..), StakeholderId, Timestamp, addressF,
-                     coinToInteger, decodeTextAddress, gbHeader, gbhConsensus,
-                     getEpochIndex, getSlotIndex, headerHash, mkCoin,
-                     prevBlockL, sumCoins, timestampToPosix, unsafeAddCoin,
-                     unsafeGetCoin, unsafeIntegerToCoin, unsafeSubCoin)
-import           Pos.Core.Block (MainBlock, mainBlockSlot, mainBlockTxPayload,
-                     mcdSlot)
+                     coinToInteger, decodeTextAddress, getEpochIndex,
+                     getSlotIndex, mkCoin, sumCoins, timestampToPosix,
+                     unsafeAddCoin, unsafeGetCoin, unsafeIntegerToCoin,
+                     unsafeSubCoin)
+import           Pos.Core.Block (MainBlock, gbHeader, gbhConsensus, headerHash,
+                     mainBlockSlot, mainBlockTxPayload, mcdSlot, prevBlockL)
+import           Pos.Core.Merkle (getMerkleRoot, mkMerkleTree, mtRoot)
 import           Pos.Core.Txp (Tx (..), TxId, TxOut (..), TxOutAux (..), TxUndo,
                      txpTxs, _txOutputs)
 import           Pos.Crypto (AbstractHash, Hash, HashAlgorithm, hash)
 import qualified Pos.DB.Lrc as LrcDB (getLeader)
 import qualified Pos.GState as GS
-import           Pos.Merkle (getMerkleRoot, mkMerkleTree, mtRoot)
 
 import           Pos.Explorer.Core (TxExtra (..))
 import           Pos.Explorer.ExplorerMode (ExplorerMode)

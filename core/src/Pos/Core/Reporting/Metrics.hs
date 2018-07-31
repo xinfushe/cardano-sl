@@ -21,7 +21,7 @@ import           System.Metrics.Gauge (Gauge)
 import qualified System.Metrics.Gauge as Gauge
 
 import           Pos.Core.Conc (currentTime)
-import           Pos.System.Metrics.Constants (withCardanoNamespace)
+import           Pos.Core.Metrics.Constants (withCardanoNamespace)
 import           Pos.Util.Trace.Named (TraceNamed, logDebug)
 
 -- | 'MetricMonitor' is primarily used to parameterize 'recordValue'

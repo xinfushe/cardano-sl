@@ -6,10 +6,11 @@ import qualified Data.IxSet.Typed as IxSet
 import qualified Data.List.NonEmpty as NE
 import           Servant
 
+import           Pos.Chain.Txp (TxpConfiguration)
 import           Pos.Client.Txp.Util (defaultInputSelectionPolicy)
 import qualified Pos.Client.Txp.Util as V0
-import           Pos.Core (TxAux)
 import qualified Pos.Core as Core
+import           Pos.Core.Txp (TxAux)
 import           Pos.Crypto (ProtocolMagic)
 import qualified Pos.Util.Servant as V0
 import           Pos.Util.Trace.Named (TraceNamed)
@@ -34,10 +35,11 @@ handlers
     :: HasConfigurations
     => TraceNamed MonadV1
     -> ProtocolMagic
+    -> TxpConfiguration
     -> (TxAux -> MonadV1 Bool)
     -> ServerT Transactions.API MonadV1
-handlers logTrace pm submitTx =
-             newTransaction logTrace pm submitTx
+handlers logTrace pm txpConfig submitTx =
+             newTransaction logTrace pm txpConfig submitTx
         :<|> (allTransactions logTrace)
         :<|> estimateFees pm
 
@@ -46,10 +48,11 @@ newTransaction
      . (V0.MonadWalletTxFull ctx m)
     => TraceNamed m
     -> ProtocolMagic
+    -> TxpConfiguration
     -> (TxAux -> m Bool)
     -> Payment
     -> m (WalletResponse Transaction)
-newTransaction logTrace pm submitTx Payment {..} = do
+newTransaction logTrace pm txpConfig submitTx Payment {..} = do
     ws <- V0.askWalletSnapshot
     sourceWallet <- migrate (psWalletId pmtSource)
 
@@ -72,7 +75,7 @@ newTransaction logTrace pm submitTx Payment {..} = do
     addrCoinList <- migrate $ NE.toList pmtDestinations
     let (V1 policy) = fromMaybe (V1 defaultInputSelectionPolicy) pmtGroupingPolicy
     let batchPayment = V0.NewBatchPayment cAccountId addrCoinList policy
-    cTx <- V0.newPaymentBatch logTrace pm submitTx spendingPw batchPayment
+    cTx <- V0.newPaymentBatch logTrace pm txpConfig submitTx spendingPw batchPayment
     single <$> migrate cTx
 
 
@@ -114,9 +117,7 @@ allTransactions logTrace mwalletId mAccIdx mAddr requestParams fops sops  =
             -- TODO: should we use the 'FilterBy' machinery instead? that
             --       let us express RANGE, GT, etc. in addition to EQ. does
             --       that make sense for this dataset?
-            throwM MissingRequiredParams
-                { requiredParams = pure ("wallet_id", "WalletId")
-                }
+            throwM . MissingRequiredParams $ pure ("wallet_id", "WalletId")
 
 estimateFees
     :: (MonadThrow m, V0.MonadFees ctx m)

@@ -27,7 +27,8 @@ import           Control.Monad.Reader (withReaderT)
 import           Control.Monad.Trans.Resource (transResourceT)
 import           Data.Conduit (transPipe)
 
-import           Pos.Block.Slog (HasSlogContext (..), HasSlogGState (..))
+import           Pos.Chain.Block (HasSlogContext (..), HasSlogGState (..))
+import           Pos.Chain.Ssc (HasSscContext (..))
 import           Pos.Client.KeyStorage (MonadKeys (..), MonadKeysRead (..),
                      getSecretDefault, modifySecretDefault)
 import           Pos.Client.Txp.Addresses (MonadAddresses (..))
@@ -58,8 +59,6 @@ import           Pos.Infra.Network.Types (HasNodeType (..), NodeType (..))
 import           Pos.Infra.Shutdown (HasShutdownContext (..))
 import           Pos.Infra.Slotting.Class (MonadSlots (..))
 import           Pos.Launcher (HasConfigurations)
-import           Pos.Ssc.Types (HasSscContext (..))
-import           Pos.Txp (HasTxpConfiguration)
 import           Pos.Util (HasLens (..), postfixLFields)
 import           Pos.Util.CompileInfo (HasCompileInfo, withCompileInfo)
 import           Pos.Util.Trace (noTrace)
@@ -202,9 +201,7 @@ instance HasConfiguration => MonadBalances AuxxMode where
     getOwnUtxos addrs = ifM isTempDbUsed (getOwnUtxosGenesis addrs) (getFilteredUtxo addrs)
     getBalance = getBalanceFromUtxo
 
-instance ( HasConfiguration
-         , HasTxpConfiguration
-         ) =>
+instance HasConfiguration =>
          MonadTxHistory AuxxMode where
     getBlockHistory = getBlockHistoryDefault
     getLocalHistory = getLocalHistoryDefault
@@ -228,16 +225,14 @@ instance MonadKeys AuxxMode where
 
 type instance MempoolExt AuxxMode = EmptyMempoolExt
 
-instance ( HasConfiguration
-         , HasTxpConfiguration
-         ) =>
+instance HasConfiguration =>
          MonadTxpLocal AuxxMode where
-    txpNormalize _ = withReaderT acRealModeContext . txNormalize noTrace
+    txpNormalize tr pm txpConfig = withReaderT acRealModeContext . txNormalize tr pm txpConfig
     --TODO trace on the left side has a different monad from trace on the right side
     --maybe a TraceNamed IO is a good solution
-    txpProcessTx _ pm = withReaderT acRealModeContext . txProcessTransaction noTrace noTrace pm
+    txpProcessTx _ pm txpConfig = withReaderT acRealModeContext . txProcessTransaction noTrace noTrace pm txpConfig
 
-instance (HasConfigurations) =>
+instance HasConfigurations =>
          MonadTxpLocal (BlockGenMode EmptyMempoolExt AuxxMode) where
     txpNormalize = withCompileInfo $ txNormalize
     txpProcessTx = withCompileInfo $ txProcessTransactionNoLock

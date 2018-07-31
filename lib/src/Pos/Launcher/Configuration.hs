@@ -32,20 +32,22 @@ import           Data.Time.Units (fromMicroseconds)
 import           Data.Aeson.Options (defaultOptions)
 import           System.FilePath (takeDirectory)
 
+import           Ntp.Client (NtpConfiguration)
+
 -- FIXME consistency on the locus of the JSON instances for configuration.
 -- Core keeps them separate, infra update and ssc define them on-site.
 import           Pos.Aeson.Core.Configuration ()
 import           Pos.Core (Address, decodeTextAddress)
+import           Pos.Core.Genesis (GenesisData)
 import           Pos.Core.Slotting (Timestamp (..))
 
-import           Pos.Block.Configuration
+import           Pos.Chain.Block
+import           Pos.Chain.Delegation
+import           Pos.Chain.Ssc hiding (filter)
+import           Pos.Chain.Txp
+import           Pos.Chain.Update
 import           Pos.Configuration
 import           Pos.Core.Configuration
-import           Pos.Delegation.Configuration
-import           Pos.Infra.Ntp.Configuration
-import           Pos.Ssc.Configuration
-import           Pos.Txp.Configuration
-import           Pos.Update.Configuration
 import           Pos.Util.Config (parseYamlConfig)
 import           Pos.Util.Trace.Named (TraceNamed, logInfo)
 
@@ -72,7 +74,6 @@ type HasConfigurations =
     , HasUpdateConfiguration
     , HasSscConfiguration
     , HasBlockConfiguration
-    , HasTxpConfiguration
     , HasDlgConfiguration
     , HasNodeConfiguration
     )
@@ -117,22 +118,24 @@ withConfigurationsM
     => TraceNamed m
     -> Maybe AssetLockPath
     -> ConfigurationOptions
-    -> (HasConfigurations => NtpConfiguration -> ProtocolMagic -> m r)
+    -> (GenesisData -> GenesisData)
+    -- ^ change genesis data; this is useful if some parameters are passed as
+    -- comand line arguments for some tools (profiling executables, benchmarks).
+    -> (HasConfigurations => ProtocolMagic -> TxpConfiguration -> NtpConfiguration -> m r)
     -> m r
-withConfigurationsM logTrace mAssetLockPath cfo act = do
+withConfigurationsM logTrace mAssetLockPath cfo fn act = do
     logInfo' ("using configurations: " <> show cfo)
     cfg <- parseYamlConfig (cfoFilePath cfo) (cfoKey cfo)
     assetLock <- case mAssetLockPath of
         Nothing -> pure mempty
         Just fp -> liftIO $ readAssetLockedSrcAddrs fp
     let configDir = takeDirectory $ cfoFilePath cfo
-    withCoreConfigurations (ccCore cfg) configDir (cfoSystemStart cfo) (cfoSeed cfo) $
+    withCoreConfigurations (ccCore cfg) fn configDir (cfoSystemStart cfo) (cfoSeed cfo) $
         withUpdateConfiguration (ccUpdate cfg) $
         withSscConfiguration (ccSsc cfg) $
         withDlgConfiguration (ccDlg cfg) $
-        withTxpConfiguration (addAssetLock assetLock $ ccTxp cfg) $
         withBlockConfiguration (ccBlock cfg) $
-        withNodeConfiguration (ccNode cfg) $ act (ccNtp cfg)
+        withNodeConfiguration (ccNode cfg) $ \ pm -> act pm (addAssetLock assetLock $ ccTxp cfg) (ccNtp cfg)
 
     where
     logInfo' :: Text -> m ()
@@ -143,10 +146,10 @@ withConfigurations
     => TraceNamed m
     -> Maybe AssetLockPath
     -> ConfigurationOptions
-    -> (HasConfigurations => NtpConfiguration -> ProtocolMagic -> m r)
+    -> (HasConfigurations => ProtocolMagic -> TxpConfiguration -> NtpConfiguration -> m r)
     -> m r
 withConfigurations logTrace mAssetLockPath cfo act = do
-    withConfigurationsM logTrace mAssetLockPath cfo act
+    withConfigurationsM logTrace mAssetLockPath cfo id act
 
 addAssetLock :: Set Address -> TxpConfiguration -> TxpConfiguration
 addAssetLock bset tcfg =

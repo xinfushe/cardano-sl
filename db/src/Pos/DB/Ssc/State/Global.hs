@@ -18,15 +18,14 @@ import           Formatting (build, sformat, (%))
 --import           Pos.Util.Log (WithLogger, logDebug, logInfo)
 import           Universum
 
+import           Pos.Chain.Ssc (MonadSscMem, SscGlobalState (..),
+                     getStableCertsPure, sgsVssCertificates, sscRunGlobalQuery)
+import qualified Pos.Chain.Ssc as Ssc
 import           Pos.Core (EpochIndex (..), HasGenesisData,
-                     HasProtocolConstants, SlotId (..),
-                     VssCertificatesMap (..))
+                     HasProtocolConstants, SlotId (..))
+import           Pos.Core.Ssc (VssCertificatesMap (..))
 import           Pos.DB (MonadDBRead)
 import qualified Pos.DB.Ssc.GState as DB
-import           Pos.Ssc.Functions (getStableCertsPure)
-import           Pos.Ssc.Mem (MonadSscMem, sscRunGlobalQuery)
-import           Pos.Ssc.Types (SscGlobalState (..), sgsVssCertificates)
-import qualified Pos.Ssc.VssCertData as VCD
 import           Pos.Util.Trace.Named (TraceNamed, logDebug, logInfo)
 
 ----------------------------------------------------------------------------
@@ -38,8 +37,8 @@ getGlobalCerts
     => SlotId -> m VssCertificatesMap
 getGlobalCerts sl =
     sscRunGlobalQuery $
-        VCD.certs .
-        VCD.setLastKnownSlot sl <$>
+        Ssc.certs .
+        Ssc.setLastKnownSlot sl <$>
         view sgsVssCertificates
 
 -- | Get stable VSS certificates for given epoch.

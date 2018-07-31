@@ -19,7 +19,9 @@ import           Universum
 import           Control.Lens (makeLensesWith)
 import qualified Control.Monad.Reader as Mtl
 
-import           Pos.Block.Slog (HasSlogContext (..), HasSlogGState (..))
+import           Pos.Chain.Block (HasSlogContext (..), HasSlogGState (..))
+import           Pos.Chain.Delegation (DelegationVar)
+import           Pos.Chain.Ssc (SscMemTag, SscState)
 import           Pos.Context (HasNodeContext (..), HasPrimaryKey (..),
                      HasSscContext (..), NodeContext)
 import           Pos.Core (HasConfiguration)
@@ -37,7 +39,6 @@ import           Pos.DB.Rocks (dbDeleteDefault, dbGetDefault,
 import           Pos.DB.Txp (GenericTxpLocalData, MempoolExt,
                      MonadTxpLocal (..), TxpHolderTag, txNormalize,
                      txProcessTransaction)
-import           Pos.Delegation.Class (DelegationVar)
 import           Pos.Infra.DHT.Real.Param (KademliaParams)
 import           Pos.Infra.Network.Types (HasNodeType (..), getNodeTypeDefault)
 import           Pos.Infra.Reporting (MonadReporting (..), Reporter (..))
@@ -46,9 +47,6 @@ import           Pos.Infra.Slotting.Class (MonadSlots (..))
 import           Pos.Infra.Slotting.Impl (currentTimeSlottingSimple,
                      getCurrentSlotBlockingSimple,
                      getCurrentSlotInaccurateSimple, getCurrentSlotSimple)
-import           Pos.Ssc.Mem (SscMemTag)
-import           Pos.Ssc.Types (SscState)
-import           Pos.Txp (HasTxpConfiguration)
 import           Pos.Util.Lens (postfixLFields)
 import qualified Pos.Util.Log as Log
 import           Pos.Util.Trace (noTrace)
@@ -167,7 +165,7 @@ instance MonadBListener (RealMode ext) where
 
 type instance MempoolExt (RealMode ext) = ext
 
-instance (HasConfiguration, HasTxpConfiguration) =>
+instance (HasConfiguration) =>
          MonadTxpLocal (RealMode ()) where
     txpNormalize = txNormalize
     txpProcessTx = \tr -> txProcessTransaction tr noTrace

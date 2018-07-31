@@ -24,17 +24,23 @@ import           Control.Monad.Morph (generalize)
 import           Data.Aeson (Value)
 import           Data.Default (Default (def))
 import qualified Data.HashMap.Strict as HM
-import           Data.Reflection (given)
 import           Formatting (build, sformat, (%))
 
-import           Pos.Core (BlockVersionData, EpochIndex, HeaderHash,
-                     ProtocolMagic, siEpoch)
+import           Pos.Chain.Txp (ExtendedLocalToilM, LocalToilState (..),
+                     MemPool, ToilVerFailure (..), TxpConfiguration (..),
+                     UndoMap, Utxo, UtxoLookup, UtxoModifier, extendLocalToilM,
+                     mpLocalTxs, normalizeToil, processTx, topsortTxs,
+                     utxoToLookup)
+import           Pos.Core (EpochIndex, ProtocolMagic, siEpoch)
+import           Pos.Core.Block (HeaderHash)
+--import           Pos.Core.JsonLog (CanJsonLog (..))
 import           Pos.Core.JsonLog.LogEvents (MemPoolModifyReason (..))
 import           Pos.Core.Reporting (reportError)
 import           Pos.Core.Slotting (MonadSlots (..))
 import           Pos.Core.StateLock (Priority (..), StateLock, StateLockMetrics,
                      withStateLock)
 import           Pos.Core.Txp (TxAux (..), TxId, TxUndo)
+import           Pos.Core.Update (BlockVersionData)
 import           Pos.Crypto (WithHash (..))
 import           Pos.DB.Class (MonadGState (..))
 import qualified Pos.DB.GState.Common as GS
@@ -43,12 +49,6 @@ import           Pos.DB.Txp.MemState (GenericTxpLocalData (..), MempoolExt,
                      MonadTxpMem, TxpLocalWorkMode, getLocalTxsMap,
                      getLocalUndos, getMemPool, getTxpExtra, getUtxoModifier,
                      setTxpLocalData, withTxpLocalData)
-import           Pos.Txp.Configuration (tcAssetLockedSrcAddrs, txpConfiguration)
-import           Pos.Txp.Toil (ExtendedLocalToilM, LocalToilState (..), MemPool,
-                     ToilVerFailure (..), UndoMap, Utxo, UtxoLookup,
-                     UtxoModifier, extendLocalToilM, mpLocalTxs, normalizeToil,
-                     processTx, utxoToLookup)
-import           Pos.Txp.Topsort (topsortTxs)
 import           Pos.Util.Trace (Trace)
 import           Pos.Util.Trace.Named (TraceNamed, appendName, logDebug,
                      logError, logWarning)
@@ -64,13 +64,15 @@ type TxpProcessTransactionMode ctx m =
 -- | Process transaction. 'TxId' is expected to be the hash of
 -- transaction in 'TxAux'. Separation is supported for optimization
 -- only.
-txProcessTransaction :: (TxpProcessTransactionMode ctx m)
+txProcessTransaction
+    :: (TxpProcessTransactionMode ctx m)
     => TraceNamed m
     -> Trace m Value -- ^ Json log.
     -> ProtocolMagic
+    -> TxpConfiguration
     -> (TxId, TxAux) -> m (Either ToilVerFailure ())
-txProcessTransaction logTrace jsonL pm itw = do
-  withStateLock jsonL LowPriority ProcessTransaction $ \__tip -> txProcessTransactionNoLock (appendName "txProc" logTrace) pm itw
+txProcessTransaction logTrace jsonL pm txpConfig itw = do
+  withStateLock jsonL LowPriority ProcessTransaction $ \__tip -> txProcessTransactionNoLock (appendName "txProc" logTrace) pm txpConfig itw
 
 -- | Unsafe version of 'txProcessTransaction' which doesn't take a
 -- lock. Can be used in tests.
@@ -81,9 +83,10 @@ txProcessTransactionNoLock
        )
     => TraceNamed m
     -> ProtocolMagic
+    -> TxpConfiguration
     -> (TxId, TxAux)
     -> m (Either ToilVerFailure ())
-txProcessTransactionNoLock logTrace pm =
+txProcessTransactionNoLock logTrace pm txpConfig =
     txProcessTransactionAbstract logTrace buildContext processTxHoisted
   where
     buildContext :: Utxo -> TxAux -> m ()
@@ -95,7 +98,7 @@ txProcessTransactionNoLock logTrace pm =
         -> (TxId, TxAux)
         -> ExceptT ToilVerFailure (ExtendedLocalToilM () ()) TxUndo
     processTxHoisted bvd =
-        mapExceptT extendLocalToilM ... (processTx pm bvd (tcAssetLockedSrcAddrs given))
+        mapExceptT extendLocalToilM ... (processTx pm txpConfig bvd)
 
 txProcessTransactionAbstract ::
        forall extraEnv extraState ctx m a.
@@ -184,22 +187,21 @@ txNormalize
        ( TxpLocalWorkMode ctx m
        , MempoolExt m ~ ()
        )
-    => TraceNamed m -> ProtocolMagic -> m ()
-txNormalize _ =
-    txNormalizeAbstract buildContext . normalizeToilHoisted
+    => TraceNamed m -> ProtocolMagic -> TxpConfiguration -> m ()
+txNormalize _ pm txpConfig =
+    txNormalizeAbstract buildContext $ normalizeToilHoisted
   where
     buildContext :: Utxo -> [TxAux] -> m ()
     buildContext _ _ = pure ()
 
-    normalizeToilHoisted ::
-           ProtocolMagic
-        -> BlockVersionData
+    normalizeToilHoisted
+        :: BlockVersionData
         -> EpochIndex
         -> HashMap TxId TxAux
         -> ExtendedLocalToilM () () ()
-    normalizeToilHoisted pm bvd epoch txs =
+    normalizeToilHoisted bvd epoch txs =
         extendLocalToilM $
-            normalizeToil pm bvd (tcAssetLockedSrcAddrs txpConfiguration) epoch $ HM.toList txs
+            normalizeToil pm txpConfig bvd epoch $ HM.toList txs
 
 txNormalizeAbstract ::
        (TxpLocalWorkMode ctx m, MempoolExt m ~ extraState)

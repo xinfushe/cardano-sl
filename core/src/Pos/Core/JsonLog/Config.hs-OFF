@@ -1,0 +1,31 @@
+-- | configuration
+module Pos.Core.JsonLog.Config
+       ( HasJsonLogConfig (..)
+       , JsonLogConfig (..)
+       , jsonLogConfigFromHandle
+       , jsonLogDefault
+       ) where
+
+import           Universum
+
+import           Data.Aeson.Types (ToJSON)
+
+import           Pos.Core.JsonLog.JsonLogT (JsonLogConfig (..))
+import qualified Pos.Core.JsonLog.JsonLogT as JL
+
+
+jsonLogConfigFromHandle :: MonadIO m => Handle -> m JsonLogConfig
+jsonLogConfigFromHandle h = do
+    v <- newMVar h
+    return $ JsonLogConfig v (\_ -> return True)
+
+class HasJsonLogConfig ctx where
+    jsonLogConfig :: Lens' ctx JsonLogConfig
+
+jsonLogDefault
+    :: (ToJSON a, MonadReader ctx m, HasJsonLogConfig ctx, MonadIO m, MonadCatch m)
+    => a -> m ()
+jsonLogDefault x = do
+    jlc <- view jsonLogConfig
+    JL.jsonLogDefault jlc x
+

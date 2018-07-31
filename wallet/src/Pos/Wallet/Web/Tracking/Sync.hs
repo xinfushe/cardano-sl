@@ -53,15 +53,16 @@ import qualified Data.List as List (last)
 import qualified Data.List.NonEmpty as NE
 import           Data.Time.Units (Microsecond, TimeUnit (..))
 import           Formatting (build, float, sformat, shown, (%))
-import           Pos.Block.Types (Blund, undoTx)
+import           Pos.Chain.Block (Blund, undoTx)
+import           Pos.Chain.Txp (UndoMap, flattenTxPayload, topsortTxs,
+                     _txOutputs)
 import           Pos.Client.Txp.History (TxHistoryEntry (..),
                      txHistoryListToMap)
 import           Pos.Core (Address, BlockCount (..), ChainDifficulty (..),
-                     HasDifficulty (..), HasProtocolConstants, HeaderHash,
-                     Timestamp (..), blkSecurityParam, genesisHash, headerHash,
-                     headerSlotL, timestampToPosix)
-import           Pos.Core.Block (BlockHeader (..), getBlockHeader,
-                     mainBlockTxPayload)
+                     HasDifficulty (..), HasProtocolConstants, Timestamp (..),
+                     blkSecurityParam, genesisHash, timestampToPosix)
+import           Pos.Core.Block (BlockHeader (..), HeaderHash, getBlockHeader,
+                     headerHash, headerSlotL, mainBlockTxPayload)
 import           Pos.Core.Chrono (getNewestFirst)
 import           Pos.Core.StateLock (Priority (..), withStateLockNoMetrics)
 import           Pos.Core.Txp (TxAux (..), TxId, TxUndo)
@@ -74,7 +75,6 @@ import qualified Pos.GState as GS
 import           Pos.Infra.Slotting (MonadSlots (..), MonadSlotsData,
                      getSlotStartPure, getSystemStartM)
 import           Pos.Infra.Slotting.Types (SlottingData)
-import           Pos.Txp (UndoMap, flattenTxPayload, topsortTxs, _txOutputs)
 import           Pos.Util.Log.LogSafe (buildSafe, secretOnlyF, secure)
 import qualified Pos.Util.Modifier as MM
 import           Pos.Util.Servant (encodeCType)
@@ -697,6 +697,3 @@ evalChange allUsed inputs outputs allOutputsOur
         -- Apply the third point.
         if allOutputsOur && potentialChange == HS.fromList (map WS._wamAddress outputs) then []
         else HS.toList potentialChange
-
---setLogger :: HasLoggerName m => m a -> m a
---setLogger = modifyLoggerName (const "syncWalletWorker")

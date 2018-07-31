@@ -23,8 +23,11 @@ import           System.Exit (ExitCode (..))
 
 import           Pos.Behavior (bcSecurityParams)
 import           Pos.Binary ()
-import           Pos.Block.Configuration (HasBlockConfiguration,
-                     recoveryHeadersMessage, streamWindow)
+import           Pos.Chain.Block (HasBlockConfiguration, recoveryHeadersMessage,
+                     streamWindow)
+import           Pos.Chain.Txp (TxpConfiguration)
+import           Pos.Chain.Update (HasUpdateConfiguration,
+                     lastKnownBlockVersion)
 import           Pos.Configuration (HasNodeConfiguration,
                      networkConnectionTimeout)
 import           Pos.Context.Context (NodeContext (..))
@@ -50,11 +53,8 @@ import           Pos.Launcher.Param (BaseParams (..), LoggingParams (..),
 import           Pos.Launcher.Resource (NodeResources (..))
 import           Pos.Logic.Full (logicFull)
 import           Pos.Logic.Types (Logic, hoistLogic)
-import           Pos.Recovery.Instance ()
 import           Pos.Reporting.Production (ProductionReporterParams (..),
                      productionReporter)
-import           Pos.Update.Configuration (HasUpdateConfiguration,
-                     lastKnownBlockVersion)
 import           Pos.Util.CompileInfo (HasCompileInfo, compileInfo)
 import           Pos.Util.Trace (natTrace, noTrace)
 import           Pos.Util.Trace.Named (TraceNamed, appendName)
@@ -80,10 +80,11 @@ runRealMode
        )
     => TraceNamed IO
     -> ProtocolMagic
+    -> TxpConfiguration
     -> NodeResources ext
     -> (Diffusion (RealMode ext) -> RealMode ext a)
     -> IO a
-runRealMode logTrace0 pm nr@NodeResources {..} act = runServer
+runRealMode logTrace0 pm txpConfig nr@NodeResources {..} act = runServer
     logTrace
     pm
     ncNodeParams
@@ -101,7 +102,7 @@ runRealMode logTrace0 pm nr@NodeResources {..} act = runServer
     logTrace' :: TraceNamed (RealMode ext)
     logTrace' = natTrace liftIO logTrace
     logic :: Logic (RealMode ext)
-    logic = logicFull logTrace' noTrace pm ourStakeholderId securityParams -- TODO jsonLog
+    logic = logicFull logTrace' noTrace pm txpConfig ourStakeholderId securityParams -- TODO jsonLog
     makeLogicIO :: Diffusion IO -> Logic IO
     makeLogicIO diffusion = hoistLogic (elimRealMode logTrace pm nr diffusion) logic
     act' :: Diffusion IO -> IO a

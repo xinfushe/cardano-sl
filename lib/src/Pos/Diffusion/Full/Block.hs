@@ -36,18 +36,17 @@ import           Pos.Binary.Communication (serializeMsgSerializedBlock,
 import           Pos.Communication.Limits (mlMsgBlock, mlMsgGetBlocks,
                      mlMsgGetHeaders, mlMsgHeaders, mlMsgStream,
                      mlMsgStreamBlock)
-import           Pos.Communication.Message ()
-import           Pos.Core (BlockVersionData, HeaderHash, ProtocolConstants (..),
-                     bvdSlotDuration, difficultyL, headerHash, prevBlockL)
-import           Pos.Core.Block (Block, BlockHeader (..), MainBlockHeader,
-                     blockHeader)
+import           Pos.Core (ProtocolConstants (..), difficultyL)
+import           Pos.Core.Block (Block, BlockHeader (..), HeaderHash,
+                     MainBlockHeader, blockHeader, headerHash, prevBlockL)
 import           Pos.Core.Chrono (NE, NewestFirst (..), OldestFirst (..),
                      toOldestFirst, _NewestFirst, _OldestFirst)
+import           Pos.Core.Exception (cardanoExceptionFromException,
+                     cardanoExceptionToException)
 import           Pos.Core.NetworkAddress (NetworkAddress)
+import           Pos.Core.Update (BlockVersionData, bvdSlotDuration)
 import           Pos.Crypto (shortHashF)
 import           Pos.DB (DBError (DBMalformed))
-import           Pos.Exception (cardanoExceptionFromException,
-                     cardanoExceptionToException)
 import           Pos.Infra.Communication.Listener (listenerConv)
 import           Pos.Infra.Communication.Protocol (Conversation (..),
                      ConversationActions (..), EnqueueMsg, ListenerSpec,
@@ -65,7 +64,7 @@ import           Pos.Network.Block.Types (MsgBlock (..), MsgGetBlocks (..),
                      MsgStreamBlock (..), MsgStreamStart (..),
                      MsgStreamUpdate (..))
 -- Dubious having this security stuff in here.
-import           Pos.Security.Params (AttackTarget (..), AttackType (..),
+import           Pos.Chain.Security (AttackTarget (..), AttackType (..),
                      NodeAttackedError (..), SecurityParams (..))
 import           Pos.Util (_neHead, _neLast)
 import           Pos.Util.Timer (Timer, startTimer)
@@ -477,7 +476,7 @@ announceBlockHeader logTrace logic protocolConstants recoveryHeadersMessage enqu
         -- TODO figure out what this security stuff is doing and judge whether
         -- it needs to change / be removed.
         let sparams = Logic.securityParams logic
-        -- Copied from Pos.Security.Util but made pure. The existing
+        -- Copied from Pos.Chain.Security but made pure. The existing
         -- implementation was tied to a reader rather than taking a
         -- SecurityParams value as a function argument.
             shouldIgnoreAddress :: NetworkAddress -> Bool
