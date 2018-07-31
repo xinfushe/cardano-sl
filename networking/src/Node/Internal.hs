@@ -72,6 +72,7 @@ import qualified Data.NonEmptySet as NESet
 import           Data.Semigroup ((<>))
 import           Data.Set (Set)
 import qualified Data.Set as Set
+import           Data.Text (Text)
 import           Data.Time.Clock.POSIX (getPOSIXTime)
 import           Data.Time.Units (Microsecond)
 import           Formatting (sformat, shown, (%))

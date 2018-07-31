@@ -80,12 +80,12 @@ correctNodeParams logTrace AuxxOptions {..} np = do
 runNodeWithSinglePlugin ::
        (HasConfigurations, HasCompileInfo)
     => TraceNamed IO
-    -> TxpConfiguration
     -> ProtocolMagic
+    -> TxpConfiguration
     -> NodeResources EmptyMempoolExt
     -> (Diffusion AuxxMode -> AuxxMode ())
     -> Diffusion AuxxMode -> AuxxMode ()
-runNodeWithSinglePlugin logTrace pm nr plugin =
+runNodeWithSinglePlugin logTrace pm txpConfig nr plugin =
     runNode (natTrace liftIO logTrace) pm txpConfig nr [plugin]
 
 action
@@ -109,7 +109,7 @@ action logTrace opts@AuxxOptions {..} command = do
   where
     runWithoutNode :: PrintAction IO -> IO ()
     runWithoutNode printAction = printAction "Mode: light"
-        >> rawExec logTrace Nothing Nothing opts Nothing command
+        >> rawExec logTrace Nothing Nothing Nothing opts Nothing command
 
     runWithConfig
         :: HasConfigurations
@@ -135,7 +135,7 @@ action logTrace opts@AuxxOptions {..} command = do
                               (npUserSecret nodeParams ^. usVss)
             sscParams = CLI.gtSscParams cArgs vssSK (npBehaviorConfig nodeParams)
 
-        bracketNodeResources logTrace nodeParams sscParams (txpGlobalSettings pm) (initNodeDBs pm epochSlots) $ \nr ->
+        bracketNodeResources logTrace nodeParams sscParams (txpGlobalSettings pm txpConfig) (initNodeDBs pm epochSlots) $ \nr ->
             let NodeContext {..} = nrContext nr
                 modifier = if aoStartMode == WithNode
                            then runNodeWithSinglePlugin logTrace pm txpConfig nr

@@ -227,7 +227,7 @@ type instance MempoolExt AuxxMode = EmptyMempoolExt
 
 instance HasConfiguration =>
          MonadTxpLocal AuxxMode where
-    txpNormalize tr pm txpConfig = withReaderT acRealModeContext . txNormalize tr pm txpConfig
+    txpNormalize _ pm txpConfig = withReaderT acRealModeContext $ txNormalize noTrace pm txpConfig
     --TODO trace on the left side has a different monad from trace on the right side
     --maybe a TraceNamed IO is a good solution
     txpProcessTx _ pm txpConfig = withReaderT acRealModeContext . txProcessTransaction noTrace noTrace pm txpConfig
