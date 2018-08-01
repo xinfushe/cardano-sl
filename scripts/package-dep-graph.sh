@@ -72,7 +72,9 @@ if [ "${include_test_bench}" = "0" ]; then
     prunefiles=$(find . -name \*.cabal -exec basename {} \; \
         | grep -v stack-work | grep "test.cabal\\|bench.cabal" \
         | sed 's/\.cabal//' | tr '\n' ',')
-    stack_dot_flags="${stack_dot_flags} --prune ${prunefiles}"
+    if [ -n "${prunefiles}" ]; then
+        stack_dot_flags="${stack_dot_flags} --prune ${prunefiles}"
+    fi
 fi
 
 # This is a weird hack to satisfy shellcheck. While strange, it works, and is
@@ -87,6 +89,34 @@ if [ "${use_tred}" = "1" ]; then
 else
     final_dotfile="${tmpdir}/full-dependencies.dot"
 fi
+
+gsed -i '/cardano-sl-infra/s/solid/solid,style=filled,fillcolor=SeaGreen/' ${final_dotfile}
+gsed -i '/cardano-sl-auxx/s/solid/solid,style=filled,fillcolor=SandyBrown/' ${final_dotfile}
+gsed -i '/cardano-sl-generator/s/solid/solid,style=filled,fillcolor=Salmon/' ${final_dotfile}
+gsed -i '/cardano-sl-binary/s/solid/solid,style=filled,fillcolor=RoyalBlue/' ${final_dotfile}
+
+# blockchain packages
+gsed -i '/cardano-sl-chain/s/solid/solid,style=filled,fillcolor=Plum/' ${final_dotfile}
+gsed -i '/cardano-sl-delegation/s/solid/solid,style=filled,fillcolor=Plum/' ${final_dotfile}
+gsed -i '/cardano-sl-txp/s/solid/solid,style=filled,fillcolor=Plum/' ${final_dotfile}
+gsed -i '/cardano-sl-ssc/s/solid/solid,style=filled,fillcolor=Plum/' ${final_dotfile}
+gsed -i '/cardano-sl-lrc/s/solid/solid,style=filled,fillcolor=Plum/' ${final_dotfile}
+gsed -i '/cardano-sl-update/s/solid/solid,style=filled,fillcolor=Plum/' ${final_dotfile}
+gsed -i '/cardano-sl-block/s/solid/solid,style=filled,fillcolor=Plum/' ${final_dotfile}
+
+
+gsed -i '/"cardano-sl"/s/solid/solid,style=filled,fillcolor=PaleGreen/' ${final_dotfile}
+gsed -i '/cardano-sl-networking/s/solid/solid,style=filled,fillcolor=Red/' ${final_dotfile}
+gsed -i '/cardano-sl-core/s/solid/solid,style=filled,fillcolor=Tomato/' ${final_dotfile}
+gsed -i '/cardano-sl-crypto/s/solid/solid,style=filled,fillcolor=Yellow/' ${final_dotfile}
+gsed -i '/cardano-sl-db/s/solid/solid,style=filled,fillcolor=YellowGreen/' ${final_dotfile}
+gsed -i '/cardano-sl-node-ipc/s/solid/solid,style=filled,fillcolor=Sienna/' ${final_dotfile}
+gsed -i '/"cardano-sl-node"/s/solid/solid,style=filled,fillcolor=SkyBlue/' ${final_dotfile}
+gsed -i '/cardano-sl-explorer/s/solid/solid,style=filled,fillcolor=PaleVioletRed/' ${final_dotfile}
+gsed -i '/cardano-sl-client/s/solid/solid,style=filled,fillcolor=LightCoral/' ${final_dotfile}
+gsed -i '/"cardano-sl-wallet"/s/solid/solid,style=filled,fillcolor=Purple/' ${final_dotfile}
+gsed -i '/cardano-sl-tools/s/solid/solid,style=filled,fillcolor=VioletRed/' ${final_dotfile}
+gsed -i '/cardano-sl-wallet-new/s/solid/solid,style=filled,fillcolor=Cornsilk/' ${final_dotfile}
 
 if [ "${format}" = "svg" ]; then
     outfile="cardano-sl-pkg-deps.svg"
