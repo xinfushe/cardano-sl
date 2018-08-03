@@ -24,7 +24,6 @@ import           Cardano.Wallet.API.Indices
 import           Cardano.Wallet.API.V1.Errors (WalletError)
 import           Cardano.Wallet.API.V1.Migration.Types (Migrate (..))
 import           Cardano.Wallet.API.V1.Types
-import           Cardano.Wallet.Orphans ()
 import qualified Cardano.Wallet.Util as Util
 
 -- | Tests whether or not some instances (JSON, Bi, etc) roundtrips.
