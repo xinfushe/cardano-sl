@@ -67,15 +67,21 @@ module Pos.Wallet.Web.ClientTypes.Types
       , ClientInfo (..)
       ) where
 
+import qualified Prelude
 import           Universum
 
 import           Control.Lens (makeLenses)
+import           Data.Aeson (ToJSON (..))
 import           Data.Default (Default, def)
 import           Data.Hashable (Hashable (..))
 import           Data.Time.Clock.POSIX (POSIXTime)
 import           Data.Typeable (Typeable)
 import           Data.Version (Version)
 import           Formatting (bprint, build, builder, later, shown, (%))
+import qualified Formatting.Buildable
+import           Serokell.Util (listJsonIndent, mapBuilder)
+import           Servant.Multipart (FileData, Mem)
+
 import           Pos.Client.Txp.Util (InputSelectionPolicy)
 import           Pos.Core (ChainDifficulty, Coin, ScriptVersion, unsafeGetCoin)
 import           Pos.Core.Update (BlockVersion, SoftwareVersion)
@@ -84,11 +90,6 @@ import           Pos.Infra.Util.LogSafe (BuildableSafeGen (..), SecureLog (..),
                      secureListF)
 import           Pos.Util.Mnemonic (Mnemonic)
 import           Pos.Util.Servant (HasTruncateLogPolicy, WithTruncatedLog (..))
-import           Serokell.Util (listJsonIndent, mapBuilder)
-import           Servant.Multipart (FileData, Mem)
-
-import qualified Formatting.Buildable
-import qualified Prelude
 
 data SyncProgress = SyncProgress
     { _spLocalCD   :: ChainDifficulty
@@ -646,6 +647,9 @@ instance Buildable (SecureLog ScrollLimit) where
 
 newtype CFilePath = CFilePath Text
     deriving (Eq, Ord, Generic, Typeable, Buildable)
+
+instance ToJSON CFilePath where
+  toJSON (CFilePath c) = toJSON c
 
 instance Buildable (SecureLog CFilePath) where
     build _ = "<filepath>"

@@ -18,7 +18,6 @@ import           Test.QuickCheck.Instances ()
 import           Cardano.Wallet.API.Response (ValidJSON)
 import qualified Cardano.Wallet.API.V1 as V1
 import           Cardano.Wallet.API.V1.Swagger ()
-import           Cardano.Wallet.Orphans.Aeson ()
 import           Cardano.Wallet.Orphans.Arbitrary ()
 
 -- for vendored code
