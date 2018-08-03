@@ -37,7 +37,8 @@ import           Pos.DB.Txp (MempoolExt, MonadTxpLocal, TxpGlobalSettings,
 import           Pos.Generator.Block (BlockGenMode, BlockGenParams (..),
                      MonadBlockGenInit, genBlocks, tgpTxCountRange)
 import           Pos.Util (HasLens', _neLast)
-import           Pos.Util.Trace (noTrace)
+import           Pos.Util.Trace (natTrace)
+import           Pos.Util.Trace.Named (TraceNamed)
 import           Test.Pos.Block.Logic.Mode (BlockProperty, BlockTestContext,
                      btcSlotIdL)
 
@@ -89,16 +90,17 @@ bpGenBlocks
        , MonadTxpLocal (BlockGenMode (MempoolExt m) m)
        , HasAllSecrets ctx
        )
-    => ProtocolMagic
+    => TraceNamed IO
+    -> ProtocolMagic
     -> TxpConfiguration
     -> Maybe BlockCount
     -> EnableTxPayload
     -> InplaceDB
     -> PropertyM m (OldestFirst [] Blund)
-bpGenBlocks pm txpConfig blkCnt enableTxPayload inplaceDB = do
+bpGenBlocks logTrace pm txpConfig blkCnt enableTxPayload inplaceDB = do
     params <- genBlockGenParams pm blkCnt enableTxPayload inplaceDB
     g <- pick $ MkGen $ \qc _ -> qc
-    lift $ OldestFirst <$> evalRandT (genBlocks noTrace pm txpConfig params maybeToList) g
+    lift $ OldestFirst <$> evalRandT (genBlocks (natTrace liftIO logTrace) pm txpConfig params maybeToList) g
 
 -- | A version of 'bpGenBlocks' which generates exactly one
 -- block. Allows one to avoid unsafe functions sometimes.
@@ -109,13 +111,14 @@ bpGenBlock
        , HasAllSecrets ctx
        , Default (MempoolExt m)
        )
-    => ProtocolMagic
+    => TraceNamed IO
+    -> ProtocolMagic
     -> TxpConfiguration
     -> EnableTxPayload
     -> InplaceDB
     -> PropertyM m Blund
 -- 'unsafeHead' is safe because we create exactly 1 block
-bpGenBlock pm txpConfig = fmap (List.head . toList) ... bpGenBlocks pm txpConfig (Just 1)
+bpGenBlock logTrace pm txpConfig = fmap (List.head . toList) ... bpGenBlocks logTrace pm txpConfig (Just 1)
 
 getAllSecrets :: (MonadReader ctx m, HasAllSecrets ctx) => m AllSecrets
 getAllSecrets = view allSecrets

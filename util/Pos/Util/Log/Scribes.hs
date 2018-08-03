@@ -20,7 +20,7 @@ import           Katip.Scribes.Handle (brackets, getKeys)
 import           System.FilePath ((</>))
 import           System.IO (BufferMode (LineBuffering), Handle,
                      IOMode (WriteMode), hFlush, hSetBuffering, stderr, stdout)
-import           System.IO.Unsafe (unsafePerformIO)
+-- import           System.IO.Unsafe (unsafePerformIO)
 
 import qualified Pos.Util.Log.Internal as Internal
 
@@ -29,10 +29,10 @@ import qualified Pos.Util.Log.Internal as Internal
 
 
 
--- | global lock for file Scribes
-{-# NOINLINE lock #-}
-lock :: MVar ()
-lock = unsafePerformIO $ newMVar ()
+-- -- | global lock for file Scribes
+-- {-# NOINLINE lock #-}
+-- lock :: MVar ()
+-- lock = unsafePerformIO $ newMVar ()
 
 prtoutException :: Exception e => FilePath -> e -> IO ()
 prtoutException fp e = do
@@ -71,9 +71,10 @@ mkFileScribe bp fp colorize s v = do
 _mkFileScribe :: Handle -> Bool -> Severity -> Verbosity -> IO Scribe
 _mkFileScribe h colorize s v = do
     hSetBuffering h LineBuffering
+    _lock <- newMVar ()
     let logger :: forall a. LogItem a => Item a -> IO ()
         logger item = when (permitItem s item) $
-            bracket_ (takeMVar lock) (putMVar lock ()) $
+            bracket_ (takeMVar _lock) (putMVar _lock ()) $
                 T.hPutStrLn h $! toLazyText $ formatItem colorize v item
     pure $ Scribe logger (hFlush h)
 

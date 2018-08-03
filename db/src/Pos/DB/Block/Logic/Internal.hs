@@ -65,7 +65,7 @@ import           Pos.DB.Update (UpdateBlock, UpdateContext, usApplyBlocks,
                      usNormalize, usRollbackBlocks)
 import           Pos.Util (Some (..), spanSafe)
 import           Pos.Util.Trace (noTrace)
-import           Pos.Util.Trace.Named (TraceNamed)
+import           Pos.Util.Trace.Named (TraceNamed, logWarning)
 import           Pos.Util.Util (HasLens', lensOf)
 
 -- | Set of basic constraints used by high-level block processing.
@@ -156,11 +156,12 @@ applyBlocksUnsafe
     -> m ()
 applyBlocksUnsafe logTrace pm bv bvd scb blunds pModifier = do
     -- Check that all blunds have the same epoch.
-    unless (null nextEpoch) $ assertionFailed noTrace $
+    unless (null nextEpoch) $ assertionFailed logTrace $
         sformat ("applyBlocksUnsafe: tried to apply more than we should"%
                  "thisEpoch"%listJson%"\nnextEpoch:"%listJson)
                 (map (headerHash . fst) thisEpoch)
                 (map (headerHash . fst) nextEpoch)
+    logWarning logTrace "applyBlocksUnsafe:1"
     -- It's essential to apply genesis block separately, before
     -- applying other blocks.
     -- That's because applying genesis block may change protocol version

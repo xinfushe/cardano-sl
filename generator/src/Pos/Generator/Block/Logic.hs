@@ -47,6 +47,7 @@ import           Pos.Generator.Block.Param (BlockGenParams,
 import           Pos.Generator.Block.Payload (genPayload)
 import           Pos.Util (HasLens', maybeThrow, _neHead)
 import           Pos.Util.Trace (natTrace)
+-- import           Pos.Util.Trace (natTrace, noTrace)
 import           Pos.Util.Trace.Named (TraceNamed, logWarning)
 
 ----------------------------------------------------------------------------
@@ -84,7 +85,9 @@ genBlocks ::
     -> RandT g m t
 genBlocks logTrace pm txpConfig params inj = do
     ctx <- lift $ mkBlockGenContext @(MempoolExt m) params
-    mapRandT (`runReaderT` ctx) genBlocksDo
+    a <- mapRandT (`runReaderT` ctx) genBlocksDo
+    lift $ logWarning logTrace "After genBlocks:mapRandT"
+    return a
   where
     genBlocksDo :: RandT g (BlockGenMode (MempoolExt m) m) t
     genBlocksDo = do
@@ -114,13 +117,14 @@ genBlockNoApply
     -> ProtocolMagic
     -> TxpConfiguration
     -> EpochOrSlot
-    -> BlockHeader -- ^ previoud block header
+    -> BlockHeader -- ^ previous block header
     -> BlockGenRandMode (MempoolExt m) g m (Maybe Block)
 genBlockNoApply logTrace0 pm txpConfig eos header = do
     let epoch = eos ^. epochIndexL
     lift $ unlessM ((epoch ==) <$> LrcDB.getEpoch) (lrcSingleShot logTrace pm epoch)
     -- We need to know leaders to create any block.
     leaders <- lift $ lrcActionOnEpochReason epoch "genBlock" LrcDB.getLeadersForEpoch
+    lift $ logWarning logTrace "Before case eos"
     case eos of
         EpochOrSlot (Left _) -> do
             let genesisBlock = mkGenesisBlock pm (Right header) epoch leaders
@@ -157,6 +161,7 @@ genBlockNoApply logTrace0 pm txpConfig eos header = do
         ProxySKBlockInfo ->
         BlockGenMode (MempoolExt m) m Block
     genMainBlock slot proxySkInfo =
+        logWarning logTrace "Passed from genMainBlock" >>
         createMainBlockInternal logTrace pm slot proxySkInfo >>= \case
             Left err -> throwM (BGFailedToCreate err)
             Right mainBlock -> return $ Right mainBlock
@@ -180,12 +185,17 @@ genBlock logTrace pm txpConfig eos = do
     tipHeader <- lift DB.getTipHeader
     genBlockNoApply logTrace pm txpConfig eos tipHeader >>= \case
         Just block@Left{}   -> do
+            lift . lift $ logWarning logTrace "Checkpoint in genBlock:Left"
             let slot0 = SlotId epoch minBound
             ctx <- getVerifyBlocksContext' (Just slot0)
             fmap Just $ withCurrentSlot slot0 $ lift $ verifyAndApply ctx block
         Just block@Right {} -> do
+            lift . lift $ logWarning logTrace "Checkpoint in genBlock:Right"
             ctx <- getVerifyBlocksContext
-            fmap Just $ lift $ verifyAndApply ctx block
+            lift . lift $ logWarning logTrace "Checkpoint in genBlock:getVerifyBlocksContext"
+            a <- fmap Just $ lift $ verifyAndApply ctx block
+            lift . lift $ logWarning logTrace "Checkpoint in genBlock:verifyAndApply"
+            return a
         Nothing -> return Nothing
     where
     verifyAndApply
@@ -195,9 +205,12 @@ genBlock logTrace pm txpConfig eos = do
     verifyAndApply ctx block =
         let logTrace' = natTrace lift logTrace
         in
-        verifyBlocksPrefix logTrace' pm ctx (one block) >>= \case
-            Left err -> throwM (BGCreatedInvalid err)
+        lift (logWarning logTrace "Checkpoint in verifyAndApply:1") >>
+        verifyBlocksPrefix logTrace' pm ctx (one block) >>=
+        \a -> (lift (logWarning logTrace "Checkpoint in verifyAndApply:2") >> return a) >>= \case
+            Left err -> lift (logWarning logTrace "Checkpoint in verifyAndApply:3:Left") >> throwM (BGCreatedInvalid err)
             Right (undos, pollModifier) -> do
+                lift (logWarning logTrace "Checkpoint in verifyAndApply:3:Right")
                 let undo = undos ^. _Wrapped . _neHead
                     blund = (block, undo)
                 applyBlocksUnsafe logTrace' pm
@@ -206,5 +219,7 @@ genBlock logTrace pm txpConfig eos = do
                     (ShouldCallBListener True)
                     (one blund)
                     (Just pollModifier)
+                lift (logWarning logTrace "Checkpoint in verifyAndApply:3:Right:before normalizeMempool")
                 normalizeMempool logTrace' pm txpConfig
+                lift (logWarning logTrace "Checkpoint in verifyAndApply:3:Right:end")
                 pure blund

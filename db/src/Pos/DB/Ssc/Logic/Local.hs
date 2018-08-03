@@ -21,6 +21,7 @@ import           Universum hiding (id)
 import           Control.Lens ((+=), (.=))
 import           Control.Monad.Except (MonadError (throwError), runExceptT)
 import           Control.Monad.Morph (hoist)
+import           Control.Monad.Trans.Writer.Lazy (runWriterT)
 import qualified Crypto.Random as Rand
 import           Data.DList as DList (singleton)
 import           Data.Functor.Contravariant (contramap)
@@ -38,9 +39,9 @@ import           Pos.Chain.Ssc (HasSscConfiguration, MonadSscMem, PureToss,
                      hasSharesToss, isCommitmentIdx, isGoodSlotForTag,
                      isOpeningIdx, isSharesIdx, ldEpoch, ldModifier, ldSize,
                      normalizeToss, pureTossWithEnvTrace, refreshToss,
-                     sscGlobal, sscRunGlobalQuery, sscRunLocalQuery,
-                     sscRunLocalSTM, supplyPureTossEnv, tmCertificates,
-                     tmCommitments, tmOpenings, tmShares,
+                     sscGlobal, sscLocal, sscRunGlobalQuery, sscRunLocalQuery,
+                     sscRunLocalSTM, supplyPureTossEnv, syncingStateWith,
+                     tmCertificates, tmCommitments, tmOpenings, tmShares,
                      verifyAndApplySscPayload)
 import           Pos.Core (EpochIndex, HasGenesisData, HasProtocolConstants,
                      SlotId (..), StakeholderId, epochIndexL)
@@ -103,19 +104,20 @@ sscNormalize
        , Rand.MonadRandom m
        )
     => TraceNamed m
-    -> ProtocolMagic -> m ()
-sscNormalize logTrace pm = do
+    -> ProtocolMagic
+    -> m ()
+sscNormalize _ pm = do
     tipEpoch <- view epochIndexL <$> getTipHeader
     richmenData <- getSscRichmen "sscNormalize" tipEpoch
     bvd <- gsAdoptedBVData
     globalVar <- sscGlobal <$> askSscMem
-    --localVar <- sscLocal <$> askSscMem
+    localVar <- sscLocal <$> askSscMem
     gs <- readTVarIO globalVar
     seed <- Rand.drgNew
 
-    sscRunLocalSTM logTrace $
-        --syncingStateWith localVar $    -- this is included in 'sscRunLocalSTM'
-        executeMonadBaseRandom seed $
+    -- sscRunLocalSTM logTrace $
+    atomically $ syncingStateWith localVar $    -- this is included in 'sscRunLocalSTM'
+        fmap fst $ runWriterT $ executeMonadBaseRandom seed $
         sscNormalizeU pm (tipEpoch, richmenData) bvd gs
   where
     -- (... MonadPseudoRandom) a -> (... n) a

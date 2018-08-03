@@ -237,6 +237,7 @@ createMainBlockAndApply logTrace pm txpConfig sId pske =
     modifyStateLock noTrace HighPriority ApplyBlock createAndApply
   where
     createAndApply tip =
+        logInfoS logTrace "PASSED FROM HERE" >>
         createMainBlockInternal logTrace pm sId pske >>= \case
             Left reason -> pure (tip, Left reason)
             Right blk -> convertRes <$> applyCreatedBlock logTrace pm txpConfig pske blk
@@ -263,9 +264,14 @@ createMainBlockInternal ::
 createMainBlockInternal logTrace pm sId pske = do
     tipHeader <- DB.getTipHeader
     logInfoS logTrace $ sformat msgFmt tipHeader
+    logInfoS logTrace "evaluateNF_ : [DONE]"
     canCreateBlock logTrace sId tipHeader >>= \case
-        Left reason -> pure (Left reason)
-        Right () -> runExceptT (createMainBlockFinish tipHeader)
+        Left reason -> do
+            logInfoS logTrace "Left in : [DONE]"
+            pure (Left reason)
+        Right () -> do
+            logInfoS logTrace "Right in : [DONE]"
+            runExceptT (createMainBlockFinish tipHeader)
   where
     msgFmt = "We are trying to create main block, our tip header is\n"%build
     createMainBlockFinish :: BlockHeader -> ExceptT Text m MainBlock
