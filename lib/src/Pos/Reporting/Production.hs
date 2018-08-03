@@ -8,6 +8,8 @@ module Pos.Reporting.Production
 
 import           Universum
 
+import           Control.Exception.Safe (catchIO)
+
 import           Pos.Core (ProtocolMagic)
 import           Pos.Infra.Diffusion.Types (Diffusion)
 import           Pos.Infra.Reporting (Reporter (..))
@@ -15,8 +17,8 @@ import           Pos.Infra.Reporting.Http (reportNode)
 import           Pos.Infra.Reporting.Logfiles (withLogTempFile)
 import           Pos.Infra.Reporting.NodeInfo (extendWithNodeInfo)
 import           Pos.Util.CompileInfo (CompileTimeInfo)
-import           Pos.Util.Log (LoggerConfig)
-import           Pos.Util.Trace.Named (TraceNamed)
+import           Pos.Util.Log (LoggerConfig, Severity (Error))
+import           Pos.Util.Trace.Named (TraceNamed, logMessage)
 
 data ProductionReporterParams = ProductionReporterParams
     { prpServers         :: ![Text]
@@ -32,10 +34,17 @@ productionReporter
     -> Reporter IO
 productionReporter params diffusion = Reporter $ \rt -> withLogTempFile logConfig $ \mfp -> do
     rt' <- extendWithNodeInfo diffusion rt
-    reportNode logTrace protocolMagic compileTimeInfo servers mfp rt'
+    (reportNode logTrace protocolMagic compileTimeInfo servers mfp rt'
+     `catchIO`
+     reportExnHandler rt')
   where
     servers = prpServers params
     logConfig = prpLoggerConfig params
     protocolMagic = prpProtocolMagic params
     compileTimeInfo = prpCompileTimeInfo params
     logTrace = prpTrace params
+    --
+    reportExnHandler rt e =
+        let msgToLog = "reportNode encountered IOException `" <> show e
+                    <> "` while trying to report the message:" <> show rt
+         in liftIO (logMessage logTrace Error msgToLog)
