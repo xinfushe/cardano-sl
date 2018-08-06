@@ -29,11 +29,12 @@ import qualified Data.ByteArray as ByteArray
 import qualified Data.ByteString as B
 
 import qualified Cardano.Wallet.Kernel.Addresses as Kernel
-import           Cardano.Wallet.Kernel.CoinSelection.FromGeneric (Cardano,
-                     CoinSelFinalResult (..), CoinSelectionOptions,
+import           Cardano.Wallet.Kernel.CoinSelection.FromGeneric
+                     (CoinSelFinalResult (..), CoinSelectionOptions,
                      dummyAddrAttrSize, dummyTxAttrSize, estimateCardanoFee,
                      estimateMaxTxInputs, mkStdTx)
 import qualified Cardano.Wallet.Kernel.CoinSelection.FromGeneric as CoinSelection
+import           Cardano.Wallet.Kernel.CoinSelection.Generic (Cardano)
 import           Cardano.Wallet.Kernel.CoinSelection.Generic
                      (CoinSelHardErr (..))
 import           Cardano.Wallet.Kernel.DB.AcidState (NewPendingError)

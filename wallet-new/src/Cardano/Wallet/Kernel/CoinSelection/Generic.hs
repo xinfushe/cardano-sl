@@ -5,8 +5,11 @@
 {-# LANGUAGE TypeFamilyDependencies     #-}
 
 module Cardano.Wallet.Kernel.CoinSelection.Generic (
+    -- * Instantiation of the generic framework
+    Cardano
+  , Size(..)
     -- * Domain
-    IsValue(..)
+  , IsValue(..)
   , CoinSelDom(..)
   , StandardDom
   , Rounding(..)
@@ -77,6 +80,8 @@ import           Test.QuickCheck (Arbitrary (..))
 
 import           Cardano.Wallet.Kernel.Util (withoutKeys)
 import           Cardano.Wallet.Kernel.Util.StrictStateT
+import qualified Pos.Chain.Txp as Core
+import qualified Pos.Core as Core
 
 {-------------------------------------------------------------------------------
   Abstract domain
@@ -91,6 +96,15 @@ class Ord v => IsValue v where
   valueDist   :: v -> v -> v                         -- ^ @|a - b|@
   valueRatio  :: v -> v -> Double                    -- ^ @a / b@
   valueAdjust :: Rounding -> Double -> v -> Maybe v  -- ^ @a * b@
+
+instance IsValue Core.Coin where
+  valueZero   = Core.mkCoin 0
+  valueAdd    = Core.addCoin
+  valueSub    = Core.subCoin
+  valueDist   = \  a b -> if a < b then b `Core.unsafeSubCoin` a
+                                   else a `Core.unsafeSubCoin` b
+  valueRatio  = \  a b -> coinToDouble a / coinToDouble b
+  valueAdjust = \r d a -> coinFromDouble r (d * coinToDouble a)
 
 class ( Ord (Input dom)
       , IsValue (Value dom)
@@ -178,6 +192,41 @@ unsafeValueAdjust :: CoinSelDom dom
                   => Rounding -> Double -> Value dom -> Value dom
 unsafeValueAdjust r x y = fromMaybe (error "unsafeValueAdjust: out of range") $
     valueAdjust r x y
+
+data Cardano
+
+instance CoinSelDom Cardano where
+  type    Input     Cardano = Core.TxIn
+  type    Output    Cardano = Core.TxOutAux
+  type    UtxoEntry Cardano = (Core.TxIn, Core.TxOutAux)
+  type    Value     Cardano = Core.Coin
+  newtype Size      Cardano = Size Word64
+
+  outVal    = Core.txOutValue   . Core.toaOut
+  outSubFee = \(Fee v) o -> outSetVal o <$> valueSub (outVal o) v
+     where
+       outSetVal o v = o {Core.toaOut = (Core.toaOut o) {Core.txOutValue = v}}
+
+instance StandardDom Cardano
+
+instance HasAddress Cardano where
+  type Address Cardano = Core.Address
+
+  outAddr = Core.txOutAddress . Core.toaOut
+
+coinToDouble :: Core.Coin -> Double
+coinToDouble = fromIntegral . Core.getCoin
+
+coinFromDouble :: Rounding -> Double -> Maybe Core.Coin
+coinFromDouble _ d         | d < 0 = Nothing
+coinFromDouble RoundUp   d = safeMkCoin (ceiling d)
+coinFromDouble RoundDown d = safeMkCoin (floor   d)
+
+safeMkCoin :: Word64 -> Maybe Core.Coin
+safeMkCoin w = let coin = Core.Coin w in
+               case Core.checkCoin coin of
+                 Left _err -> Nothing
+                 Right ()  -> Just coin
 
 {-------------------------------------------------------------------------------
   Describing domains which have addresses
@@ -470,6 +519,8 @@ class ( StandardDom (Dom utxo)
       , Coercible utxo (Map (Input (Dom utxo)) (Output (Dom utxo)))
       ) => StandardUtxo utxo where
 
+instance StandardUtxo Core.Utxo
+
 -- | Abstraction over selecting entries from a UTxO
 class CoinSelDom (Dom utxo) => PickFromUtxo utxo where
   -- | The domain that this UTxO representation lives in
@@ -512,6 +563,10 @@ class CoinSelDom (Dom utxo) => PickFromUtxo utxo where
 
   default utxoBalance :: StandardUtxo utxo => utxo -> Value (Dom utxo)
   utxoBalance = unsafeValueSum . map outVal . Map.elems . coerce
+
+instance PickFromUtxo Core.Utxo where
+  type Dom Core.Utxo = Cardano
+  -- Use default implementations
 
 {-------------------------------------------------------------------------------
   Helper functions for defining instances

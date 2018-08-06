@@ -1,12 +1,8 @@
 {-# LANGUAGE RankNTypes #-}
-{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Cardano.Wallet.Kernel.CoinSelection.FromGeneric (
-    -- * Instantiation of the generic framework
-    Cardano
-  , Size(..)
     -- * Coin selection options
-  , ExpenseRegulation(..)
+    ExpenseRegulation(..)
   , InputGrouping(..)
   , CoinSelectionOptions(..)
   , newOptions
@@ -33,6 +29,7 @@ import qualified Data.ByteString.Lazy as LBS
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map.Strict as Map
 import           Data.Typeable (TypeRep, typeRep)
+import           Serokell.Data.Memory.Units (Byte, toBytes)
 
 import           Pos.Binary.Class (LengthOf, Range (..), SizeOverride (..),
                      encode, szSimplify, szWithCtx, toLazyByteString)
@@ -45,7 +42,6 @@ import           Pos.Core.Attributes (Attributes)
 import           Pos.Core.Txp (TxAux, TxIn, TxInWitness, TxOut, TxSigData)
 import           Pos.Crypto (Signature)
 import qualified Pos.Crypto as Core
-import           Serokell.Data.Memory.Units (Byte, toBytes)
 
 import           Cardano.Wallet.Kernel.CoinSelection.Generic
 import           Cardano.Wallet.Kernel.CoinSelection.Generic.Fees
@@ -56,58 +52,6 @@ import qualified Cardano.Wallet.Kernel.CoinSelection.Generic.Random as Random
 {-------------------------------------------------------------------------------
   Type class instances
 -------------------------------------------------------------------------------}
-
-data Cardano
-
-instance IsValue Core.Coin where
-  valueZero   = Core.mkCoin 0
-  valueAdd    = Core.addCoin
-  valueSub    = Core.subCoin
-  valueDist   = \  a b -> if a < b then b `Core.unsafeSubCoin` a
-                                   else a `Core.unsafeSubCoin` b
-  valueRatio  = \  a b -> coinToDouble a / coinToDouble b
-  valueAdjust = \r d a -> coinFromDouble r (d * coinToDouble a)
-
-instance CoinSelDom Cardano where
-  type    Input     Cardano = Core.TxIn
-  type    Output    Cardano = Core.TxOutAux
-  type    UtxoEntry Cardano = (Core.TxIn, Core.TxOutAux)
-  type    Value     Cardano = Core.Coin
-  newtype Size      Cardano = Size Word64
-
-  outVal    = Core.txOutValue   . Core.toaOut
-  outSubFee = \(Fee v) o -> outSetVal o <$> valueSub (outVal o) v
-     where
-       outSetVal o v = o {Core.toaOut = (Core.toaOut o) {Core.txOutValue = v}}
-
-instance HasAddress Cardano where
-  type Address Cardano = Core.Address
-
-  outAddr = Core.txOutAddress . Core.toaOut
-
-coinToDouble :: Core.Coin -> Double
-coinToDouble = fromIntegral . Core.getCoin
-
-coinFromDouble :: Rounding -> Double -> Maybe Core.Coin
-coinFromDouble _ d         | d < 0 = Nothing
-coinFromDouble RoundUp   d = safeMkCoin (ceiling d)
-coinFromDouble RoundDown d = safeMkCoin (floor   d)
-
-safeMkCoin :: Word64 -> Maybe Core.Coin
-safeMkCoin w = let coin = Core.Coin w in
-               case Core.checkCoin coin of
-                 Left _err -> Nothing
-                 Right ()  -> Just coin
-
-instance StandardDom Cardano
-instance StandardUtxo Core.Utxo
-
-instance PickFromUtxo Core.Utxo where
-  type Dom Core.Utxo = Cardano
-  -- Use default implementations
-
-instance CanGroup Core.Utxo where
-  -- Use default implementations
 
 {-------------------------------------------------------------------------------
   Coin selection options

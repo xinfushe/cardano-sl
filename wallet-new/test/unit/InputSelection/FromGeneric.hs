@@ -1,10 +1,13 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# OPTIONS_GHC -fno-warn-unused-binds #-}
+
 {-# LANGUAGE UndecidableInstances #-}
+
 module InputSelection.FromGeneric (
     -- * Instantiation of the generic infrastructure
     DSL
   , SafeValue(..)
-  , Size(..)
+  -- , Size(..) -- Causes an export conflict
   , runCoinSelT
     -- * Wrap coin selection
     -- ** Random
@@ -14,20 +17,20 @@ module InputSelection.FromGeneric (
   , largestFirst
   ) where
 
+import qualified Prelude
 import           Universum
 
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Set as Set
 import           Formatting (bprint, build)
 import qualified Formatting.Buildable
-import qualified Prelude
 
-import           Cardano.Wallet.Kernel.CoinSelection.Generic
+import           Cardano.Wallet.Kernel.CoinSelection.Generic as Generic
 import           Cardano.Wallet.Kernel.CoinSelection.Generic.Grouped
-import qualified Cardano.Wallet.Kernel.CoinSelection.Generic.LargestFirst as Generic
+import qualified Cardano.Wallet.Kernel.CoinSelection.Generic.LargestFirst as LargestFirst
 import           Cardano.Wallet.Kernel.CoinSelection.Generic.Random
                      (PrivacyMode (..))
-import qualified Cardano.Wallet.Kernel.CoinSelection.Generic.Random as Generic
+import qualified Cardano.Wallet.Kernel.CoinSelection.Generic.Random as Random
 
 import           InputSelection.TxStats
 import           Util.GenHash
@@ -163,7 +166,7 @@ random :: (MonadRandom m, GenHash m, Dom utxo ~ DSL h a, PickFromUtxo utxo)
        -> CoinSelPolicy utxo m (DSL.Transaction h a, TxStats, utxo)
 random privacy changeAddr maxInps =
       runCoinSelT changeAddr
-    . Generic.random privacy maxInps
+    . Random.random privacy maxInps
     . NE.toList
 
 largestFirst :: (GenHash m, Dom utxo ~ DSL h a, PickFromUtxo utxo)
@@ -172,7 +175,7 @@ largestFirst :: (GenHash m, Dom utxo ~ DSL h a, PickFromUtxo utxo)
              -> CoinSelPolicy utxo m (DSL.Transaction h a, TxStats, utxo)
 largestFirst changeAddr maxInps =
       runCoinSelT changeAddr
-    . Generic.largestFirst maxInps
+    . LargestFirst.largestFirst maxInps
     . NE.toList
 
 {-------------------------------------------------------------------------------

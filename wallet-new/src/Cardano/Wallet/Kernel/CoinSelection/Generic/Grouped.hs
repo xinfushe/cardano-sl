@@ -25,6 +25,7 @@ import qualified Formatting.Buildable
 import           Serokell.Util (listJson)
 
 import           Cardano.Wallet.Kernel.CoinSelection.Generic
+import qualified Pos.Chain.Txp as Core
 
 {-------------------------------------------------------------------------------
   Domain
@@ -97,6 +98,9 @@ class (PickFromUtxo utxo, HasAddress (Dom utxo)) => CanGroup utxo where
       removeInputs :: Map (Input (Dom utxo)) (Output (Dom utxo))
                    -> Map (Input (Dom utxo)) (Output (Dom utxo))
       removeInputs = (`withoutKeys` inps)
+
+instance CanGroup Core.Utxo where
+  -- Use default implementations
 
 -- | UTxO lookup when the input is guaranteed to exist
 unsafeUtxoLookup :: CanGroup utxo
