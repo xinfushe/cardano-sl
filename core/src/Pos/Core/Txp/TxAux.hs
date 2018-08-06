@@ -8,6 +8,7 @@ import           Universum
 
 import           Control.Monad.Except (MonadError)
 import           Data.Aeson.TH (defaultOptions, deriveJSON)
+import           Data.SafeCopy (SafeCopy (..))
 import           Formatting (Format, bprint, build, later, (%))
 import qualified Formatting.Buildable as Buildable
 import           Serokell.Util.Text (listJsonIndent)
@@ -24,6 +25,10 @@ data TxAux = TxAux
     } deriving (Generic, Show, Eq)
 
 instance NFData TxAux
+
+instance SafeCopy TxAux where
+    getCopy = error "TODO: getCopy for (InDb Txp.TxAux)"
+    putCopy = error "TODO: putCopy for (InDb Txp.TxAux)"
 
 -- | Specialized formatter for 'TxAux'.
 txaF :: Format r (TxAux -> r)

@@ -129,7 +129,7 @@ import           Pos.Core (Address, BlockCount (..), ChainDifficulty (..),
                      ProtocolConstants (..), SlotId, Timestamp, VssMaxTTL (..),
                      VssMinTTL (..))
 import           Pos.Core.Block (HeaderHash)
-import           Pos.Core.Txp (TxAux, TxId)
+import           Pos.Core.Txp (TxId)
 import qualified Pos.Util.Modifier as MM
 import qualified Pos.Wallet.Web.ClientTypes as WebTypes
 import           Pos.Wallet.Web.Pending.Types (PendingTx (..), PtxCondition,
@@ -872,7 +872,6 @@ deriveSafeCopySimple 0 'base ''WebTypes.CUpdateInfo
 deriveSafeCopySimple 0 'base ''AddressLookupMode
 deriveSafeCopySimple 0 'base ''CustomAddressType
 deriveSafeCopySimple 0 'base ''CurrentAndRemoved
-deriveSafeCopySimple 0 'base ''TxAux
 deriveSafeCopySimple 0 'base ''PtxCondition
 deriveSafeCopySimple 0 'base ''PtxSubmitTiming
 deriveSafeCopySimple 0 'base ''PtxMetaUpdate

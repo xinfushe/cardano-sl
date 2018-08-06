@@ -1,5 +1,3 @@
-{-# OPTIONS_GHC -fno-warn-orphans #-}
-
 module Cardano.Wallet.Kernel.DB.InDb (
     InDb(..)
   , fromDb
@@ -66,11 +64,6 @@ instance SafeCopy (InDb Core.SlotId) where
 instance SafeCopy (InDb Core.Timestamp) where
     getCopy = error "TODO: getCopy for (InDb Core.Timestamp)"
     putCopy = error "TODO: putCopy for (InDb Core.Timestamp)"
-
--- TODO this should live with other core type safecopy instances
-instance SafeCopy Txp.TxAux where
-    getCopy = error "TODO: getCopy for (InDb Txp.TxAux)"
-    putCopy = error "TODO: putCopy for (InDb Txp.TxAux)"
 
 instance SafeCopy (InDb Txp.TxAux) where
     getCopy = error "TODO: getCopy for (InDb Txp.TxAux)"
