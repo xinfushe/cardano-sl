@@ -58,6 +58,11 @@ let
     nodejs = pkgs.nodejs-6_x;
   };
 
+  regen-script = pkgs.writeScriptBin "regen" ''
+    cardano-explorer-hs2purs --bridge-path src/Generated/
+    scripts/generate-explorer-lenses.sh
+  '';
+
   frontend = { stdenv, python, purescript, mkYarnPackage }:
     mkYarnPackage {
       name = "cardano-explorer-frontend";
@@ -67,14 +72,14 @@ let
       extraBuildInputs = [
         oldHaskellPackages.purescript-derive-lenses
         cardano-sl-explorer
-        purescript
+        purescript regen-script
       ];
+      passthru = { inherit bowerComponents; };
       postConfigure = ''
         rm -rf .psci_modules .pulp-cache bower_components output result
 
         # Purescript code generation
-        cardano-explorer-hs2purs --bridge-path src/Generated/
-        scripts/generate-explorer-lenses.sh
+        regen
 
         # Frontend dependencies
         ln -s ${bowerComponents}/bower_components .
