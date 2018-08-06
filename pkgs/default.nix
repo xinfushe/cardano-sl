@@ -17852,6 +17852,7 @@ license = stdenv.lib.licenses.mit;
 , vector
 , wai
 , wai-cors
+, wai-middleware-throttle
 , warp
 , x509
 , x509-store
@@ -17950,6 +17951,7 @@ unordered-containers
 vector
 wai
 wai-cors
+wai-middleware-throttle
 warp
 x509
 x509-store
