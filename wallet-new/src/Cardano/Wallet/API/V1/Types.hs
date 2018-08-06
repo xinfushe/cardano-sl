@@ -1705,14 +1705,6 @@ deriveJSON Serokell.defaultOptions ''TimeInfo
 availableSubscriptionStatus :: [SubscriptionStatus]
 availableSubscriptionStatus = [Subscribed, Subscribing]
 
-deriveSafeBuildable ''SubscriptionStatus
-instance BuildableSafeGen SubscriptionStatus where
-    buildSafeGen _ = \case
-        Subscribed  -> "Subscribed"
-        Subscribing -> "Subscribing"
-
-deriveJSON Serokell.defaultOptions ''SubscriptionStatus
-
 instance Arbitrary SubscriptionStatus where
     arbitrary =
         elements availableSubscriptionStatus

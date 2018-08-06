@@ -18,14 +18,28 @@ import           Prelude
 import           Control.Concurrent.STM (TVar, atomically, newTVarIO, readTVar,
                      retry, writeTVar)
 import           Control.Monad (when)
+import           Data.Aeson.Options (defaultOptions)
+import           Data.Aeson.TH (deriveJSON)
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import           GHC.Generics (Generic)
+
+import           Pos.Infra.Util.LogSafe (BuildableSafeGen (..),
+                     deriveSafeBuildable)
 
 data SubscriptionStatus =
       Subscribed
     | Subscribing
     deriving (Eq, Ord, Show, Generic)
+
+deriveSafeBuildable ''SubscriptionStatus
+
+instance BuildableSafeGen SubscriptionStatus where
+    buildSafeGen _ = \case
+        Subscribed  -> "Subscribed"
+        Subscribing -> "Subscribing"
+
+deriveJSON defaultOptions ''SubscriptionStatus
 
 -- | Mutable 'SubscriptionStatus'es keyed on some type.
 newtype SubscriptionStates peer = SubscriptionStates
