@@ -264,6 +264,10 @@ instance FromJSON WalletError where
                 Just "MissingRequiredParams" ->
                     MissingRequiredParams
                         <$> ((o .: "diagnostic") >>= (.: "params"))
+                Just "RequestThrottled"      ->
+                    RequestThrottled <$> do
+                        d <- o .: "diagnostic"
+                        d .: "microsecondsUntilRetry"
                 Just _                       ->
                     fail "Incorrect JSON encoding for WalletError"
                 Nothing                      ->
@@ -339,6 +343,7 @@ sample =
   , CannotCreateAddress "Cannot create derivation path for new address in external wallet."
   , WalletIsNotReadyToProcessPayments sampleSyncProgress
   , NodeIsStillSyncing (mkSyncPercentage 42)
+  , RequestThrottled 42
   ]
 
 
@@ -385,6 +390,8 @@ describe = \case
         "We were unable to find a set of inputs to satisfy this transaction."
     CannotCreateAddress _ ->
         "Cannot create derivation path for new address, for external wallet."
+    RequestThrottled {} ->
+        "You've made too many requests too soon, and this one was throttled."
 
 -- | Convert wallet errors to Servant errors
 toServantError :: WalletError -> ServantErr
@@ -430,6 +437,8 @@ toServantError err =
             err500
         CannotCreateAddress{} ->
             err500
+        RequestThrottled{} ->
+            err400 { errHTTPCode = 429 }
   where
     mkServantErr serr@ServantErr{..} = serr
         { errBody    = encode err
