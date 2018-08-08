@@ -15,10 +15,6 @@ import           Pos.Core (LocalSlotIndex (..))
 epochFileHeader :: ByteString
 epochFileHeader = ""
 
-exampleIndex :: [SlotIndexLength]
-exampleIndex =
-    [SlotIndexLength 0 10, SlotIndexLength 1 14, SlotIndexLength 10 150]
-
  -- Use sized types here because we would like store these as binary in the
 -- epoch index file.
 data SlotIndexLength = SlotIndexLength
@@ -28,7 +24,7 @@ data SlotIndexLength = SlotIndexLength
 
 data SlotIndexOffset = SlotIndexOffset
     { sioSlotIndex :: !Word16
-    , sioOffset    :: !Int64
+    , sioOffset    :: !Word64
     }
 
 writeEpochIndex :: FilePath -> [SlotIndexLength] -> IO ()
@@ -46,7 +42,7 @@ epochIndexToOffset :: [SlotIndexLength] -> [SlotIndexOffset]
 epochIndexToOffset =
     snd . mapAccumL convert (fromIntegral $ BS.length epochFileHeader)
   where
-    convert :: Int64 -> SlotIndexLength -> (Int64, SlotIndexOffset)
+    convert :: Word64 -> SlotIndexLength -> (Word64, SlotIndexOffset)
     convert offset (SlotIndexLength a b) =
         (offset + fromIntegral b, SlotIndexOffset a offset)
 
@@ -54,10 +50,10 @@ readEpochOffsets :: FilePath -> IO [SlotIndexOffset]
 readEpochOffsets fpath =
     epochIndexToOffset <$> readEpochIndex fpath
 
-findEpochBlockOffset :: LocalSlotIndex -> [SlotIndexOffset] -> Maybe Int64
+findEpochBlockOffset :: LocalSlotIndex -> [SlotIndexOffset] -> Maybe Word64
 findEpochBlockOffset (UnsafeLocalSlotIndex lsi) xs =
     sioOffset <$> List.find (\x -> sioSlotIndex x == lsi) xs
 
-getEpochBlockOffset :: FilePath -> LocalSlotIndex -> IO (Maybe Int64)
+getEpochBlockOffset :: FilePath -> LocalSlotIndex -> IO (Maybe Word64)
 getEpochBlockOffset fpath lsi =
     findEpochBlockOffset lsi <$> readEpochOffsets fpath

@@ -44,6 +44,7 @@ library
                        Pos.DB.Update
                        Pos.DB.Block
 
+                       Pos.DB.Epoch.Index.BTree
                        Pos.DB.Epoch.Index.Naive
 
   other-modules:       Pos.DB.Txp.Logic.Common
@@ -123,6 +124,7 @@ library
 
   build-depends:       aeson
                      , base
+                     , b-tree
                      , bytestring
                      , cardano-sl-binary
                      , cardano-sl-chain
@@ -145,6 +147,7 @@ library
                      , memory
                      , mmorph
                      , mtl
+                     , pipes
                      , reflection
                      , resourcet
                      , rocksdb-haskell-ng
