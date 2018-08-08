@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -fno-warn-orphans  #-}
 {-# OPTIONS_GHC -fno-warn-missing-methods #-}
 
 module Cardano.Wallet.API.V1.Parameters where
