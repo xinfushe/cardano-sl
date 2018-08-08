@@ -288,7 +288,6 @@ executable cardano-generate-swagger-file
   default-language:    Haskell2010
   ghc-options:         -threaded -rtsopts
                        -Wall
-                       -fno-warn-orphans
                        -O2
 
   build-depends:       base
