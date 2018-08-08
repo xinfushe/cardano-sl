@@ -1,7 +1,10 @@
+{-# LANGUAGE DeriveGeneric #-}
+
 module Pos.DB.Epoch.Index.Naive where
 
 import           Universum
 
+import           Data.Binary (Binary (..))
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.List as List
 import qualified Prelude
@@ -20,7 +23,9 @@ epochFileHeader = ""
 data SlotIndexLength = SlotIndexLength
     { silSlotIndex :: !Word16
     , silLength    :: !Word32 -- Length of the block for the given slot index (up to 2 MB)
-    } deriving Eq
+    } deriving (Eq, Generic, Show)
+
+instance Binary SlotIndexLength
 
 data SlotIndexOffset = SlotIndexOffset
     { sioSlotIndex :: !Word16
