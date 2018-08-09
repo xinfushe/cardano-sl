@@ -18,7 +18,6 @@ module Explorer.View.Common (
     , txEmptyContentView
     , noData
     , logoView
-    , clickableLogoView
     , langItems
     , langView
     ) where
@@ -31,10 +30,10 @@ import Data.Int (ceil, fromString, toNumber)
 import Data.Lens ((^.))
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Newtype (unwrap)
-import Data.Tuple (Tuple(..))
+import Data.Tuple (Tuple(..), snd, fst)
 import Explorer.I18n.Lang (Language(..), readLanguage, translate)
-import Explorer.I18n.Lenses (common, cDateFormat) as I18nL
-import Explorer.Lenses.State (lang)
+import Explorer.I18n.Lenses (common, cDateFormat, cTitle) as I18nL
+import Explorer.Lenses.State (lang, route, testnet)
 import Explorer.Routes (Route(..), toUrl)
 import Explorer.State (initialState)
 import Explorer.Types.Actions (Action(..))
@@ -43,16 +42,16 @@ import Explorer.Util.DOM (enterKeyPressed)
 import Explorer.Util.Factory (mkCAddress, mkCTxId, mkCoin)
 import Explorer.Util.String (formatADA)
 import Explorer.Util.Time (prettyDate)
-import Explorer.View.Lenses (txbAmount, txbInputs, txbOutputs, txhAmount, txhHash, txhTimeIssued)
+import Explorer.View.Lenses (txbInputs, txbOutputs, txhAmount, txhHash, txhTimeIssued)
 import Exporer.View.Types (TxBodyViewProps(..), TxHeaderViewProps(..))
 import Pos.Explorer.Web.ClientTypes (CCoin, CAddress(..), CTxBrief(..), CTxEntry(..), CTxSummary(..))
 import Pos.Explorer.Web.Lenses.ClientTypes (_CHash, _CTxId, ctbId, ctbInputs, ctbOutputs, ctbOutputSum, ctbTimeIssued, cteId, cteTimeIssued, ctsBlockTimeIssued, ctsId, ctsInputs, ctsOutputs, ctsTotalOutput)
 import Pux.DOM.Events (DOMEvent, onBlur, onChange, onFocus, onKeyDown, onClick, targetValue) as P
 import Pux.DOM.HTML (HTML) as P
-import Text.Smolder.HTML (a, div, p, span, input, option, select) as S
-import Text.Smolder.HTML.Attributes (className, href, value, disabled, type', min, max) as S
+import Text.Smolder.HTML (a, div, p, span, input, option, select, ul, li, small, thead, table, tbody, td, th, tr) as S
+import Text.Smolder.HTML.Attributes (className, href, value, disabled, type', min, max, colspan) as S
 import Text.Smolder.Markup ((#!), (!), (!?))
-import Text.Smolder.Markup (text) as S
+import Text.Smolder.Markup (text, empty) as S
 
 
 
@@ -99,18 +98,16 @@ instance emtpyTxHeaderViewPropsFactory :: TxHeaderViewPropsFactory EmptyViewProp
 
 txHeaderView :: Language -> TxHeaderViewProps -> P.HTML Action
 txHeaderView lang (TxHeaderViewProps props) =
-    S.div ! S.className "transaction-header" $ do
-        S.div ! S.className "hash-container"
-              $ S.a ! S.href (toUrl txRoute)
-              #! P.onClick (Navigate $ toUrl txRoute)
-              ! S.className "hash"
-              $ S.text (props ^. (txhHash <<< _CTxId <<< _CHash))
-        S.div ! S.className "date"
-              $ S.text $ case props ^. txhTimeIssued of
-                              Just time ->
-                                  let format = translate (I18nL.common <<< I18nL.cDateFormat) lang
-                                  in fromMaybe noData $ prettyDate format time
-                              Nothing -> noData
+    S.thead $
+      S.tr $ do
+        S.th $ S.a ! S.href (toUrl txRoute)
+             #! P.onClick (Navigate $ toUrl txRoute)
+             $ S.text (props ^. (txhHash <<< _CTxId <<< _CHash))
+        S.th $ S.text $ case props ^. txhTimeIssued of
+                             Just time ->
+                                 let format = translate (I18nL.common <<< I18nL.cDateFormat) lang
+                                 in fromMaybe noData $ prettyDate format time
+                             Nothing -> noData
         txAmountView (props ^. txhAmount) lang
     where
         txRoute = Tx $ props ^. txhHash
@@ -122,10 +119,8 @@ emptyTxHeaderView =
 
 txAmountView :: CCoin -> Language -> P.HTML Action
 txAmountView coin lang =
-    S.div ! S.className "amount-container"
-          $ S.div ! S.className "amount bg-ada"
-                  $ S.text (formatADA coin lang)
-
+    S.th ! S.className "ada" $
+      txBodyAmountView lang coin
 -- -----------------
 -- tx body
 -- -----------------
@@ -165,35 +160,36 @@ txBodyView lang (TxBodyViewProps props) =
         outputs = props ^. txbOutputs
         lOutputs = length outputs
     in
-    S.div ! S.className "transaction-body" $ do
-        S.div ! S.className "from-hash__container" $ do
-              S.div ! S.className "from-hash__wrapper"
-                    $ for_ inputs (txMaybeFromView lang)
-              -- On mobile devices we wan't to show amounts of `inputs`.
-              -- This view is hidden on desktop by CSS.
-              S.div ! S.className "from-hash__amounts"
-                    $ if (lInputs > lOutputs)
-                          then for_ inputs (txBodyMaybeAmountView lang)
-                          else S.text ""
-        S.div ! S.className "to-hash__container bg-transaction-arrow" $ do
-              S.div ! S.className "to-hash__wrapper"
-                    $ for_ outputs txToView
-              -- On mobile devices we wan't to show amounts of `outputs`.
-              -- This view is hidden on desktop by CSS.
-              S.div ! S.className "to-hash__amounts"
-                    $ if (lOutputs >= lInputs)
-                          then for_ outputs (txBodyAmountView lang)
-                          else S.text ""
-        -- On desktop we do show amounts within an extra column.
-        -- This column is hidden on mobile by CSS.
-        S.div ! S.className "amounts-container"
-              $ if (lOutputs >= lInputs)
-                then for_ outputs (txBodyAmountView lang)
-                else for_ inputs (txBodyMaybeAmountView lang)
+    S.tbody $ do
+        S.td $ do
+          for_ inputs (txMaybeFromView lang)
+          -- On mobile devices we wan't to show amounts of `inputs`.
+          -- This view is hidden on desktop by CSS.
+          S.div ! S.className "from-hash__amounts" $
+                if (lInputs > lOutputs)
+                      then for_ inputs (txBodyMaybeAmountView lang)
+                      else S.text ""
+        S.td ! S.colspan "2" $ do
+          S.div ! S.className "txn-arrow bg-transaction-arrow" $
+            S.table $
+              S.tbody $
+                for_ outputs (txToView lang)
+          --  On mobile devices we wan't to show amounts of `outputs`.
+          --  This view is hidden on desktop by CSS.
+          -- S.div ! S.className "to-hash__amounts"
+          --       $ if (lOutputs >= lInputs)
+          --             then for_ outputs (txBodyAmountView lang)
+          --             else S.text ""
+          -- On desktop we do show amounts within an extra column.
+          -- This column is hidden on mobile by CSS.
+          -- S.div ! S.className "amounts-container"
+          --       $ if (lOutputs >= lInputs)
+          --         then for_ outputs (txBodyAmountView lang)
+          --         else for_ inputs (txBodyMaybeAmountView lang)
 
-        -- On mobile we do show an extra row of total amount
-        -- This view is hidden on desktop by CSS.
-        txAmountView (props ^. txbAmount) lang
+          -- On mobile we do show an extra row of total amount
+          -- This view is hidden on desktop by CSS.
+          -- txAmountView (props ^. txbAmount) lang
 
 emptyTxBodyView :: P.HTML Action
 emptyTxBodyView =
@@ -201,45 +197,44 @@ emptyTxBodyView =
           $ S.text ""
 
 txMaybeFromView :: Language -> Maybe (Tuple CAddress CCoin) -> P.HTML Action
-txMaybeFromView _ (Just tuple) = txFromView tuple
+txMaybeFromView _ (Just tuple) = txAddressView (fst tuple)
 txMaybeFromView lang Nothing = txFromEmptyView lang
 
-txFromView :: Tuple CAddress CCoin -> P.HTML Action
-txFromView (Tuple (CAddress cAddress) _) =
+txAddressView :: CAddress -> P.HTML Action
+txAddressView (CAddress cAddress) =
     let addressRoute = Address $ mkCAddress cAddress in
-    S.a ! S.href (toUrl addressRoute)
-        #! P.onClick (Navigate $ toUrl addressRoute)
-        ! S.className "from-hash__value"
-        $ S.text cAddress
+    S.div ! S.className "truncate-address" $
+      S.a ! S.href (toUrl addressRoute)
+          #! P.onClick (Navigate $ toUrl addressRoute)
+          $ S.text cAddress
 
 txFromEmptyView :: Language -> P.HTML Action
 txFromEmptyView lang =
     S.p ! S.className "from-hash__empty"
         $ S.text noData
 
-txToView :: Tuple CAddress CCoin -> P.HTML Action
-txToView (Tuple (CAddress cAddress) _) =
-    let addressRoute = Address $ mkCAddress cAddress in
-    S.a ! S.href (toUrl addressRoute)
-        #! P.onClick (Navigate $ toUrl addressRoute)
-        ! S.className "to-hash__value"
-        $ S.text cAddress
+txToView :: Language -> Tuple CAddress CCoin -> P.HTML Action
+txToView lang (Tuple address coin) =
+    S.tr $ do
+      S.td $ txAddressView address
+      S.td ! S.className "ada"
+        $ txBodyAmountView lang coin
 
 txBodyMaybeAmountView :: Language -> Maybe (Tuple CAddress CCoin) -> P.HTML Action
-txBodyMaybeAmountView lang (Just tuple) = txBodyAmountView lang tuple
+txBodyMaybeAmountView lang (Just tuple) = txBodyAmountView lang (snd tuple)
 txBodyMaybeAmountView lang Nothing = txBodyAmountEmptyView lang
 
-txBodyAmountView :: Language -> Tuple CAddress CCoin -> P.HTML Action
-txBodyAmountView lang (Tuple _ coin) =
-    S.div ! S.className "amount-wrapper"
-          $ S.span  ! S.className "plain-amount bg-ada-dark"
-                    $ S.text (formatADA coin lang)
+txBodyAmountView :: Language -> CCoin -> P.HTML Action
+txBodyAmountView lang coin =
+    S.div $
+      S.span ! S.className "amount bg-ada" $
+        S.text (formatADA coin lang)
 
 txBodyAmountEmptyView :: Language -> P.HTML Action
 txBodyAmountEmptyView lang =
-    S.div ! S.className "amount-wrapper"
-          $ S.span  ! S.className "empty-amount"
-                    $ S.text noData
+    S.div $
+      S.span ! S.className "plain-amount bg-ada-dark" $
+        S.text noData
 
 -- -----------------
 -- pagination
@@ -342,32 +337,31 @@ txEmptyContentView message =
 -- logo
 -- -----------------
 
-logoView' :: Maybe Route -> Boolean -> P.HTML Action
-logoView' mRoute isTestnet =
-    let logoContentTag = case mRoute of
-                              Just route ->
-                                  S.a ! S.href (toUrl route)
-                                      #! P.onClick (Navigate $ toUrl route)
-                              Nothing ->
-                                  S.div
+logoView :: State -> P.HTML Action
+logoView state =
+    let route' = state ^. route
+        lang' = state ^. lang
+        isTestnet = state ^. testnet
+        logoContentTag c = S.a ! S.href "/"
+                              #! P.onClick (Navigate $ toUrl Dashboard)
+                              ! S.className c
 
         iconHiddenClazz = if isTestnet then "" else " hide"
+        title = (translate (I18nL.common <<< I18nL.cTitle) lang')
     in
-    S.div
-        ! S.className "logo__container"
-        $ S.div
-            ! S.className "logo__wrapper"
-            $ logoContentTag
-                ! S.className "logo__img bg-logo"
-                $ S.div
-                    ! S.className ("testnet-icon" <> iconHiddenClazz)
-                    $ S.text ("Testnet")
-
-logoView :: Boolean -> P.HTML Action
-logoView isTestnet = logoView' Nothing isTestnet
-
-clickableLogoView :: Route -> Boolean -> P.HTML Action
-clickableLogoView route isTestnet = logoView' (Just route) isTestnet
+    S.div ! S.className "pure-menu" $ do
+      S.div ! S.className "pure-menu-heading" $ do
+        logoContentTag  "pure-menu-link header-img" $
+          S.div ! S.className ("testnet-icon" <> iconHiddenClazz) $
+            S.text ("Testnet")
+      S.ul ! S.className "pure-menu-list" $ do
+        S.li ! S.className "pure-menu-item" $
+        S.li ! S.className "pure-menu-item" $ do
+          logoContentTag "pure-menu-link" $ do
+            S.text title
+            if isTestnet
+              then S.small $ S.text " - testnet"
+              else S.empty
 
 -- -----------------
 -- lang
@@ -410,8 +404,8 @@ noData = "--"
 currencyCSSClass :: Maybe CCurrency -> String
 currencyCSSClass mCurrency =
   case mCurrency of
-      Just ADA -> "ada bg-ada-dark"
-      Just USD -> "usd bg-usd-dark"
+      Just ADA -> "amount bg-ada"
+      Just USD -> "amount bg-usd"
       _ -> ""
 
 -- TODO (jk) Remove placeholderView if all views are implemented

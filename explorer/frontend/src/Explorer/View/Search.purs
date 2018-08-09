@@ -47,69 +47,72 @@ searchInputView (ElementId viewId) state =
         focusedClazz = if dbViewSearchInputFocused then " focused " else ""
         searchTimeQuery = state ^. (viewStates <<< globalViewState <<< gViewSearchTimeQuery)
     in
-    S.div ! S.className ("explorer-search__container" <> focusedClazz)
-          ! S.id viewId $ do
-          (S.input !? dbViewSearchInputFocused) (S.placeholder $ translate (I18nL.hero <<< I18nL.hrSearch) lang')
-                  ! S.className ("explorer-search__input explorer-search__input--address-tx"
-                                    <> addrHiddenClazz <> focusedClazz)
-                  ! S.type' "text"
-                  ! S.value (state ^. (viewStates <<< globalViewState <<< gViewSearchQuery))
-                  #! P.onFocus (const $ if mobileMenuOpened
-                                            then GlobalFocusSearchInput true
-                                            else NoOp)
-                  #! P.onBlur (const $ if mobileMenuOpened
-                                          then GlobalFocusSearchInput false
-                                          else NoOp)
-                  #! P.onChange (GlobalUpdateSearchValue <<< P.targetValue)
-                  #! P.onKeyDown (\event -> if enterKeyPressed event then GlobalSearch event else NoOp)
-          S.div ! S.className ("explorer-search__wrapper" <> epochHiddenClazz) $ do
-              S.label ! S.className "explorer-search__label"
-                      ! S.for inputEpochName
-                      $ S.text (translate (I18nL.common <<< I18nL.cEpoch) lang')
-              S.input ! S.className ("explorer-search__input explorer-search__input--epoch"
-                                        <> focusedClazz)
-                    ! S.type' "text"
-                    ! S.name inputEpochName
-                    #! P.onFocus (const $ if mobileMenuOpened
-                                              then GlobalFocusSearchInput true
-                                              else NoOp)
-                    #! P.onBlur (const $ if mobileMenuOpened
-                                              then GlobalFocusSearchInput false
-                                              else NoOp)
-                    #! P.onChange (GlobalUpdateSearchEpochValue <<< P.targetValue)
-                    #! P.onKeyDown (\event -> if enterKeyPressed event then GlobalSearchTime event else NoOp)
-                    ! S.value (case searchTimeQuery of
-                                      Tuple (Just epoch) _ -> show epoch
-                                      _ -> "")
-              S.label ! S.className "explorer-search__label"
-                      ! S.for inputSlotName
-                      $ S.text (translate (I18nL.common <<< I18nL.cSlot) lang')
-              S.input ! S.className ("explorer-search__input explorer-search__input--slot"
-                                        <> focusedClazz)
+     S.div ! S.className "explorer-search" $
+        S.div ! S.className ("explorer-search__container" <> focusedClazz)
+              ! S.id viewId $ do
+              (S.input !? dbViewSearchInputFocused) (S.placeholder $ translate (I18nL.hero <<< I18nL.hrSearch) lang')
+                      ! S.className ("explorer-search__input explorer-search__input--address-tx"
+                                     <> addrHiddenClazz <> focusedClazz)
+
                       ! S.type' "text"
-                      ! S.name inputSlotName
-                      ! S.maxlength (show <<< length $ show maxSlotInEpoch)
+                      ! S.id "search-box"
+                      ! S.value (state ^. (viewStates <<< globalViewState <<< gViewSearchQuery))
                       #! P.onFocus (const $ if mobileMenuOpened
                                                 then GlobalFocusSearchInput true
                                                 else NoOp)
                       #! P.onBlur (const $ if mobileMenuOpened
-                                                then GlobalFocusSearchInput false
-                                                else NoOp)
-                      #! P.onChange (GlobalUpdateSearchSlotValue <<< P.targetValue)
-                      #! P.onKeyDown (\event -> if enterKeyPressed event
-                                                    then GlobalSearchTime event
+                                              then GlobalFocusSearchInput false
+                                              else NoOp)
+                      #! P.onChange (GlobalUpdateSearchValue <<< P.targetValue)
+                      #! P.onKeyDown (\event -> if enterKeyPressed event then GlobalSearch event else NoOp)
+              S.div ! S.className ("explorer-search__wrapper" <> epochHiddenClazz) $ do
+                  S.label ! S.className "explorer-search__label"
+                          ! S.for inputEpochName
+                          $ S.text (translate (I18nL.common <<< I18nL.cEpoch) lang')
+                  S.input ! S.className ("explorer-search__input explorer-search__input--epoch"
+                                            <> focusedClazz)
+                        ! S.type' "text"
+                        ! S.name inputEpochName
+                        #! P.onFocus (const $ if mobileMenuOpened
+                                                  then GlobalFocusSearchInput true
+                                                  else NoOp)
+                        #! P.onBlur (const $ if mobileMenuOpened
+                                                  then GlobalFocusSearchInput false
+                                                  else NoOp)
+                        #! P.onChange (GlobalUpdateSearchEpochValue <<< P.targetValue)
+                        #! P.onKeyDown (\event -> if enterKeyPressed event then GlobalSearchTime event else NoOp)
+                        ! S.value (case searchTimeQuery of
+                                          Tuple (Just epoch) _ -> show epoch
+                                          _ -> "")
+                  S.label ! S.className "explorer-search__label"
+                          ! S.for inputSlotName
+                          $ S.text (translate (I18nL.common <<< I18nL.cSlot) lang')
+                  S.input ! S.className ("explorer-search__input explorer-search__input--slot"
+                                            <> focusedClazz)
+                          ! S.type' "text"
+                          ! S.name inputSlotName
+                          ! S.maxlength (show <<< length $ show maxSlotInEpoch)
+                          #! P.onFocus (const $ if mobileMenuOpened
+                                                    then GlobalFocusSearchInput true
                                                     else NoOp)
-                      ! S.value (case searchTimeQuery of
-                                      Tuple _ (Just slot) -> show slot
-                                      _ -> "")
-          if dbViewSearchInputFocused
-              then searchItemViews lang' selectedSearch
-              else emptyView
-          S.div ! S.className ("explorer-search__btn bg-icon-search" <> focusedClazz)
-                #! P.onClick (if selectedSearch == SearchTime
-                                  then GlobalSearchTime
-                                  else GlobalSearch)
-                $ S.text ""
+                          #! P.onBlur (const $ if mobileMenuOpened
+                                                    then GlobalFocusSearchInput false
+                                                    else NoOp)
+                          #! P.onChange (GlobalUpdateSearchSlotValue <<< P.targetValue)
+                          #! P.onKeyDown (\event -> if enterKeyPressed event
+                                                        then GlobalSearchTime event
+                                                        else NoOp)
+                          ! S.value (case searchTimeQuery of
+                                          Tuple _ (Just slot) -> show slot
+                                          _ -> "")
+              if dbViewSearchInputFocused
+                  then searchItemViews lang' selectedSearch
+                  else emptyView
+              S.div ! S.className ("explorer-search__btn bg-icon-search" <> focusedClazz)
+                    #! P.onClick (if selectedSearch == SearchTime
+                                      then GlobalSearchTime
+                                      else GlobalSearch)
+                    $ S.text ""
 
 type SearchItem =
   { value :: Search

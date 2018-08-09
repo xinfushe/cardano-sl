@@ -14,6 +14,9 @@ import GitRevisionPlugin from 'git-revision-webpack-plugin';
 import CopyWebpackPlugin from 'copy-webpack-plugin';
 import ExtractTextPlugin from 'extract-text-webpack-plugin'
 
+var fs = require('fs');
+var gracefulFs = require('graceful-fs');
+gracefulFs.gracefulify(fs);
 const nodeEnv = process.env.NODE_ENV || 'development';
 const isProd = nodeEnv === 'production';
 console.log("production build: ", isProd);
@@ -119,8 +122,9 @@ module.exports = {
         // 1) Enable HMR w/o using ExtractTextPlugin in dev mode
         use: isProd ? undefined : [
           'style-loader',
-          'css-loader?importLoaders=1',
-          'postcss-loader?sourceMap'
+          'css-loader?importLoaders=1&minimize?false',
+          'postcss-loader'
+          // 'postcss-loader?sourceMap'
         ],
         // 2) Use ExtractTextPlugin in prod mode, only
         loader: isProd ? ExtractTextPlugin.extract({

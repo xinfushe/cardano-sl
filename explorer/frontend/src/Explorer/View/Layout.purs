@@ -19,9 +19,8 @@ import Explorer.View.Blocks (epochBlocksView)
 import Explorer.View.CSS (route) as CSS
 import Explorer.View.Calculator (calculatorView)
 import Explorer.View.Dashboard.Dashboard (dashboardView)
-import Explorer.View.Footer (footerView)
 import Explorer.View.GenesisBlock (genesisBlockView)
-import Explorer.View.Header (headerView)
+import Explorer.View.Hero (heroView)
 import Explorer.View.NotFound (notFoundView)
 import Explorer.View.Playground (playgroundView)
 import Explorer.View.Transaction (transactionView)
@@ -33,20 +32,19 @@ view state =
                           else ""
         routeClazz = CSS.route $ state ^. route
     in
-    S.div ! S.className ("explorer-container" <> mobileMenuClazz <> " " <> routeClazz)
-          $ S.div ! S.className "explorer-bg__container"
-                  $ S.div ! S.className "explorer-content__wrapper" $ do
-                      S.div ! S.className "explorer-content" $ do
-                            case state ^. route of
-                                Dashboard -> dashboardView state
-                                (Tx id) -> transactionView state
-                                (Address address) -> addressView state
-                                (Epoch epoch) -> epochBlocksView state
-                                (EpochSlot epoch slot) -> epochBlocksView state
-                                Calculator -> calculatorView state
-                                (Block hash) -> blockView state
-                                GenesisBlock -> genesisBlockView state
-                                Playground -> playgroundView state
-                                NotFound -> notFoundView state
-                            footerView state
-                      headerView state
+    S.div $ do
+      S.div ! S.className "header" $
+        heroView state
+      S.div ! S.className "content-wrapper" $
+        S.div ! S.className "content" $
+          case state ^. route of
+              Dashboard -> dashboardView state
+              (Tx id) -> transactionView state
+              (Address address) -> addressView state
+              (Epoch epoch) -> epochBlocksView state
+              (EpochSlot epoch slot) -> epochBlocksView state
+              Calculator -> calculatorView state
+              (Block hash) -> blockView state
+              GenesisBlock -> genesisBlockView state
+              Playground -> playgroundView state
+              NotFound -> notFoundView state
