@@ -58,15 +58,14 @@ import           Pos.Util (liftEither)
 -- witnesses, addresses, attributes) must be known. Otherwise unknown
 -- data is just ignored.
 verifyToil ::
-       ProtocolMagic
-    -> BlockVersionData
+       BlockVersionData
     -> Set Address
     -> EpochIndex
     -> Utxo.VTxContext
     -> [TxAux]
     -> ExceptT ToilVerFailure UtxoM TxpUndo
-verifyToil pm bvd lockedAssets curEpoch ctx =
-    mapM (verifyAndApplyTx pm bvd lockedAssets curEpoch ctx . withTxId)
+verifyToil bvd lockedAssets curEpoch ctx =
+    mapM (verifyAndApplyTx bvd lockedAssets curEpoch ctx . withTxId)
 
 -- | Apply transactions from one block. They must be valid (for
 -- example, it implies topological sort).
@@ -93,15 +92,14 @@ processTx
     -> TxpConfiguration
     -> BlockVersionData
     -> EpochIndex
-    -> Bool
     -> (TxId, TxAux)
     -> ExceptT ToilVerFailure LocalToilM TxUndo
-processTx pm txpConfig bvd curEpoch requiresNetworkMagic tx@(id, aux) = do
+processTx pm txpConfig bvd curEpoch tx@(id, aux) = do
     whenM (lift $ hasTx id) $ throwError ToilKnown
     whenM ((>= memPoolLimitTx txpConfig) <$> lift memPoolSize) $
         throwError (ToilOverwhelmed $ memPoolLimitTx txpConfig)
-    let ctx = Utxo.VTxContext True requiresNetworkMagic
-    undo <- mapExceptT utxoMToLocalToilM $ verifyAndApplyTx pm bvd (tcAssetLockedSrcAddrs txpConfig) curEpoch ctx tx
+    let ctx = Utxo.VTxContext True pm (tcRequiresNetworkMagic txpConfig)
+    undo <- mapExceptT utxoMToLocalToilM $ verifyAndApplyTx bvd (tcAssetLockedSrcAddrs txpConfig) curEpoch ctx tx
     undo <$ lift (putTxWithUndo id aux undo)
 
 -- | Get rid of invalid transactions.
@@ -111,11 +109,9 @@ normalizeToil
     -> TxpConfiguration
     -> BlockVersionData
     -> EpochIndex
-    -> Bool
     -> [(TxId, TxAux)]
     -> LocalToilM ()
-normalizeToil pm txpConfig bvd curEpoch requiresNetworkMagic txs =
-    mapM_ normalize ordered
+normalizeToil pm txpConfig bvd curEpoch txs = mapM_ normalize ordered
   where
     -- If there is a cycle in the tx list, topsortTxs returns Nothing.
     -- Why is that not an error? And if its not an error, why bother
@@ -125,8 +121,7 @@ normalizeToil pm txpConfig bvd curEpoch requiresNetworkMagic txs =
     normalize ::
            (TxId, TxAux)
         -> LocalToilM ()
-    normalize = void . runExceptT .
-        processTx pm txpConfig bvd curEpoch requiresNetworkMagic
+    normalize = void . runExceptT . processTx pm txpConfig bvd curEpoch
 
 ----------------------------------------------------------------------------
 -- Verify and Apply logic
@@ -135,16 +130,15 @@ normalizeToil pm txpConfig bvd curEpoch requiresNetworkMagic txs =
 -- Note: it doesn't consider/affect stakes! That's because we don't
 -- care about stakes for local txp.
 verifyAndApplyTx ::
-       ProtocolMagic
-    -> BlockVersionData
+       BlockVersionData
     -> Set Address
     -> EpochIndex
     -> Utxo.VTxContext
     -> (TxId, TxAux)
     -> ExceptT ToilVerFailure UtxoM TxUndo
-verifyAndApplyTx pm adoptedBVD lockedAssets curEpoch ctx tx@(_, txAux) = do
+verifyAndApplyTx adoptedBVD lockedAssets curEpoch ctx tx@(_, txAux) = do
     whenLeft (checkTxAux txAux) (throwError . ToilInconsistentTxAux)
-    vtur@VerifyTxUtxoRes {..} <- Utxo.verifyTxUtxo pm ctx lockedAssets txAux
+    vtur@VerifyTxUtxoRes {..} <- Utxo.verifyTxUtxo ctx lockedAssets txAux
     liftEither $ verifyGState adoptedBVD curEpoch txAux vtur
     lift $ applyTxToUtxo' tx
     pure vturUndo

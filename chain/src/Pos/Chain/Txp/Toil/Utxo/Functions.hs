@@ -51,7 +51,8 @@ data VTxContext = VTxContext
     { -- | Verify that script versions in tx are known, addresses' and
       -- witnesses' types are known, attributes are known too.
       vtcVerifyAllIsKnown :: !Bool
-    , configRequiresAddressMagic :: !Bool
+    , vtcProtocolMagic :: !ProtocolMagic
+    , vtcRequiresAddressMagic :: !Bool
 --    , vtcSlotId   :: !SlotId         -- ^ Slot id of block transaction is checked in
 --    , vtcLeaderId :: !StakeholderId  -- ^ Leader id of block transaction is checked in
     }
@@ -83,12 +84,11 @@ data VerifyTxUtxoRes = VerifyTxUtxoRes
 -- inclusion into blocks are verified with 'vtcVerifyAllIsKnown'
 -- set to 'True', so unknown script versions are rejected).
 verifyTxUtxo
-    :: ProtocolMagic
-    -> VTxContext
+    :: VTxContext
     -> Set Address
     -> TxAux
     -> ExceptT ToilVerFailure UtxoM VerifyTxUtxoRes
-verifyTxUtxo protocolMagic ctx@VTxContext {..} lockedAssets ta@(TxAux UnsafeTx {..} witnesses) = do
+verifyTxUtxo ctx@VTxContext {..} lockedAssets ta@(TxAux UnsafeTx {..} witnesses) = do
     let unknownTxInMB = find (isTxInUnknown . snd) $ zip [0..] (toList _txInputs)
     case (vtcVerifyAllIsKnown, unknownTxInMB) of
         (True, Just (inpId, txIn)) -> throwError $
@@ -110,7 +110,7 @@ verifyTxUtxo protocolMagic ctx@VTxContext {..} lockedAssets ta@(TxAux UnsafeTx {
             resolvedInputs <- filterAssetLocked =<< mapM resolveInput _txInputs
             liftEither $ do
                 txFee <- verifySums resolvedInputs _txOutputs
-                verifyKnownInputs protocolMagic ctx resolvedInputs ta
+                verifyKnownInputs ctx resolvedInputs ta
                 when vtcVerifyAllIsKnown $ verifyAttributesAreKnown _txAttributes
                 pure VerifyTxUtxoRes
                     { vturUndo = map (Just . snd) resolvedInputs
@@ -120,7 +120,7 @@ verifyTxUtxo protocolMagic ctx@VTxContext {..} lockedAssets ta@(TxAux UnsafeTx {
     minimalReasonableChecks :: ExceptT ToilVerFailure UtxoM ()
     minimalReasonableChecks = liftEither $ do
         verifyConsistency _txInputs witnesses
-        verifyOutputs protocolMagic ctx ta
+        verifyOutputs ctx ta
 
     -- Until multisig addresses are available (which is supposed to be before decentralisation)
     -- all Ada are secured by single cryptographic signatures. In addition, before
@@ -178,9 +178,9 @@ verifyConsistency inputs witnesses
     errFmt = ("length of inputs != length of witnesses "%"("%int%" != "%int%")")
     errMsg = sformat errFmt (length inputs) (length witnesses)
 
-verifyOutputs :: ProtocolMagic -> VTxContext -> TxAux
+verifyOutputs :: VTxContext -> TxAux
               -> Either ToilVerFailure ()
-verifyOutputs configNetworkMagic VTxContext {..} (TxAux UnsafeTx {..} _) =
+verifyOutputs VTxContext {..} (TxAux UnsafeTx {..} _) =
     mapM_ verifyOutput . enumerate $ toList _txOutputs
   where
     verifyOutput :: (Word32, TxOut) -> Either ToilVerFailure ()
@@ -197,23 +197,22 @@ verifyOutputs configNetworkMagic VTxContext {..} (TxAux UnsafeTx {..} _) =
     addressHasValidMagic :: AddrAttributes -> Bool
     addressHasValidMagic addrAttrs
         -- used by mainnet and staging
-      | (not configRequiresAddressMagic)
+      | (not vtcRequiresAddressMagic)
       = isNothing (aaNetworkMagic addrAttrs)
 
         -- used by all other dev/testnets
       | otherwise
       = (ProtocolMagic <$> aaNetworkMagic addrAttrs)
-            == Just configNetworkMagic
+            == Just vtcProtocolMagic
 
 -- Verify inputs of a transaction after they have been resolved
 -- (implies that they are known).
 verifyKnownInputs ::
-       ProtocolMagic
-    -> VTxContext
+       VTxContext
     -> NonEmpty (TxIn, TxOutAux)
     -> TxAux
     -> Either ToilVerFailure ()
-verifyKnownInputs protocolMagic VTxContext {..} resolvedInputs TxAux {..} = do
+verifyKnownInputs VTxContext {..} resolvedInputs TxAux {..} = do
     unless allInputsDifferent $ throwError ToilRepeatedInput
     mapM_ (uncurry3 checkInput) $
         zip3 [0 ..] (toList resolvedInputs) (toList witnesses)
@@ -249,10 +248,10 @@ verifyKnownInputs protocolMagic VTxContext {..} resolvedInputs TxAux {..} = do
     checkWitness :: TxOutAux -> TxInWitness -> Either WitnessVerFailure ()
     checkWitness _txOutAux witness = case witness of
         PkWitness twKey twSig ->
-            unless (checkSig protocolMagic SignTx twKey txSigData twSig) $
+            unless (checkSig vtcProtocolMagic SignTx twKey txSigData twSig) $
                 throwError WitnessWrongSignature
         RedeemWitness twRedeemKey twRedeemSig ->
-            unless (redeemCheckSig protocolMagic SignRedeemTx twRedeemKey txSigData twRedeemSig) $
+            unless (redeemCheckSig vtcProtocolMagic SignRedeemTx twRedeemKey txSigData twRedeemSig) $
                 throwError WitnessWrongSignature
         ScriptWitness twValidator twRedeemer -> do
             let valVer = scrVersion twValidator

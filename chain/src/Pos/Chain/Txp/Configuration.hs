@@ -23,6 +23,9 @@ data TxpConfiguration = TxpConfiguration
       -- | Set of source address which are asset-locked. Transactions which
       -- use these addresses as transaction inputs will be silently dropped.
     , tcAssetLockedSrcAddrs :: !(Set Address)
+      -- | Boolean indicating presence/absense of ProtocolMagic
+      -- in Addresses for this cluster.
+    , tcRequiresNetworkMagic :: !Bool
     } deriving (Eq,Show,Generic)
 
 instance ToJSON TxpConfiguration where
