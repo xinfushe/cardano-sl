@@ -26,16 +26,16 @@ import           Pos.Chain.Txp.Toil.Monad (UtxoM, utxoDel, utxoGet, utxoPut)
 import           Pos.Chain.Txp.Toil.Types (TxFee (..))
 import           Pos.Core (AddrType (..), Address (..), integerToCoin,
                      isRedeemAddress, isUnknownAddressType, sumCoins)
-import           Pos.Core.Attributes (Attributes (attrRemain),
+import           Pos.Core.Attributes (Attributes (..),
                      areAttributesKnown)
-import           Pos.Core.Common (checkPubKeyAddress, checkRedeemAddress,
-                     checkScriptAddress)
+import           Pos.Core.Common (AddrAttributes (..), checkPubKeyAddress,
+                     checkRedeemAddress, checkScriptAddress)
 import           Pos.Core.Txp (Tx (..), TxAttributes, TxAux (..), TxIn (..),
                      TxInWitness (..), TxOut (..), TxOutAux (..),
                      TxSigData (..), TxUndo, TxWitness, isTxInUnknown)
 import           Pos.Crypto (SignTag (SignRedeemTx, SignTx), WithHash (..),
                      checkSig, hash, redeemCheckSig)
-import           Pos.Crypto.Configuration (ProtocolMagic)
+import           Pos.Crypto.Configuration (ProtocolMagic (..))
 import           Pos.Util (liftEither)
 
 ----------------------------------------------------------------------------
@@ -51,6 +51,7 @@ data VTxContext = VTxContext
     { -- | Verify that script versions in tx are known, addresses' and
       -- witnesses' types are known, attributes are known too.
       vtcVerifyAllIsKnown :: !Bool
+    , configRequiresAddressMagic :: !Bool
 --    , vtcSlotId   :: !SlotId         -- ^ Slot id of block transaction is checked in
 --    , vtcLeaderId :: !StakeholderId  -- ^ Leader id of block transaction is checked in
     }
@@ -119,7 +120,7 @@ verifyTxUtxo protocolMagic ctx@VTxContext {..} lockedAssets ta@(TxAux UnsafeTx {
     minimalReasonableChecks :: ExceptT ToilVerFailure UtxoM ()
     minimalReasonableChecks = liftEither $ do
         verifyConsistency _txInputs witnesses
-        verifyOutputs ctx ta
+        verifyOutputs protocolMagic ctx ta
 
     -- Until multisig addresses are available (which is supposed to be before decentralisation)
     -- all Ada are secured by single cryptographic signatures. In addition, before
@@ -177,8 +178,9 @@ verifyConsistency inputs witnesses
     errFmt = ("length of inputs != length of witnesses "%"("%int%" != "%int%")")
     errMsg = sformat errFmt (length inputs) (length witnesses)
 
-verifyOutputs :: VTxContext -> TxAux -> Either ToilVerFailure ()
-verifyOutputs VTxContext {..} (TxAux UnsafeTx {..} _) =
+verifyOutputs :: ProtocolMagic -> VTxContext -> TxAux
+              -> Either ToilVerFailure ()
+verifyOutputs configNetworkMagic VTxContext {..} (TxAux UnsafeTx {..} _) =
     mapM_ verifyOutput . enumerate $ toList _txOutputs
   where
     verifyOutput :: (Word32, TxOut) -> Either ToilVerFailure ()
@@ -189,6 +191,19 @@ verifyOutputs VTxContext {..} (TxAux UnsafeTx {..} _) =
             throwError $ ToilInvalidOutput i (TxOutUnknownAddressType addr)
         when (isRedeemAddress addr) $
             throwError $ ToilInvalidOutput i (TxOutRedeemAddressProhibited addr)
+        unless (addressHasValidMagic (attrData addrAttributes)) $
+            throwError $ ToilInvalidOutput i (TxOutAddressBadProtocolMagic addr)
+
+    addressHasValidMagic :: AddrAttributes -> Bool
+    addressHasValidMagic addrAttrs
+        -- used by mainnet and staging
+      | (not configRequiresAddressMagic)
+      = isNothing (aaNetworkMagic addrAttrs)
+
+        -- used by all other dev/testnets
+      | otherwise
+      = (ProtocolMagic <$> aaNetworkMagic addrAttrs)
+            == Just configNetworkMagic
 
 -- Verify inputs of a transaction after they have been resolved
 -- (implies that they are known).

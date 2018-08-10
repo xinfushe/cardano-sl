@@ -106,7 +106,7 @@ verifyTxInUtxo pm (SmallGenerator (GoodTx ls)) =
             let id = hash tx
             (idx, out) <- zip [0..] (toList _txOutputs)
             pure ((TxInUtxo id idx), TxOutAux out)
-        vtxContext = VTxContext False
+        vtxContext = VTxContext False False
         txAux = TxAux newTx witness
     in counterexample ("\n"+|nameF "txs" (blockListF' "-" genericF txs)|+""
                            +|nameF "transaction" (B.build txAux)|+"") $
@@ -116,7 +116,7 @@ badSigsTx :: ProtocolMagic -> SmallGenerator BadSigsTx -> Property
 badSigsTx pm (SmallGenerator (getBadSigsTx -> ls)) =
     let (tx@UnsafeTx {..}, utxo, extendedInputs, txWits) =
             getTxFromGoodTx ls
-        ctx = VTxContext False
+        ctx = VTxContext False False
         transactionVerRes =
             verifyTxUtxoSimple pm ctx utxo $ TxAux tx txWits
         notAllSignaturesAreValid =
@@ -129,7 +129,7 @@ doubleInputTx :: ProtocolMagic -> SmallGenerator DoubleInputTx -> Property
 doubleInputTx pm (SmallGenerator (getDoubleInputTx -> ls)) =
     let ((tx@UnsafeTx {..}), utxo, _extendedInputs, txWits) =
             getTxFromGoodTx ls
-        ctx = VTxContext False
+        ctx = VTxContext False False
         transactionVerRes =
             verifyTxUtxoSimple pm ctx utxo $ TxAux tx txWits
         someInputsAreDuplicated =
@@ -139,7 +139,7 @@ doubleInputTx pm (SmallGenerator (getDoubleInputTx -> ls)) =
 validateGoodTx :: ProtocolMagic -> SmallGenerator GoodTx -> Property
 validateGoodTx pm (SmallGenerator (getGoodTx -> ls)) =
     let quadruple@(tx, utxo, _, txWits) = getTxFromGoodTx ls
-        ctx = VTxContext False
+        ctx = VTxContext False False
         transactionVerRes =
             verifyTxUtxoSimple pm ctx utxo $ TxAux tx txWits
         transactionReallyIsGood = individualTxPropertyVerifier pm quadruple
@@ -428,7 +428,8 @@ scriptTxSpec pm = describe "script transactions" $ do
         in  (TxInUtxo txid 0, outp, one ((TxInUtxo txid 0), (TxOutAux outp)))
 
     -- Do not verify versions
-    vtxContext = VTxContext False
+    -- Do not require ProtocolMagic
+    vtxContext = VTxContext False False
 
     -- Try to apply a transaction (with given utxo as context) and say
     -- whether it applied successfully

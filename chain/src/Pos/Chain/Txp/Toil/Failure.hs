@@ -175,6 +175,7 @@ data TxOutVerFailure
     | TxOutUnknownAddressType Address
     -- | Can't send to a redeem address
     | TxOutRedeemAddressProhibited Address
+    | TxOutAddressBadProtocolMagic Address
     deriving (Show, Eq, Generic, NFData)
 
 instance Buildable TxOutVerFailure where
@@ -186,3 +187,7 @@ instance Buildable TxOutVerFailure where
     build (TxOutRedeemAddressProhibited addr) =
         bprint ("sends money to a redeem address ("
                 %addressF%"), this is prohibited") addr
+    build (TxOutAddressBadProtocolMagic addr) =
+        bprint ("sends money to an address with mismatched \
+                \ProtocolMagic ("%addressF%"), this is prohibited")
+               addr

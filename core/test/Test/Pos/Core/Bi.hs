@@ -113,7 +113,7 @@ golden_Address :: Property
 golden_Address = goldenTestBi a "test/golden/Address"
   where
     a = makeAddress exampleAddrSpendingData_PubKey attrs
-    attrs = AddrAttributes hap BootstrapEraDistr
+    attrs = AddrAttributes hap BootstrapEraDistr Nothing
     hap = Just (HDAddressPayload (getBytes 32 32))
 
 roundTripAddressBi :: Property

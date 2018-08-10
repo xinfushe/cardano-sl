@@ -32,6 +32,7 @@ instance ArbitraryUnsafe Address where
                 AddrAttributes
                 { aaPkDerivationPath = Nothing
                 , aaStakeDistribution = BootstrapEraDistr
+                , aaNetworkMagic = Nothing
                 }
         let addrType = ATPubKey
         return Address {..}

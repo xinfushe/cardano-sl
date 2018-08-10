@@ -28,7 +28,7 @@ import           Pos.Core.Configuration (genesisSecretKeys)
 import           Pos.Core.Delegation (HeavyDlgIndex (..))
 import           Pos.Core.Txp (TxOut (..))
 import           Pos.Core.Update (SoftwareVersion (..))
-import           Pos.Crypto (ProtocolMagic, PublicKey, emptyPassphrase,
+import           Pos.Crypto (ProtocolMagic (..), PublicKey, emptyPassphrase,
                      encToPublic, fullPublicKeyF, hashHexF, noPassEncrypt,
                      safeCreatePsk, unsafeCheatingHashCoerce, withSafeSigner)
 import           Pos.DB.Class (MonadGState (..))
@@ -113,7 +113,10 @@ createCommandProcs mpm mTxpConfig hasAuxxMode printAction mDiffusion = rights . 
         addr <- case mDistr of
             Nothing -> makePubKeyAddressAuxx pk
             Just distr -> return $
-                makeAddress (PubKeyASD pk) (AddrAttributes Nothing distr)
+                let mpmInt = getProtocolMagic <$> mpm
+                 in makeAddress (PubKeyASD pk) (AddrAttributes Nothing
+                                                               distr
+                                                               mpmInt)
         return $ ValueAddress addr
     , cpHelp = "address for the specified public key. a stake distribution \
              \ can be specified manually (by default it uses the current epoch \

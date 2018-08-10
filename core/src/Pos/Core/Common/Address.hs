@@ -270,7 +270,8 @@ makePubKeyAddressImpl path (IsBootstrapEraAddr isBootstrapEra) key =
         | isBootstrapEra = BootstrapEraDistr
         | otherwise = SingleKeyDistr (addressHash key)
     attrs =
-        AddrAttributes {aaStakeDistribution = distr, aaPkDerivationPath = path}
+        AddrAttributes { aaStakeDistribution = distr, aaPkDerivationPath = path
+                       , aaNetworkMagic = Nothing }
 
 -- | A function for making an address from a validation 'Script'.  It
 -- takes an optional 'StakeholderId'. If it's given, it will receive
@@ -281,7 +282,8 @@ makeScriptAddress stakeholder scr = makeAddress spendingData attrs
   where
     spendingData = ScriptASD scr
     aaStakeDistribution = maybe BootstrapEraDistr SingleKeyDistr stakeholder
-    attrs = AddrAttributes {aaPkDerivationPath = Nothing, ..}
+    attrs = AddrAttributes { aaPkDerivationPath = Nothing
+                           , aaNetworkMagic = Nothing, ..}
 
 -- | A function for making an address from 'RedeemPublicKey'.
 makeRedeemAddress :: RedeemPublicKey -> Address
@@ -290,7 +292,8 @@ makeRedeemAddress key = makeAddress spendingData attrs
     spendingData = RedeemASD key
     attrs =
         AddrAttributes
-        {aaStakeDistribution = BootstrapEraDistr, aaPkDerivationPath = Nothing}
+        { aaStakeDistribution = BootstrapEraDistr, aaPkDerivationPath = Nothing
+        , aaNetworkMagic = Nothing}
 
 -- | Create address from secret key in hardened way.
 createHDAddressH

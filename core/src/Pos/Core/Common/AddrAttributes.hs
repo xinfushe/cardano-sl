@@ -23,6 +23,8 @@ import           Pos.Core.Common.AddrStakeDistribution
 data AddrAttributes = AddrAttributes
     { aaPkDerivationPath  :: !(Maybe HDAddressPayload)
     , aaStakeDistribution :: !AddrStakeDistribution
+    -- TODO mhueschen - turn this into an Int8 or Word8 to be smaller
+    , aaNetworkMagic      :: !(Maybe Int32)
     } deriving (Eq, Ord, Show, Generic, Typeable)
 
 instance Buildable AddrAttributes where
@@ -58,12 +60,14 @@ instance Bi (Attributes AddrAttributes) where
     -- toStrict call.
     -- Also consider using a custom builder strategy; serialized attributes are
     -- probably small, right?
-    encode attrs@(Attributes {attrData = AddrAttributes derivationPath stakeDistr}) =
+    encode attrs@(Attributes {attrData = AddrAttributes derivationPath stakeDistr networkMagic}) =
         encodeAttributes listWithIndices attrs
       where
         listWithIndices :: [(Word8, AddrAttributes -> LBS.ByteString)]
-        listWithIndices =
-            stakeDistributionListWithIndices <> derivationPathListWithIndices
+        listWithIndices = stakeDistributionListWithIndices
+                       <> derivationPathListWithIndices
+                       <> networkMagicListWithIndices
+
         stakeDistributionListWithIndices =
             case stakeDistr of
                 BootstrapEraDistr -> []
@@ -75,6 +79,13 @@ instance Bi (Attributes AddrAttributes) where
                 -- that derivation path is 'Just'.
                 Just _ ->
                     [(1, Bi.serialize . unsafeFromJust . aaPkDerivationPath)]
+
+        networkMagicListWithIndices =
+            case networkMagic of
+                Nothing -> []
+                Just _  ->
+                    [(2, Bi.serialize . unsafeFromJust . aaNetworkMagic)]
+
         unsafeFromJust =
             fromMaybe
                 (error "Maybe was Nothing in Bi (Attributes AddrAttributes)")
@@ -85,11 +96,13 @@ instance Bi (Attributes AddrAttributes) where
             AddrAttributes
             { aaPkDerivationPath = Nothing
             , aaStakeDistribution = BootstrapEraDistr
+            , aaNetworkMagic = Nothing
             }
         go n v acc =
             case n of
                 0 -> (\distr -> Just $ acc {aaStakeDistribution = distr }    ) <$> Bi.deserialize v
                 1 -> (\deriv -> Just $ acc {aaPkDerivationPath = Just deriv }) <$> Bi.deserialize v
+                2 -> (\deriv -> Just $ acc {aaNetworkMagic = Just deriv }    ) <$> Bi.deserialize v
                 _ -> pure Nothing
 
 deriveSafeCopySimple 0 'base ''AddrAttributes

@@ -195,7 +195,7 @@ import           Pos.Core.Update (ApplicationName (..), BlockVersion (..),
                      UpdateProof, UpdateProposal (..),
                      UpdateProposalToSign (..), UpdateProposals,
                      UpdateVote (..), VoteId, mkUpdateVote)
-import           Pos.Crypto (Hash, ProtocolMagic, decodeHash, deterministic,
+import           Pos.Crypto (Hash, ProtocolMagic (..), decodeHash, deterministic,
                      hash, safeCreatePsk, sign)
 import           Pos.Util.Util (leftToPanic)
 import           Serokell.Data.Memory.Units (Byte)
@@ -215,9 +215,10 @@ genGenesisHash = do
 ----------------------------------------------------------------------------
 
 genAddrAttributes :: Gen AddrAttributes
-genAddrAttributes = AddrAttributes <$> hap <*> genAddrStakeDistribution
+genAddrAttributes = AddrAttributes <$> hap <*> genAddrStakeDistribution <*> pm
   where
     hap = Gen.maybe genHDAddressPayload
+    pm  = getProtocolMagic <<$>> Gen.maybe genProtocolMagic
 
 genAddress :: Gen Address
 genAddress = makeAddress <$> genAddrSpendingData <*> genAddrAttributes
