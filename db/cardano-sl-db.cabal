@@ -47,6 +47,7 @@ library
                        Pos.DB.Epoch.Index.Binary
                        Pos.DB.Epoch.Index.BTree
                        Pos.DB.Epoch.Index.Naive
+                       Pos.DB.Epoch.Index.Vector
 
   other-modules:       Pos.DB.Txp.Logic.Common
                        Pos.DB.Txp.Logic.Global
@@ -163,6 +164,9 @@ library
                      , universum
                      , unliftio
                      , unordered-containers
+                     , vector
+                     , vector-binary-instances
+                     , vector-th-unbox
 
   default-language:    Haskell2010
 
@@ -208,5 +212,6 @@ benchmark bench
                      , criterion
                      , hedgehog
                      , universum
+                     , vector
   default-language:    Haskell2010
   default-extensions:  NoImplicitPrelude
