@@ -30,7 +30,9 @@ instance Binary SlotIndexLength
 data SlotIndexOffset = SlotIndexOffset
     { sioSlotIndex :: !Word16
     , sioOffset    :: !Word64
-    }
+    } deriving (Eq, Generic, Show)
+
+instance Binary SlotIndexOffset
 
 writeEpochIndex :: FilePath -> [SlotIndexLength] -> IO ()
 writeEpochIndex fpath xs =

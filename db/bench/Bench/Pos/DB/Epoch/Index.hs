@@ -50,7 +50,7 @@ naiveBench index = mkIndexBench "Naive"
 binaryBench :: [SlotIndexLength] -> [LocalSlotIndex] -> Benchmark
 binaryBench index = mkIndexBench
     "Binary"
-    (Binary.writeEpochIndex "binary.index" index)
+    (Binary.writeEpochIndex "binary.index" $ epochIndexToOffset index)
     (Binary.getEpochBlockOffset "binary.index")
 
 btreeBench :: [SlotIndexLength] -> [LocalSlotIndex] -> Benchmark
