@@ -49,9 +49,17 @@ import           Test.Pos.Util.QuickCheck.Property (stopProperty)
 ----------------------------------------------------------------------------
 
 spec :: Spec
-spec = withDefConfigurations $ \_ _ _ ->
-    describe "Client.Txp.Util" $ do
-        describe "createMTx" $ createMTxSpec
+spec = do
+    -- Test with configuration that requires NetworkMagic
+    -- in addresses (testnet)
+    withDefConfigurations True $ \_ _ _ ->
+        describe "Client.Txp.Util" $ do
+            describe "createMTx" $ createMTxSpec
+    -- Test with configuration that does not require NetworkMagic
+    -- in addresses (mainnet / staging)
+    withDefConfigurations False $ \_ _ _ ->
+        describe "Client.Txp.Util" $ do
+            describe "createMTx" $ createMTxSpec
 
 -- GHC doesn't support impredicative polymorphism so we need a wrapper
 -- for the list below to typecheck.

@@ -85,14 +85,20 @@ generateValidExplorerMockableMode blocksNumber slotsPerEpoch = do
     slotLeaders   <- produceSlotLeaders blocksNumber
     secretKeys    <- produceSecretKeys blocksNumber
 
-    blocks <- withDefConfigurations $ \_ _ _ ->
+    requiresNetworkMagic <- liftIO $ generate arbitrary
+
+    blocks <- withDefConfigurations requiresNetworkMagic $ \_ _ _ ->
         produceBlocksByBlockNumberAndSlots blocksNumber slotsPerEpoch slotLeaders secretKeys
 
     let tipBlock         = Prelude.last blocks
-    let pagedHHs         = withDefConfigurations $ \pm _ _ -> createMapPageHHs blocks pm
-    let hHsBlunds        = withDefConfigurations $ \pm _ _ -> createMapHHsBlund blocks pm
-    let epochPageHHs     = withDefConfigurations $ \pm _ _ -> createMapEpochPageHHs blocks slotsPerEpoch pm
-    let mapEpochMaxPages = withDefConfigurations $ \pm _ _ -> createMapEpochMaxPages (keys epochPageHHs) pm
+    let pagedHHs         = withDefConfigurations requiresNetworkMagic $ \pm _ _ ->
+                               createMapPageHHs blocks pm
+    let hHsBlunds        = withDefConfigurations requiresNetworkMagic $ \pm _ _ ->
+                               createMapHHsBlund blocks pm
+    let epochPageHHs     = withDefConfigurations requiresNetworkMagic $ \pm _ _ ->
+                               createMapEpochPageHHs blocks slotsPerEpoch pm
+    let mapEpochMaxPages = withDefConfigurations requiresNetworkMagic $ \pm _ _ ->
+                               createMapEpochMaxPages (keys epochPageHHs) pm
 
     pure $ ExplorerMockableMode
         { emmGetTipBlock          = pure tipBlock

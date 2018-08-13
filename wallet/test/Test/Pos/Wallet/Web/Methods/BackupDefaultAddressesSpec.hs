@@ -20,9 +20,16 @@ import           Test.QuickCheck (Arbitrary (..))
 import           Test.QuickCheck.Monadic (pick)
 
 spec :: Spec
-spec = withDefConfigurations $ \_ _ _ ->
-       describe "restoreAddressFromWalletBackup" $ modifyMaxSuccess (const 10) $ do
-           restoreWalletAddressFromBackupSpec
+spec = do
+    runWithNetworkMagic True
+    runWithNetworkMagic False
+
+runWithNetworkMagic :: Bool -> Spec
+runWithNetworkMagic requiresNetworkMagic = do
+    withDefConfigurations requiresNetworkMagic $ \_ _ _ ->
+    describe ("restoreAddressFromWalletBackup (" <> show requiresNetworkMagic
+                  <> ")") $ modifyMaxSuccess (const 10) $ do
+        restoreWalletAddressFromBackupSpec
 
 restoreWalletAddressFromBackupSpec :: HasConfigurations => Spec
 restoreWalletAddressFromBackupSpec =

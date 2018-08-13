@@ -91,7 +91,12 @@ generateBlocks pm txpConfig bCount = do
                 , _bgpInplaceDB = False
                 , _bgpSkipNoKey = True
                 , _bgpGenStakeholders = gdBootStakeholders genesisData
-                , _bgpTxpGlobalSettings = txpGlobalSettings pm (TxpConfiguration 200 Set.empty)
+                , _bgpTxpGlobalSettings =
+                    txpGlobalSettings pm (TxpConfiguration
+                                              200
+                                              Set.empty
+                -- TODO mhueschen | check this is correct --------\/
+                                              (tcRequiresNetworkMagic txpConfig))
                 })
             (maybeToList . fmap fst)
     return $ OldestFirst $ NE.fromList bs
@@ -205,7 +210,9 @@ main = do
                     { _tpStartTime = Timestamp (convertUnit startTime)
                     , _tpBlockVersionData = genesisBlockVersionData
                     , _tpGenesisInitializer = genesisInitializer
-                    , _tpTxpConfiguration = TxpConfiguration 200 Set.empty
+                    , _tpTxpConfiguration =
+                    -- TODO mhueschen | check this makes sense -\/
+                        TxpConfiguration 200 Set.empty (tcRequiresNetworkMagic txpConfig)
                     }
             in runBlockTestMode tp $ do
                 -- initialize databasea

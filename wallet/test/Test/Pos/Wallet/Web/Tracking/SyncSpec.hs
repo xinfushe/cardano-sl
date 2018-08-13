@@ -48,8 +48,15 @@ import           Test.Pos.Wallet.Web.Mode (walletPropertySpec)
 import           Test.Pos.Wallet.Web.Util (importSomeWallets, wpGenBlocks)
 
 spec :: Spec
-spec = withDefConfigurations $ \_ _ _ -> do
-    describe "Pos.Wallet.Web.Tracking.BListener" $ modifyMaxSuccess (const 10) $ do
+spec = do
+    runWithNetworkMagic True
+    runWithNetworkMagic False
+
+runWithNetworkMagic :: Bool -> Spec
+runWithNetworkMagic requiresNetworkMagic = do
+    withDefConfigurations requiresNetworkMagic $ \_ _ _ -> do
+    describe ("Pos.Wallet.Web.Tracking.BListener" <> show requiresNetworkMagic
+                   <> ")") $ modifyMaxSuccess (const 10) $ do
         describe "Two applications and rollbacks" twoApplyTwoRollbacksSpec
     xdescribe "Pos.Wallet.Web.Tracking.evalChange (pending, CSL-2473)" $ do
         prop evalChangeDiffAccountsDesc evalChangeDiffAccounts
@@ -73,7 +80,8 @@ twoApplyTwoRollbacksSpec = walletPropertySpec twoApplyTwoRollbacksDesc $ do
     genesisWalletDB <- lift WS.askWalletSnapshot
     applyBlocksCnt1 <- pick $ choose (1, k `div` 2)
     applyBlocksCnt2 <- pick $ choose (1, k `div` 2)
-    let txpConfig = TxpConfiguration 200 Set.empty
+    -- TODO mhueschen | should this be arbitrary? --\/
+    let txpConfig = TxpConfiguration 200 Set.empty True
     blunds1 <- wpGenBlocks dummyProtocolMagic
                            txpConfig
                            (Just $ BlockCount applyBlocksCnt1)

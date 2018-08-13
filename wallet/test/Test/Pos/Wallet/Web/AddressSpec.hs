@@ -35,13 +35,20 @@ import           Test.Pos.Wallet.Web.Util (importSingleWallet,
                      mostlyEmptyPassphrases)
 
 spec :: Spec
-spec = withDefConfigurations $ \_ _ _ ->
-    describe "Fake address has maximal possible size" $
-    modifyMaxSuccess (const 10) $ do
-        prop "getNewAddress" $
-            fakeAddressHasMaxSizeTest changeAddressGenerator
-        prop "genUniqueAddress" $
-            fakeAddressHasMaxSizeTest commonAddressGenerator
+spec = do
+    runWithNetworkMagic True
+    runWithNetworkMagic False
+
+runWithNetworkMagic :: Bool -> Spec
+runWithNetworkMagic requiresNetworkMagic = do
+    withDefConfigurations requiresNetworkMagic $ \_ _ _ ->
+    describe ("Fake address has maximal possible size (requiresNetworkMagic="
+                   <> show requiresNetworkMagic <> ")") $
+        modifyMaxSuccess (const 10) $ do
+            prop "getNewAddress" $
+                fakeAddressHasMaxSizeTest changeAddressGenerator
+            prop "genUniqueAddress" $
+                fakeAddressHasMaxSizeTest commonAddressGenerator
 
 type AddressGenerator = AccountId -> PassPhrase -> WalletProperty Address
 

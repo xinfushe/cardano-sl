@@ -19,9 +19,16 @@ import           Test.Pos.Wallet.Web.Mode (WalletProperty)
 
 -- TODO remove HasCompileInfo when MonadWalletWebMode will be splitted.
 spec :: Spec
-spec = withDefConfigurations $ \_ _ _ ->
-       describe "Pos.Wallet.Web.Methods" $ do
-    prop emptyWalletOnStarts emptyWallet
+spec = do
+    runWithNetworkMagic True
+    runWithNetworkMagic False
+
+runWithNetworkMagic :: Bool -> Spec
+runWithNetworkMagic requiresNetworkMagic = do
+    withDefConfigurations requiresNetworkMagic $ \_ _ _ ->
+        describe ("Pos.Wallet.Web.Methods (requiresNetworkMagic="
+                       <> show requiresNetworkMagic <> ")") $ do
+            prop emptyWalletOnStarts emptyWallet
   where
     emptyWalletOnStarts = "wallet must be empty on start"
 

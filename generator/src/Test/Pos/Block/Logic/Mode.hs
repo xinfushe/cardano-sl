@@ -156,7 +156,8 @@ instance Arbitrary TestParams where
     arbitrary = do
         let _tpStartTime = Timestamp (fromMicroseconds 0)
         let _tpBlockVersionData = defaultTestBlockVersionData
-        let _tpTxpConfiguration = TxpConfiguration 200 Set.empty
+        _tpTxpConfiguration <-
+            TxpConfiguration 200 Set.empty <$> arbitrary
         _tpGenesisInitializer <-
             withGenesisBlockVersionData
                 _tpBlockVersionData

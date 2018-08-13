@@ -28,7 +28,7 @@ import           Pos.Chain.Txp (ExtendedGlobalToilM, GlobalToilEnv (..),
                      ToilVerFailure, TxpConfiguration (..), Utxo, UtxoM,
                      UtxoModifier, applyToil, defGlobalToilState,
                      flattenTxPayload, gtsUtxoModifier, rollbackToil,
-                     runGlobalToilMBase, runUtxoM, utxoToLookup, verifyToil)
+                     runGlobalToilMBase, runUtxoM, utxoToLookup, verifyToil, VTxContext (..))
 import           Pos.Core (HasCoreConfiguration, HasGenesisData, ProtocolMagic,
                      epochIndexL)
 import           Pos.Core.Chrono (NE, NewestFirst (..), OldestFirst (..))
@@ -73,9 +73,10 @@ verifyBlocks ::
     -> m $ Either ToilVerFailure $ OldestFirst NE TxpUndo
 verifyBlocks pm txpConfig verifyAllIsKnown newChain = runExceptT $ do
     bvd <- gsAdoptedBVData
-    let verifyPure :: [TxAux] -> UtxoM (Either ToilVerFailure TxpUndo)
+    let vCtx = VTxContext verifyAllIsKnown pm (tcRequiresNetworkMagic txpConfig)
+        verifyPure :: [TxAux] -> UtxoM (Either ToilVerFailure TxpUndo)
         verifyPure = runExceptT
-            . verifyToil pm bvd (tcAssetLockedSrcAddrs txpConfig) epoch verifyAllIsKnown
+            . verifyToil bvd (tcAssetLockedSrcAddrs txpConfig) epoch vCtx
         foldStep ::
                (UtxoModifier, [TxpUndo])
             -> TxpBlock

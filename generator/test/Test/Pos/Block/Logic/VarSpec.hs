@@ -62,18 +62,26 @@ import           Test.Pos.Util.QuickCheck.Property (splitIntoChunks,
 spec :: Spec
 -- Unfortunatelly, blocks generation is quite slow nowdays.
 -- See CSL-1382.
-spec = withStaticConfigurations $ \txpConfig _ ->
-    describe "Block.Logic.VAR" $ modifyMaxSuccess (min 4) $ do
-        describe "verifyBlocksPrefix" $ verifyBlocksPrefixSpec txpConfig
-        describe "verifyAndApplyBlocks" $ verifyAndApplyBlocksSpec txpConfig
-        describe "applyBlocks" applyBlocksSpec
-        describe "Block.Event" $ do
-            describe "Successful sequence" $ blockEventSuccessSpec txpConfig
-            describe "Apply through epoch" $ applyThroughEpochSpec txpConfig 0
-            describe "Apply through epoch" $ applyThroughEpochSpec txpConfig 4
-            describe "Fork - short" $ singleForkSpec txpConfig ForkShort
-            describe "Fork - medium" $ singleForkSpec txpConfig ForkMedium
-            describe "Fork - deep" $ singleForkSpec txpConfig ForkDeep
+spec = do
+    runWithNetworkMagic True
+    runWithNetworkMagic False
+
+runWithNetworkMagic :: Bool -> Spec
+runWithNetworkMagic requiresNetworkMagic = do
+    withStaticConfigurations requiresNetworkMagic $ \txpConfig _ ->
+        describe ("Block.Logic.VAR (requiresNetworkMagic="
+                       <> show requiresNetworkMagic <> ")") $
+            modifyMaxSuccess (min 4) $ do
+                describe "verifyBlocksPrefix" $ verifyBlocksPrefixSpec txpConfig
+                describe "verifyAndApplyBlocks" $ verifyAndApplyBlocksSpec txpConfig
+                describe "applyBlocks" applyBlocksSpec
+                describe "Block.Event" $ do
+                    describe "Successful sequence" $ blockEventSuccessSpec txpConfig
+                    describe "Apply through epoch" $ applyThroughEpochSpec txpConfig 0
+                    describe "Apply through epoch" $ applyThroughEpochSpec txpConfig 4
+                    describe "Fork - short" $ singleForkSpec txpConfig ForkShort
+                    describe "Fork - medium" $ singleForkSpec txpConfig ForkMedium
+                    describe "Fork - deep" $ singleForkSpec txpConfig ForkDeep
 
 ----------------------------------------------------------------------------
 -- verifyBlocksPrefix

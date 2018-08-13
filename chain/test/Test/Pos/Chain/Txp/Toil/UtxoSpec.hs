@@ -106,19 +106,24 @@ verifyTxInUtxo pm (SmallGenerator (GoodTx ls)) =
             let id = hash tx
             (idx, out) <- zip [0..] (toList _txOutputs)
             pure ((TxInUtxo id idx), TxOutAux out)
-        vtxContext = VTxContext False False
+        -- TODO mhueschen : this is a problem. We should be generating an
+        -- arbitrary bool, threading it into the above Tx generators, and
+        -- passing it into the below vtxContext. Then we'll get consistent
+        -- Address generation and verification.
+        -- For now, we're copping out, but this must be revisited.
+        vtxContext = VTxContext False pm False
         txAux = TxAux newTx witness
     in counterexample ("\n"+|nameF "txs" (blockListF' "-" genericF txs)|+""
                            +|nameF "transaction" (B.build txAux)|+"") $
-       qcIsRight $ verifyTxUtxoSimple pm vtxContext utxo txAux
+       qcIsRight $ verifyTxUtxoSimple vtxContext utxo txAux
 
 badSigsTx :: ProtocolMagic -> SmallGenerator BadSigsTx -> Property
 badSigsTx pm (SmallGenerator (getBadSigsTx -> ls)) =
     let (tx@UnsafeTx {..}, utxo, extendedInputs, txWits) =
             getTxFromGoodTx ls
-        ctx = VTxContext False False
+        ctx = VTxContext False pm False
         transactionVerRes =
-            verifyTxUtxoSimple pm ctx utxo $ TxAux tx txWits
+            verifyTxUtxoSimple ctx utxo $ TxAux tx txWits
         notAllSignaturesAreValid =
             any (signatureIsNotValid pm tx)
                 (NE.zip (NE.fromList (toList txWits))
@@ -129,9 +134,9 @@ doubleInputTx :: ProtocolMagic -> SmallGenerator DoubleInputTx -> Property
 doubleInputTx pm (SmallGenerator (getDoubleInputTx -> ls)) =
     let ((tx@UnsafeTx {..}), utxo, _extendedInputs, txWits) =
             getTxFromGoodTx ls
-        ctx = VTxContext False False
+        ctx = VTxContext False pm False
         transactionVerRes =
-            verifyTxUtxoSimple pm ctx utxo $ TxAux tx txWits
+            verifyTxUtxoSimple ctx utxo $ TxAux tx txWits
         someInputsAreDuplicated =
             not $ allDistinct (toList _txInputs)
     in someInputsAreDuplicated ==> qcIsLeft transactionVerRes
@@ -139,9 +144,9 @@ doubleInputTx pm (SmallGenerator (getDoubleInputTx -> ls)) =
 validateGoodTx :: ProtocolMagic -> SmallGenerator GoodTx -> Property
 validateGoodTx pm (SmallGenerator (getGoodTx -> ls)) =
     let quadruple@(tx, utxo, _, txWits) = getTxFromGoodTx ls
-        ctx = VTxContext False False
+        ctx = VTxContext False pm False
         transactionVerRes =
-            verifyTxUtxoSimple pm ctx utxo $ TxAux tx txWits
+            verifyTxUtxoSimple ctx utxo $ TxAux tx txWits
         transactionReallyIsGood = individualTxPropertyVerifier pm quadruple
     in transactionReallyIsGood ==> qcIsRight transactionVerRes
 
@@ -153,14 +158,13 @@ utxoGetSimple :: Utxo -> TxIn -> Maybe TxOutAux
 utxoGetSimple utxo txIn = evalUtxoM mempty (utxoToLookup utxo) (utxoGet txIn)
 
 verifyTxUtxoSimple
-    :: ProtocolMagic
-    -> VTxContext
+    :: VTxContext
     -> Utxo
     -> TxAux
     -> Either ToilVerFailure VerifyTxUtxoRes
-verifyTxUtxoSimple pm ctx utxo txAux =
+verifyTxUtxoSimple ctx utxo txAux =
     evalUtxoM mempty (utxoToLookup utxo) . runExceptT $
-    verifyTxUtxo pm ctx mempty txAux
+    verifyTxUtxo ctx mempty txAux
 
 type TxVerifyingTools =
     (Tx, Utxo, NonEmpty (Maybe (TxIn, TxOutAux)), TxWitness)
@@ -429,14 +433,14 @@ scriptTxSpec pm = describe "script transactions" $ do
 
     -- Do not verify versions
     -- Do not require ProtocolMagic
-    vtxContext = VTxContext False False
+    vtxContext = VTxContext False pm False
 
     -- Try to apply a transaction (with given utxo as context) and say
     -- whether it applied successfully
     tryApplyTx :: Utxo -> TxAux -> Either ToilVerFailure ()
     tryApplyTx utxo txa =
         evalUtxoM mempty (utxoToLookup utxo) . runExceptT $
-        () <$ verifyTxUtxo pm vtxContext mempty txa
+        () <$ verifyTxUtxo vtxContext mempty txa
 
     -- Test tx1 against tx0. Tx0 will be a script transaction with given
     -- validator. Tx1 will be a P2PK transaction spending tx0 (with given

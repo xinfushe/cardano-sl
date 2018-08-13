@@ -8,7 +8,8 @@ import qualified Data.ByteString.Lazy as BSL
 import qualified Data.Set as Set
 import           Test.Hspec (Spec, describe)
 import           Test.Hspec.QuickCheck (prop)
-import           Test.QuickCheck.Monadic (assert)
+import           Test.QuickCheck (arbitrary)
+import           Test.QuickCheck.Monadic (assert, pick)
 
 import           Pos.Binary.Class (decodeFull, serialize')
 import           Pos.Binary.Communication (serializeMsgSerializedBlock)
@@ -32,7 +33,10 @@ serializeMsgSerializedBlockSpec
     :: (HasStaticConfigurations) => Spec
 serializeMsgSerializedBlockSpec = do
     prop desc $ blockPropertyTestable $ do
-        (block, _) <- bpGenBlock dummyProtocolMagic (TxpConfiguration 200 Set.empty) (EnableTxPayload True) (InplaceDB True)
+        requiresNetworkMagic <- pick arbitrary
+        (block, _) <- bpGenBlock dummyProtocolMagic
+                                 (TxpConfiguration 200 Set.empty requiresNetworkMagic)
+                                 (EnableTxPayload True) (InplaceDB True)
         let sb = Serialized $ serialize' block
         assert $ serializeMsgSerializedBlock (MsgSerializedBlock sb) == serialize' (MsgBlock block)
     prop descNoBlock $ blockPropertyTestable $ do
@@ -53,7 +57,10 @@ deserializeSerilizedMsgSerializedBlockSpec
     :: (HasStaticConfigurations) => Spec
 deserializeSerilizedMsgSerializedBlockSpec = do
     prop desc $ blockPropertyTestable $ do
-        (block, _) <- bpGenBlock dummyProtocolMagic (TxpConfiguration 200 Set.empty) (EnableTxPayload True) (InplaceDB True)
+        requiresNetworkMagic <- pick arbitrary
+        (block, _) <- bpGenBlock dummyProtocolMagic
+                                 (TxpConfiguration 200 Set.empty requiresNetworkMagic)
+                                 (EnableTxPayload True) (InplaceDB True)
         let sb = Serialized $ serialize' block
         let msg :: Either Text MsgBlock
             msg = decodeFull . BSL.fromStrict . serializeMsgSerializedBlock $ MsgSerializedBlock sb
@@ -67,7 +74,14 @@ deserializeSerilizedMsgSerializedBlockSpec = do
     descNoBlock = "deserialization of a serialized MsgNoSerializedBlock message should give back corresponding MsgNoBlock"
 
 spec :: Spec
-spec = withStaticConfigurations $ \_ _ -> withCompileInfo $
-    describe "Pos.Binary.Communication" $ do
-        describe "serializeMsgSerializedBlock" serializeMsgSerializedBlockSpec
-        describe "decode is left inverse of serializeMsgSerializedBlock" deserializeSerilizedMsgSerializedBlockSpec
+spec = do
+    runWithNetworkMagic True
+    runWithNetworkMagic False
+
+runWithNetworkMagic :: Bool -> Spec
+runWithNetworkMagic requiresNetworkMagic =
+    withStaticConfigurations requiresNetworkMagic $ \_ _ -> withCompileInfo $
+        describe ("Pos.Binary.Communication (requiresNetworkMagic="
+                       <> show requiresNetworkMagic <> ")") $ do
+            describe "serializeMsgSerializedBlock" serializeMsgSerializedBlockSpec
+            describe "decode is left inverse of serializeMsgSerializedBlock" deserializeSerilizedMsgSerializedBlockSpec

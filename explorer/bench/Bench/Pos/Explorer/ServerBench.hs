@@ -31,16 +31,18 @@ type BenchmarkTestParams = (ExplorerTestParams, ExtraContext)
 
 -- | @getBlocksTotal@ function for benchmarks.
 getBlocksTotalBench :: BenchmarkTestParams -> IO Integer
-getBlocksTotalBench (testParams, extraContext) =
-    withDefConfigurations $ \_ _ _ -> runExplorerTestMode
+getBlocksTotalBench (testParams, extraContext) = do
+    requiresNetworkMagic <- pick arbitrary
+    withDefConfigurations requiresNetworkMagic $ \_ _ _ -> runExplorerTestMode
         testParams
         extraContext
         getBlocksTotal
 
 -- | @getBlocksPage@ function for the last page for benchmarks.
 getBlocksPageBench :: BenchmarkTestParams -> IO (Integer, [CBlockEntry])
-getBlocksPageBench (testParams, extraContext) =
-    withDefConfigurations $ \_ _ _ ->
+getBlocksPageBench (testParams, extraContext) = do
+    requiresNetworkMagic <- pick arbitrary
+    withDefConfigurations requiresNetworkMagic $ \_ _ _ ->
           runExplorerTestMode testParams extraContext
         $ getBlocksPage       Nothing    (Just $ fromIntegral defaultPageSize)
 
@@ -58,8 +60,10 @@ generateTestParams totalBlocksNumber slotsPerEpoch = do
     mode <- generateValidExplorerMockableMode totalBlocksNumber slotsPerEpoch
 
     -- The extra context so we can mock the functions.
+    requiresNetworkMagic <- pick arbitrary
     let extraContext :: ExtraContext
-        extraContext = withDefConfigurations $ \_ _ _ -> makeMockExtraCtx mode
+        extraContext = withDefConfigurations requiresNetworkMagic $ \_ _ _ ->
+            makeMockExtraCtx mode
 
     pure (testParams, extraContext)
   where

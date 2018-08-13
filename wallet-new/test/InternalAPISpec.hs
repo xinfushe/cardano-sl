@@ -35,10 +35,16 @@ import           Servant
 {-# ANN module ("HLint: ignore Reduce duplication" :: Text) #-}
 
 spec :: Spec
-spec =
-    withDefConfigurations $ \_ _ _ ->
-        describe "development endpoint" $
-        describe "secret-keys" $ modifyMaxSuccess (const 10) deleteAllSecretKeysSpec
+spec = do
+    runWithNetworkMagic True
+    runWithNetworkMagic False
+
+runWithNetworkMagic :: Bool -> Spec
+runWithNetworkMagic requiresNetworkMagic = do
+    withDefConfigurations requiresNetworkMagic $ \_ _ _ ->
+        describe ("development endpoint (requiresNetworkMagic="
+                      <> show requiresNetworkMagic <> ")") $
+            describe "secret-keys" $ modifyMaxSuccess (const 10) deleteAllSecretKeysSpec
 
 deleteAllSecretKeysSpec :: (HasConfigurations) => Spec
 deleteAllSecretKeysSpec = do

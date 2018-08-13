@@ -83,7 +83,8 @@ wpGenBlocks
     -> InplaceDB
     -> WalletProperty (OldestFirst [] Blund)
 wpGenBlocks pm txpConfig blkCnt enTxPayload inplaceDB = do
-    params <- genBlockGenParams pm blkCnt enTxPayload inplaceDB
+    params <- genBlockGenParams pm (tcRequiresNetworkMagic) blkCnt
+                                enTxPayload inplaceDB
     g <- pick $ MkGen $ \qc _ -> qc
     lift $ modifyStateLock HighPriority ApplyBlock $ \prevTip -> do -- FIXME is ApplyBlock the right one?
         blunds <- OldestFirst <$> evalRandT (genBlocks pm txpConfig params maybeToList) g

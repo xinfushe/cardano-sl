@@ -40,20 +40,27 @@ import           Test.Pos.Configuration (withDefConfigurations)
 
 -- stack test cardano-sl-explorer --fast --test-arguments "-m Pos.Explorer.Web.Server"
 spec :: Spec
-spec = withDefConfigurations $ \_ _ _ -> do
-    describe "Pos.Explorer.Web.Server" $ do
-        blocksTotalSpec
-        blocksPagesTotalSpec
+spec = do
+    runWithNetworkMagic True
+    runWithNetworkMagic False
 
-        blocksTotalUnitSpec
-        blocksPagesTotalUnitSpec
-        blocksPageUnitSpec
-        blocksLastPageUnitSpec
+runWithNetworkMagic :: Bool -> Spec
+runWithNetworkMagic requiresNetworkMagic = do
+    withDefConfigurations requiresNetworkMagic $ \_ _ _ -> do
+        describe ("Pos.Explorer.Web.Server (requiresNetworkMagic="
+                       <> show requiresNetworkMagic <> ")") $ do
+            blocksTotalSpec
+            blocksPagesTotalSpec
 
-        epochSlotUnitSpec
-        epochPageUnitSpec
+            blocksTotalUnitSpec
+            blocksPagesTotalUnitSpec
+            blocksPageUnitSpec
+            blocksLastPageUnitSpec
 
-        blocksTotalFunctionalSpec
+            epochSlotUnitSpec
+            epochPageUnitSpec
+
+            blocksTotalFunctionalSpec
 
 -- | A spec with the following test invariant. If a block is generated, there is no way
 -- that blocksTotal could be less than 1.

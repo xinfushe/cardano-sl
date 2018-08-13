@@ -53,18 +53,26 @@ import           Test.Pos.Util.QuickCheck (maybeStopProperty, stopProperty)
 
 
 spec :: Spec
-spec = withStaticConfigurations $ \txpConfig _ ->
-    describe "Lrc.Worker" $ modifyMaxSuccess (const 4) $ do
-        describe "lrcSingleShot" $ do
-            -- Currently we want to run it only 4 times, because there
-            -- is no much randomization (its effect is likely
-            -- negligible) and performance matters (but not very much,
-            -- so we can run more than once).
-            modifyMaxSuccess (const 4) $ prop lrcCorrectnessDesc $
-                blockPropertyToProperty genTestParams (lrcCorrectnessProp txpConfig)
-            -- This test is relatively slow, hence we launch it only 15 times.
-            modifyMaxSuccess (const 15) $ blockPropertySpec lessThanKAfterCrucialDesc
-                (lessThanKAfterCrucialProp txpConfig)
+spec = do
+    runWithNetworkMagic True
+    runWithNetworkMagic False
+
+runWithNetworkMagic :: Bool -> Spec
+runWithNetworkMagic requiresNetworkMagic =
+    withStaticConfigurations requiresNetworkMagic $ \txpConfig _ ->
+        describe ("Lrc.Worker (requiresNetworkMagic="
+                       <> show requiresNetworkMagic <> ")") $
+            modifyMaxSuccess (const 4) $ do
+                describe "lrcSingleShot" $ do
+                    -- Currently we want to run it only 4 times, because there
+                    -- is no much randomization (its effect is likely
+                    -- negligible) and performance matters (but not very much,
+                    -- so we can run more than once).
+                    modifyMaxSuccess (const 4) $ prop lrcCorrectnessDesc $
+                        blockPropertyToProperty genTestParams (lrcCorrectnessProp txpConfig)
+                    -- This test is relatively slow, hence we launch it only 15 times.
+                    modifyMaxSuccess (const 15) $ blockPropertySpec lessThanKAfterCrucialDesc
+                        (lessThanKAfterCrucialProp txpConfig)
   where
     lrcCorrectnessDesc =
         "Computes richmen correctly according to the stake distribution " <>
@@ -83,7 +91,11 @@ genTestParams :: Gen TestParams
 genTestParams = do
     let _tpStartTime = 0
     let _tpBlockVersionData = defaultTestBlockVersionData
-    let _tpTxpConfiguration = TxpConfiguration 200 Set.empty
+    -- TODO mhueschen : make sure that Addresses will check this field
+    -- in the tests, and be consistent.
+    requiresNetworkMagic <- arbitrary
+    let _tpTxpConfiguration =
+            TxpConfiguration 200 Set.empty requiresNetworkMagic
     _tpGenesisInitializer <- genGenesisInitializer
     return TestParams {..}
 

@@ -94,16 +94,18 @@ withDefDlgConfiguration = withDlgConfiguration (ccDlg defaultTestConf)
 withDefConfiguration :: (HasConfiguration => ProtocolMagic -> r) -> r
 withDefConfiguration = withGenesisSpec 0 (ccCore defaultTestConf) id
 
-withStaticConfigurations :: (HasStaticConfigurations => TxpConfiguration -> NtpConfiguration -> r) -> r
-withStaticConfigurations patak =
+withStaticConfigurations :: Bool -> (HasStaticConfigurations => TxpConfiguration -> NtpConfiguration -> r) -> r
+withStaticConfigurations requiresNetworkMagic patak =
     withDefNodeConfiguration $
     withDefSscConfiguration $
     withDefUpdateConfiguration $
     withDefBlockConfiguration $
     withDefDlgConfiguration $
-    withDefNtpConfiguration (patak $ TxpConfiguration 200 Set.empty)
+    withDefNtpConfiguration
+        (patak $ TxpConfiguration 200 Set.empty requiresNetworkMagic)
 
 withDefConfigurations
-    :: (HasConfigurations => ProtocolMagic -> TxpConfiguration -> NtpConfiguration -> r) -> r
-withDefConfigurations bardaq =
-    withDefConfiguration $ \pm -> withStaticConfigurations (bardaq pm)
+    :: Bool -> (HasConfigurations => ProtocolMagic -> TxpConfiguration -> NtpConfiguration -> r) -> r
+withDefConfigurations requiresNetworkMagic bardaq =
+    withDefConfiguration $ \pm -> withStaticConfigurations requiresNetworkMagic
+                                                           (bardaq pm)
