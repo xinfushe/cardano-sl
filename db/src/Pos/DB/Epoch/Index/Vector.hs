@@ -1,7 +1,3 @@
-{-# LANGUAGE TypeFamilies #-}
-
-{-# OPTIONS_GHC -fno-warn-orphans #-}
-
 module Pos.DB.Epoch.Index.Vector
        ( writeEpochIndex
        , getEpochBlockOffset
@@ -14,15 +10,9 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import           Data.Vector.Binary ()
 import qualified Data.Vector.Unboxed as V
-import           Data.Vector.Unboxed.Deriving
 
 import           Pos.Core (LocalSlotIndex (..))
 import           Pos.DB.Epoch.Index.Naive (SlotIndexOffset (..))
-
-derivingUnbox "SlotIndexOffset"
-    [t| SlotIndexOffset -> (Word16, Word64) |]
-    [| \ (SlotIndexOffset i o) -> (i, o) |]
-    [| uncurry SlotIndexOffset |]
 
 writeEpochIndex :: FilePath -> V.Vector SlotIndexOffset -> IO ()
 writeEpochIndex path = BL.writeFile path . encode

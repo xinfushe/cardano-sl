@@ -1,4 +1,7 @@
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric   #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies    #-}
+
 
 module Pos.DB.Epoch.Index.Naive where
 
@@ -7,6 +10,9 @@ import           Universum
 import           Data.Binary (Binary (..))
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.List as List
+import           Data.Vector.Unboxed.Deriving (derivingUnbox)
+import           Foreign.Ptr (castPtr)
+import           Foreign.Storable (Storable (..))
 import qualified Prelude
 
 import           Pos.Core (LocalSlotIndex (..))
@@ -33,6 +39,23 @@ data SlotIndexOffset = SlotIndexOffset
     } deriving (Eq, Generic, Show)
 
 instance Binary SlotIndexOffset
+
+derivingUnbox "SlotIndexOffset"
+    [t| SlotIndexOffset -> (Word16, Word64) |]
+    [| \ (SlotIndexOffset i o) -> (i, o) |]
+    [| uncurry SlotIndexOffset |]
+
+instance Storable SlotIndexOffset where
+    sizeOf _ = 10
+    alignment _ = 10
+    peekByteOff ptr idx =
+        SlotIndexOffset
+            <$> peekByteOff (castPtr ptr) (10 * idx)
+            <*> peekByteOff (castPtr ptr) (10 * idx + 2)
+    pokeByteOff ptr idx sio = do
+        pokeByteOff (castPtr ptr) (idx * 10) $ sioSlotIndex sio
+        pokeByteOff (castPtr ptr) (idx * 10 + 2) $ sioOffset sio
+
 
 writeEpochIndex :: FilePath -> [SlotIndexLength] -> IO ()
 writeEpochIndex fpath xs =

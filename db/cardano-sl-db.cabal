@@ -48,6 +48,7 @@ library
                        Pos.DB.Epoch.Index.BTree
                        Pos.DB.Epoch.Index.Naive
                        Pos.DB.Epoch.Index.Vector
+                       Pos.DB.Epoch.Index.Vector2
 
   other-modules:       Pos.DB.Txp.Logic.Common
                        Pos.DB.Txp.Logic.Global
