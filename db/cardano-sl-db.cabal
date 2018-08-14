@@ -47,6 +47,7 @@ library
                        Pos.DB.Epoch.Index.Binary
                        Pos.DB.Epoch.Index.BTree
                        Pos.DB.Epoch.Index.DenseBinary
+                       Pos.DB.Epoch.Index.DenseVector
                        Pos.DB.Epoch.Index.Naive
                        Pos.DB.Epoch.Index.Vector
                        Pos.DB.Epoch.Index.Vector2
