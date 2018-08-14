@@ -16,6 +16,25 @@ import           System.IO (IOMode (..), SeekMode (..), hSeek, withBinaryFile)
 
 import           Pos.Core (LocalSlotIndex (..), SlotCount, localSlotIndices)
 
+
+-- When we store all blocks for an epoch in a "epoch" file we need a fast and
+-- simple way of extracting any single block from the epoch file without decoding
+-- the whole file.
+--
+-- We do this by keeping a separate index file that for each slot, can give the
+-- offset in the file where that block occurs. There are 21600 slots/blocks per
+-- epoch (10 * blkSecurityParam) and in the first 62 epochs, the smallest number
+-- of blocks in an epoch was 21562. The means the most disk storage efficient
+-- and quickest to access way to store the slot index to file offset mapping in
+-- file is as a dense vector of 64 bit file offsets indexed by the slot index,
+-- even if that means that the file has to have sentinel values inserted at empty
+-- slot indices.
+--
+-- We use 'maxBound' as the sentinel value. On read, if we get a value of
+-- 'maxBound' we return 'Nothing', otherwise the offset is returned wrapper in
+-- a 'Just'.
+
+
 header :: BL.ByteString
 header = "EPOCH INDEX V1"
 
@@ -72,4 +91,6 @@ getSlotIndexOffsetN fpath (UnsafeLocalSlotIndex i) =
 getEpochBlockOffset :: FilePath -> LocalSlotIndex -> IO (Maybe Word64)
 getEpochBlockOffset fpath lsi = do
     off <- getSlotIndexOffsetN fpath lsi
+    -- 'maxBound' is the sentinel value which means there is no block
+    -- in the epoch file for the specified 'LocalSlotIndex'.
     pure $ if off == maxBound then Nothing else Just off
