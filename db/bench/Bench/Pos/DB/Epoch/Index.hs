@@ -15,6 +15,7 @@ import           Pos.Core (LocalSlotIndex (..), ProtocolConstants (..),
                      VssMaxTTL (..), VssMinTTL (..))
 import           Pos.DB.Epoch.Index.Binary as Binary
 import           Pos.DB.Epoch.Index.BTree as BTree
+import           Pos.DB.Epoch.Index.DenseBinary as DenseBinary
 import           Pos.DB.Epoch.Index.Naive as Naive
 import           Pos.DB.Epoch.Index.Vector as Vector
 import           Pos.DB.Epoch.Index.Vector2 as Vector2
@@ -28,6 +29,7 @@ runBenchmark = do
     defaultMainWith
         (defaultConfig { reportFile = Just "naiveIndex.html" })
         [ binaryBench exampleIndex indices
+        , denseBinaryBench exampleIndex indices
         , btreeBench exampleIndex indices
         , vectorBench exampleIndex indices
         , vector2Bench exampleIndex indices
@@ -58,6 +60,12 @@ binaryBench index = mkIndexBench
     "Binary"
     (Binary.writeEpochIndex "binary.index" $ epochIndexToOffset index)
     (Binary.getEpochBlockOffset "binary.index")
+
+denseBinaryBench :: [SlotIndexLength] -> [LocalSlotIndex] -> Benchmark
+denseBinaryBench index = mkIndexBench
+    "DenseBinary"
+    (DenseBinary.writeEpochIndex "denseBinary.index" $ epochIndexToOffset index)
+    (DenseBinary.getEpochBlockOffset "denseBinary.index")
 
 btreeBench :: [SlotIndexLength] -> [LocalSlotIndex] -> Benchmark
 btreeBench index = mkIndexBench

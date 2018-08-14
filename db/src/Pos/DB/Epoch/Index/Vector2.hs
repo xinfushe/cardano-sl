@@ -23,8 +23,6 @@ import           Pos.DB.Epoch.Index.Naive (SlotIndexOffset (..))
 writeEpochIndex :: FilePath -> Vector SlotIndexOffset -> IO ()
 writeEpochIndex = writeStorableVector
 
-
-
 getEpochBlockOffset :: FilePath -> LocalSlotIndex -> IO (Maybe Word64)
 getEpochBlockOffset fpath (UnsafeLocalSlotIndex k) = do
     v <- readStorableVector fpath (SlotIndexOffset 0 0)
