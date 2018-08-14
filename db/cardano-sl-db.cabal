@@ -208,34 +208,3 @@ test-suite test
   default-language:    Haskell2010
   default-extensions:  NoImplicitPrelude
                        OverloadedStrings
-
-benchmark bench
-  hs-source-dirs:      bench
-  main-is:             Bench.hs
-  other-modules:       Bench.Pos.DB.Epoch.Index
-
-                       Pos.DB.Epoch.Index.Binary
-                       Pos.DB.Epoch.Index.BTree
-                       Pos.DB.Epoch.Index.DenseVector
-                       Pos.DB.Epoch.Index.Naive
-                       Pos.DB.Epoch.Index.Vector
-                       Pos.DB.Epoch.Index.Vector2
-
-  type:                exitcode-stdio-1.0
-  build-depends:       base
-                     , binary
-                     , bytestring
-                     , b-tree
-                     , cardano-sl-core
-                     , cardano-sl-core-test
-                     , cardano-sl-db
-                     , criterion
-                     , hedgehog
-                     , pipes
-                     , universum
-                     , vector
-                     , vector-binary-instances
-                     , vector-th-unbox
-  default-language:    Haskell2010
-  default-extensions:  NoImplicitPrelude
-                       OverloadedStrings
