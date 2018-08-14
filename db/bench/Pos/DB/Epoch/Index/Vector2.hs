@@ -1,3 +1,5 @@
+{-# LANGUAGE MultiWayIf #-}
+
 module Pos.DB.Epoch.Index.Vector2
        ( writeEpochIndex
        , getEpochBlockOffset
@@ -17,7 +19,8 @@ import           GHC.IO.Handle (hFileSize)
 import           System.IO (IOMode (..), hGetBuf, hPutBuf, withBinaryFile)
 
 import           Pos.Core (LocalSlotIndex (..))
-import           Pos.DB.Epoch.Index.Naive (SlotIndexOffset (..))
+import           Pos.DB.Epoch.Index (SlotIndexOffset (..))
+import           Pos.DB.Epoch.Index.Naive ()
 
 
 writeEpochIndex :: FilePath -> Vector SlotIndexOffset -> IO ()

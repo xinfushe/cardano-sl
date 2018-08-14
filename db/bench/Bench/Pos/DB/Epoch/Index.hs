@@ -13,9 +13,9 @@ import           Hedgehog.Gen (sample)
 
 import           Pos.Core (LocalSlotIndex (..), ProtocolConstants (..),
                      VssMaxTTL (..), VssMinTTL (..))
+import           Pos.DB.Epoch.Index as DenseBinary
 import           Pos.DB.Epoch.Index.Binary as Binary
 import           Pos.DB.Epoch.Index.BTree as BTree
-import           Pos.DB.Epoch.Index.DenseBinary as DenseBinary
 import           Pos.DB.Epoch.Index.DenseVector as DenseVector
 import           Pos.DB.Epoch.Index.Naive as Naive
 import           Pos.DB.Epoch.Index.Vector as Vector

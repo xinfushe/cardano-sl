@@ -17,8 +17,8 @@ import qualified Data.ByteString.Lazy as BL
 import           System.IO (IOMode (..), SeekMode (..), hSeek, withBinaryFile)
 
 import           Pos.Core (LocalSlotIndex (..))
-import           Pos.DB.Epoch.Index.Naive (SlotIndexOffset (..),
-                     findEpochBlockOffset)
+import           Pos.DB.Epoch.Index (SlotIndexOffset (..))
+import           Pos.DB.Epoch.Index.Naive (findEpochBlockOffset)
 
 {-
 

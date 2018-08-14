@@ -12,7 +12,8 @@ import           Data.Vector.Binary ()
 import qualified Data.Vector.Unboxed as V
 
 import           Pos.Core (LocalSlotIndex (..))
-import           Pos.DB.Epoch.Index.Naive (SlotIndexOffset (..))
+import           Pos.DB.Epoch.Index (SlotIndexOffset (..))
+import           Pos.DB.Epoch.Index.Naive ()
 
 writeEpochIndex :: FilePath -> V.Vector SlotIndexOffset -> IO ()
 writeEpochIndex path = BL.writeFile path . encode

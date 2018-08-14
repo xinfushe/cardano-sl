@@ -1,7 +1,7 @@
-{-# LANGUAGE DeriveGeneric   #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TypeFamilies    #-}
-
+{-# LANGUAGE DeriveGeneric         #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TemplateHaskell       #-}
+{-# LANGUAGE TypeFamilies          #-}
 
 module Pos.DB.Epoch.Index.Naive where
 
@@ -16,6 +16,7 @@ import           Foreign.Storable (Storable (..))
 import qualified Prelude
 
 import           Pos.Core (LocalSlotIndex (..))
+import           Pos.DB.Epoch.Index (SlotIndexOffset (..))
 
 --------------------------------------------------------------------------------
 -- Naive Implementation
@@ -32,13 +33,6 @@ data SlotIndexLength = SlotIndexLength
     } deriving (Eq, Generic, Show)
 
 instance Binary SlotIndexLength
-
-data SlotIndexOffset = SlotIndexOffset
-    { sioSlotIndex :: !Word16
-    , sioOffset    :: !Word64
-    } deriving (Eq, Generic, Show)
-
-instance Binary SlotIndexOffset
 
 derivingUnbox "SlotIndexOffset"
     [t| SlotIndexOffset -> (Word16, Word64) |]

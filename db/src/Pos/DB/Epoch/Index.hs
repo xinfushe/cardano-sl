@@ -1,19 +1,26 @@
 {-# LANGUAGE DeriveGeneric #-}
 
-module Pos.DB.Epoch.Index.DenseBinary
+module Pos.DB.Epoch.Index
        ( writeEpochIndex
        , getEpochBlockOffset
+       , SlotIndexOffset (..)
        ) where
 
 import           Universum
 
-import           Data.Binary (decode, encode)
+import           Data.Binary (Binary, decode, encode)
 import qualified Data.ByteString.Builder as B
 import qualified Data.ByteString.Lazy as BL
 import           System.IO (IOMode (..), SeekMode (..), hSeek, withBinaryFile)
 
 import           Pos.Core (LocalSlotIndex (..))
-import           Pos.DB.Epoch.Index.Naive (SlotIndexOffset (..))
+
+data SlotIndexOffset = SlotIndexOffset
+    { sioSlotIndex :: !Word16
+    , sioOffset    :: !Word64
+    } deriving (Eq, Generic, Show)
+
+instance Binary SlotIndexOffset
 
 -- | Write a list of @SlotIndexOffset@s to a dense @Binary@ representation
 --

@@ -17,7 +17,8 @@ import           GHC.IO.Handle (hFileSize)
 import           System.IO (IOMode (..), hGetBuf, hPutBuf, withBinaryFile)
 
 import           Pos.Core (LocalSlotIndex (..))
-import           Pos.DB.Epoch.Index.Naive (SlotIndexOffset (..))
+import           Pos.DB.Epoch.Index (SlotIndexOffset (..))
+import           Pos.DB.Epoch.Index.Naive ()
 
 writeEpochIndex :: FilePath -> [SlotIndexOffset] -> IO ()
 writeEpochIndex fpath = writeStorableVector fpath . SVector.fromList . padIndex
