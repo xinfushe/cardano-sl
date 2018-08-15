@@ -5037,28 +5037,16 @@ license = stdenv.lib.licenses.publicDomain;
 ({
   mkDerivation
 , acid-state
-, array
 , base
-, bytestring
-, cereal
-, containers
 , directory
 , exceptions
-, extensible-exceptions
 , extra
-, filelock
 , filepath
-, hashable
 , mtl
-, network
 , safecopy
 , stdenv
-, stm
-, template-haskell
-, th-expand-syns
 , time-units
 , unix
-, unordered-containers
 }:
 mkDerivation {
 
@@ -5067,27 +5055,15 @@ version = "0.14.2";
 src = ./../acid-state-exts;
 libraryHaskellDepends = [
 acid-state
-array
 base
-bytestring
-cereal
-containers
 directory
 exceptions
-extensible-exceptions
 extra
-filelock
 filepath
-hashable
 mtl
-network
 safecopy
-stm
-template-haskell
-th-expand-syns
 time-units
 unix
-unordered-containers
 ];
 doHaddock = false;
 homepage = "https://github.com/acid-state/acid-state";
@@ -14749,7 +14725,6 @@ license = stdenv.lib.licenses.bsd3;
 , lens
 , log-warper
 , memory
-, mmorph
 , monad-control
 , mtl
 , neat-interpolation
@@ -14826,7 +14801,6 @@ conduit
 constraints
 containers
 contravariant
-cpphs
 cryptonite
 data-default
 directory
@@ -14844,7 +14818,6 @@ http-conduit
 lens
 log-warper
 memory
-mmorph
 monad-control
 mtl
 neat-interpolation
@@ -14884,6 +14857,9 @@ x509
 x509-store
 x509-validation
 yaml
+];
+libraryToolDepends = [
+cpphs
 ];
 testHaskellDepends = [
 base
@@ -14930,6 +14906,9 @@ time-units
 universum
 unordered-containers
 ];
+testToolDepends = [
+cpphs
+];
 benchmarkHaskellDepends = [
 base
 bytestring
@@ -14952,8 +14931,10 @@ network-transport
 network-transport-inmemory
 optparse-applicative
 QuickCheck
-time-units
 universum
+];
+benchmarkToolDepends = [
+cpphs
 ];
 doHaddock = false;
 description = "Cardano SL main implementation";
@@ -15137,15 +15118,7 @@ license = stdenv.lib.licenses.mit;
 , cereal
 , containers
 , cpphs
-, cryptonite
-, data-default
 , digest
-, directory
-, extra
-, file-embed
-, filelock
-, filepath
-, fmt
 , formatting
 , generic-arbitrary
 , half
@@ -15196,7 +15169,6 @@ formatting
 hashable
 lens
 micro-recursion-schemes
-mtl
 safe-exceptions
 safecopy
 serokell-util
@@ -15213,21 +15185,12 @@ libraryToolDepends = [
 cpphs
 ];
 testHaskellDepends = [
-aeson
 base
 bytestring
 cardano-sl-util-test
 cborg
 cereal
 containers
-cryptonite
-data-default
-directory
-extra
-file-embed
-filelock
-filepath
-fmt
 formatting
 generic-arbitrary
 half
@@ -15240,7 +15203,6 @@ quickcheck-instances
 safecopy
 serokell-util
 tagged
-template-haskell
 text
 time-units
 universum
@@ -15257,7 +15219,6 @@ license = stdenv.lib.licenses.mit;
 "cardano-sl-binary-test" = callPackage
 ({
   mkDerivation
-, aeson
 , base
 , bytestring
 , cardano-sl-binary
@@ -15267,8 +15228,6 @@ license = stdenv.lib.licenses.mit;
 , containers
 , cpphs
 , cryptonite
-, directory
-, filepath
 , formatting
 , half
 , hedgehog
@@ -15280,7 +15239,6 @@ license = stdenv.lib.licenses.mit;
 , safecopy
 , serokell-util
 , stdenv
-, template-haskell
 , text
 , universum
 }:
@@ -15295,7 +15253,6 @@ configureFlags = [
 "--ghc-option=-Werror"
 ];
 libraryHaskellDepends = [
-aeson
 base
 bytestring
 cardano-sl-binary
@@ -15304,8 +15261,6 @@ cborg
 cereal
 containers
 cryptonite
-directory
-filepath
 formatting
 half
 hedgehog
@@ -15316,7 +15271,6 @@ QuickCheck
 quickcheck-instances
 safecopy
 serokell-util
-template-haskell
 text
 universum
 ];
@@ -15665,7 +15619,6 @@ license = stdenv.lib.licenses.mit;
 , aeson
 , aeson-options
 , ansi-terminal
-, async
 , base
 , base16-bytestring
 , base58-bytestring
@@ -15748,7 +15701,6 @@ libraryHaskellDepends = [
 aeson
 aeson-options
 ansi-terminal
-async
 base
 base58-bytestring
 bytestring
@@ -15807,7 +15759,6 @@ libraryToolDepends = [
 cpphs
 ];
 testHaskellDepends = [
-aeson
 base
 base16-bytestring
 bytestring
@@ -15848,7 +15799,6 @@ license = stdenv.lib.licenses.mit;
 "cardano-sl-core-test" = callPackage
 ({
   mkDerivation
-, aeson
 , base
 , base16-bytestring
 , bytestring
@@ -15864,7 +15814,6 @@ license = stdenv.lib.licenses.mit;
 , cryptonite
 , data-default
 , ed25519
-, formatting
 , generic-arbitrary
 , hedgehog
 , pvss
@@ -15890,7 +15839,6 @@ configureFlags = [
 "--ghc-option=-Werror"
 ];
 libraryHaskellDepends = [
-aeson
 base
 base16-bytestring
 bytestring
@@ -15906,7 +15854,6 @@ containers
 cryptonite
 data-default
 ed25519
-formatting
 generic-arbitrary
 hedgehog
 pvss
@@ -16119,7 +16066,6 @@ license = stdenv.lib.licenses.mit;
 , memory
 , mmorph
 , mtl
-, reflection
 , resourcet
 , rocksdb-haskell-ng
 , safe-exceptions
@@ -16172,7 +16118,6 @@ lrucache
 memory
 mmorph
 mtl
-reflection
 resourcet
 rocksdb-haskell-ng
 safe-exceptions
@@ -16349,7 +16294,6 @@ cardano-sl-crypto-test
 cardano-sl-db
 cardano-sl-generator
 cardano-sl-infra
-cardano-sl-networking
 cardano-sl-util
 conduit
 containers
@@ -16462,7 +16406,6 @@ license = stdenv.lib.licenses.mit;
 "cardano-sl-generator" = callPackage
 ({
   mkDerivation
-, async
 , base
 , bytestring
 , cardano-sl
@@ -16476,7 +16419,6 @@ license = stdenv.lib.licenses.mit;
 , cardano-sl-crypto-test
 , cardano-sl-db
 , cardano-sl-infra
-, cardano-sl-networking
 , cardano-sl-util
 , cardano-sl-util-test
 , containers
@@ -16492,10 +16434,8 @@ license = stdenv.lib.licenses.mit;
 , hspec
 , lens
 , log-warper
-, lrucache
 , monad-control
 , MonadRandom
-, mtl
 , optparse-applicative
 , QuickCheck
 , random
@@ -16507,7 +16447,6 @@ license = stdenv.lib.licenses.mit;
 , transformers-base
 , universum
 , unliftio
-, unliftio-core
 , unordered-containers
 , vector
 }:
@@ -16562,7 +16501,6 @@ libraryToolDepends = [
 cpphs
 ];
 executableHaskellDepends = [
-async
 base
 bytestring
 cardano-sl
@@ -16571,30 +16509,19 @@ cardano-sl-chain
 cardano-sl-core
 cardano-sl-crypto
 cardano-sl-db
-cardano-sl-infra
-cardano-sl-networking
 cardano-sl-util
 containers
 criterion
-cryptonite
-data-default
 deepseq
 directory
-ether
 formatting
-lens
 log-warper
-lrucache
 MonadRandom
-mtl
 optparse-applicative
-QuickCheck
 random
 text
 time-units
 universum
-unliftio-core
-unordered-containers
 ];
 executableToolDepends = [
 cpphs
@@ -16629,34 +16556,21 @@ testToolDepends = [
 cpphs
 ];
 benchmarkHaskellDepends = [
-async
 base
 cardano-sl
-cardano-sl-binary
 cardano-sl-chain
 cardano-sl-core
 cardano-sl-crypto
 cardano-sl-db
-cardano-sl-infra
-cardano-sl-networking
 cardano-sl-util
 containers
 criterion
-cryptonite
-data-default
-ether
-lens
 log-warper
-lrucache
 MonadRandom
-mtl
-QuickCheck
 random
 serokell-util
 time-units
 universum
-unliftio-core
-unordered-containers
 ];
 benchmarkToolDepends = [
 cpphs
@@ -16805,7 +16719,6 @@ aeson
 async
 base
 bytestring
-cardano-sl-binary
 cardano-sl-binary-test
 cardano-sl-chain
 cardano-sl-chain-test
@@ -16838,7 +16751,6 @@ license = stdenv.lib.licenses.mit;
 , async
 , base
 , bytestring
-, cardano-sl-binary
 , cardano-sl-binary-test
 , cardano-sl-chain
 , cardano-sl-chain-test
@@ -16871,7 +16783,6 @@ aeson
 async
 base
 bytestring
-cardano-sl-binary
 cardano-sl-binary-test
 cardano-sl-chain
 cardano-sl-chain-test
@@ -16913,9 +16824,7 @@ license = stdenv.lib.licenses.mit;
 , cardano-sl-util
 , containers
 , contravariant
-, cryptonite
 , ekg-core
-, exceptions
 , formatting
 , hashable
 , hspec
@@ -16923,7 +16832,6 @@ license = stdenv.lib.licenses.mit;
 , kademlia
 , lens
 , log-warper
-, monad-control
 , mtl
 , mwc-random
 , network
@@ -16932,7 +16840,6 @@ license = stdenv.lib.licenses.mit;
 , network-transport-tcp
 , QuickCheck
 , random
-, resourcet
 , safe-exceptions
 , scientific
 , serokell-util
@@ -16971,21 +16878,17 @@ cardano-sl-chain
 cardano-sl-core
 cardano-sl-util
 containers
-cryptonite
 ekg-core
-exceptions
 formatting
 hashable
 kademlia
 lens
 log-warper
-monad-control
 mtl
 network
 network-transport
 network-transport-tcp
 random
-resourcet
 safe-exceptions
 scientific
 stm
@@ -17051,9 +16954,7 @@ license = stdenv.lib.licenses.mit;
 , base
 , cardano-sl
 , cardano-sl-chain
-, cardano-sl-core
 , cardano-sl-crypto
-, cardano-sl-infra
 , cardano-sl-networking
 , cardano-sl-util
 , cpphs
@@ -17077,9 +16978,7 @@ executableHaskellDepends = [
 base
 cardano-sl
 cardano-sl-chain
-cardano-sl-core
 cardano-sl-crypto
-cardano-sl-infra
 cardano-sl-networking
 cardano-sl-util
 log-warper
@@ -17503,7 +17402,6 @@ license = stdenv.lib.licenses.mit;
 , QuickCheck
 , quickcheck-instances
 , stdenv
-, tagged
 , template-haskell
 , text
 , time-units
@@ -17538,7 +17436,6 @@ mtl
 pretty-show
 QuickCheck
 quickcheck-instances
-tagged
 template-haskell
 text
 time-units
@@ -18021,7 +17918,6 @@ filepath
 formatting
 hedgehog
 hspec
-ixset-typed
 lens
 log-warper
 mtl
@@ -18052,7 +17948,6 @@ base
 bytestring
 cardano-sl-client
 cardano-sl-core
-cardano-sl-db
 cardano-sl-wallet
 cassava
 connection
