@@ -22,7 +22,7 @@ import           Test.QuickCheck.Monadic (pick)
 import           Pos.Chain.Txp (TxpConfiguration (..))
 import           Pos.Core (Address, BlockCount (..), blkSecurityParam)
 import           Pos.Core.Chrono (nonEmptyOldestFirst, toNewestFirst)
-import           Pos.Crypto (emptyPassphrase)
+import           Pos.Crypto (ProtocolMagic (..), emptyPassphrase)
 import           Pos.DB.Block (rollbackBlocks)
 import           Pos.Launcher (HasConfigurations)
 import qualified Pos.Wallet.Web.State as WS
@@ -53,14 +53,16 @@ spec = do
     runWithNetworkMagic False
 
 runWithNetworkMagic :: Bool -> Spec
-runWithNetworkMagic requiresNetworkMagic = do
+runWithNetworkMagic requiresNetworkMagic =
     withDefConfigurations requiresNetworkMagic $ \_ _ _ -> do
-    describe ("Pos.Wallet.Web.Tracking.BListener" <> show requiresNetworkMagic
-                   <> ")") $ modifyMaxSuccess (const 10) $ do
-        describe "Two applications and rollbacks" twoApplyTwoRollbacksSpec
-    xdescribe "Pos.Wallet.Web.Tracking.evalChange (pending, CSL-2473)" $ do
-        prop evalChangeDiffAccountsDesc evalChangeDiffAccounts
-        prop evalChangeSameAccountsDesc evalChangeSameAccounts
+        describe ("Pos.Wallet.Web.Tracking.BListener (requiresNetworkMagic="
+                       <> show requiresNetworkMagic
+                       <> ")") $ modifyMaxSuccess (const 10) $ do
+            describe "Two applications and rollbacks" twoApplyTwoRollbacksSpec
+        xdescribe ("Pos.Wallet.Web.Tracking.evalChange (pending, CSL-2473)\
+                  \ (" <> show requiresNetworkMagic <> ")") $ do
+            prop evalChangeDiffAccountsDesc evalChangeDiffAccounts
+            prop evalChangeSameAccountsDesc evalChangeSameAccounts
   where
     evalChangeDiffAccountsDesc =
       "An outgoing transaction to another account."
@@ -69,12 +71,16 @@ runWithNetworkMagic requiresNetworkMagic = do
 
 twoApplyTwoRollbacksSpec :: HasConfigurations => Spec
 twoApplyTwoRollbacksSpec = walletPropertySpec twoApplyTwoRollbacksDesc $ do
+    let networkMagic = Just $ getProtocolMagic dummyProtocolMagic
     let k = fromIntegral blkSecurityParam :: Word64
     -- During these tests we need to manually switch back to the old synchronous
     -- way of restoring.
-    void $ importSomeWallets (pure emptyPassphrase)
+    void $ importSomeWallets networkMagic (pure emptyPassphrase)
     sks <- lift getSecretKeysPlain
-    lift $ forM_ sks $ \s -> syncWalletWithBlockchain (newSyncRequest (eskToWalletDecrCredentials s))
+    lift
+        $ forM_ sks
+        $ \s -> syncWalletWithBlockchain
+            $ newSyncRequest (eskToWalletDecrCredentials networkMagic s)
 
     -- Testing starts here
     genesisWalletDB <- lift WS.askWalletSnapshot

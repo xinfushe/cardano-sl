@@ -211,11 +211,11 @@ instance (HasConfigurations, HasCompileInfo) =>
          MonadAddresses AuxxMode where
     type AddrData AuxxMode = PublicKey
     getNewAddress = makePubKeyAddressAuxx
-    getFakeChangeAddress = do
+    getFakeChangeAddress nm = do
         epochIndex <- siEpoch <$> getCurrentSlotInaccurate
         gsIsBootstrapEra epochIndex <&> \case
-            False -> largestPubKeyAddressBoot
-            True -> largestPubKeyAddressSingleKey
+            False -> largestPubKeyAddressBoot nm
+            True  -> largestPubKeyAddressSingleKey nm
 
 instance MonadKeysRead AuxxMode where
     getSecret = getSecretDefault
@@ -240,20 +240,22 @@ instance HasConfigurations =>
 -- whether we are currently in bootstrap era.
 makePubKeyAddressAuxx ::
        MonadAuxxMode m
-    => PublicKey
+    => Maybe Int32
+    -> PublicKey
     -> m Address
-makePubKeyAddressAuxx pk = do
+makePubKeyAddressAuxx nm pk = do
     epochIndex <- siEpoch <$> getCurrentSlotInaccurate
     ibea <- IsBootstrapEraAddr <$> gsIsBootstrapEra epochIndex
-    pure $ makePubKeyAddress ibea pk
+    pure $ makePubKeyAddress nm ibea pk
 
 -- | Similar to @makePubKeyAddressAuxx@ but create HD address.
 deriveHDAddressAuxx ::
        MonadAuxxMode m
-    => EncryptedSecretKey
+    => Maybe Int32
+    -> EncryptedSecretKey
     -> m Address
-deriveHDAddressAuxx hdwSk = do
+deriveHDAddressAuxx nm hdwSk = do
     epochIndex <- siEpoch <$> getCurrentSlotInaccurate
     ibea <- IsBootstrapEraAddr <$> gsIsBootstrapEra epochIndex
     pure $ fst $ fromMaybe (error "makePubKeyHDAddressAuxx: pass mismatch") $
-        deriveFirstHDAddress ibea emptyPassphrase hdwSk
+        deriveFirstHDAddress nm ibea emptyPassphrase hdwSk

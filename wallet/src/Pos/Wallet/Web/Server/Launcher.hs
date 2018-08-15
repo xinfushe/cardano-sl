@@ -32,7 +32,7 @@ import           Pos.Chain.Txp (TxpConfiguration)
 import           Pos.Client.Txp.Network (sendTxOuts)
 import           Pos.Communication (OutSpecs)
 import           Pos.Core.NetworkAddress (NetworkAddress)
-import           Pos.Crypto (ProtocolMagic)
+import           Pos.Crypto (ProtocolMagic (..))
 import           Pos.Infra.Diffusion.Types (Diffusion (sendTx))
 import           Pos.Util (bracketWithLogging)
 import           Pos.Util.CompileInfo (HasCompileInfo)
@@ -90,7 +90,8 @@ walletServer
     -> (forall x. m x -> Handler x)
     -> m (Server WalletSwaggerApi)
 walletServer pm txpConfig diffusion ntpStatus nat = do
-    mapM_ (findKey >=> syncWallet . eskToWalletDecrCredentials) =<< myRootAddresses
+    let networkMagic = Just $ getProtocolMagic pm
+    mapM_ (findKey >=> syncWallet . eskToWalletDecrCredentials networkMagic) =<< myRootAddresses networkMagic
     return $ servantHandlersWithSwagger pm txpConfig ntpStatus submitTx nat
   where
     -- Diffusion layer takes care of submitting transactions.

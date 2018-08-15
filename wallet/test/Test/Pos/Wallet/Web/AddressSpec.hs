@@ -18,9 +18,8 @@ import           Test.QuickCheck.Monadic (pick, stop)
 import           Pos.Binary (biSize)
 import           Pos.Client.Txp.Addresses (getFakeChangeAddress, getNewAddress)
 import           Pos.Core.Common (Address)
-import           Pos.Crypto (PassPhrase)
+import           Pos.Crypto (PassPhrase, ProtocolMagic (..))
 import           Pos.Launcher (HasConfigurations)
-
 import           Pos.Wallet.Web.Account (GenSeed (..), genUniqueAddress)
 import           Pos.Wallet.Web.ClientTypes (AccountId, CAccountInit (..), caId)
 import           Pos.Wallet.Web.Error (WalletError (..))
@@ -28,7 +27,9 @@ import           Pos.Wallet.Web.Methods.Logic (newAccount)
 import           Pos.Wallet.Web.State (askWalletSnapshot, getWalletAddresses,
                      wamAddress)
 import           Pos.Wallet.Web.Util (decodeCTypeOrFail)
+
 import           Test.Pos.Configuration (withDefConfigurations)
+import           Test.Pos.Crypto.Dummy (dummyProtocolMagic)
 import           Test.Pos.Util.QuickCheck.Property (assertProperty, expectedOne)
 import           Test.Pos.Wallet.Web.Mode (WalletProperty)
 import           Test.Pos.Wallet.Web.Util (importSingleWallet,
@@ -42,13 +43,13 @@ spec = do
 runWithNetworkMagic :: Bool -> Spec
 runWithNetworkMagic requiresNetworkMagic = do
     withDefConfigurations requiresNetworkMagic $ \_ _ _ ->
-    describe ("Fake address has maximal possible size (requiresNetworkMagic="
-                   <> show requiresNetworkMagic <> ")") $
-        modifyMaxSuccess (const 10) $ do
-            prop "getNewAddress" $
-                fakeAddressHasMaxSizeTest changeAddressGenerator
-            prop "genUniqueAddress" $
-                fakeAddressHasMaxSizeTest commonAddressGenerator
+        describe ("Fake address has maximal possible size (requiresNetworkMagic="
+                       <> show requiresNetworkMagic <> ")") $
+            modifyMaxSuccess (const 10) $ do
+                prop "getNewAddress" $
+                    fakeAddressHasMaxSizeTest changeAddressGenerator
+                prop "genUniqueAddress" $
+                    fakeAddressHasMaxSizeTest commonAddressGenerator
 
 type AddressGenerator = AccountId -> PassPhrase -> WalletProperty Address
 
@@ -56,14 +57,18 @@ fakeAddressHasMaxSizeTest
     :: HasConfigurations
     => AddressGenerator -> Word32 -> WalletProperty ()
 fakeAddressHasMaxSizeTest generator accSeed = do
-    passphrase <- importSingleWallet mostlyEmptyPassphrases
+    let networkMagic = Just $ getProtocolMagic dummyProtocolMagic
+    passphrase <- importSingleWallet networkMagic mostlyEmptyPassphrases
     ws <- askWalletSnapshot
     wid <- expectedOne "wallet addresses" $ getWalletAddresses ws
     accId <- lift $ decodeCTypeOrFail . caId
-         =<< newAccount (DeterminedSeed accSeed) passphrase (CAccountInit def wid)
+         =<< newAccount networkMagic
+                        (DeterminedSeed accSeed)
+                        passphrase
+                        (CAccountInit def wid)
     address <- generator accId passphrase
 
-    largeAddress <- lift getFakeChangeAddress
+    largeAddress <- lift $ getFakeChangeAddress networkMagic
 
     assertProperty
         (biSize largeAddress >= biSize address)
@@ -73,14 +78,21 @@ fakeAddressHasMaxSizeTest generator accSeed = do
 -- Unfortunatelly, its randomness doesn't depend on QuickCheck seed,
 -- so another proper generator is helpful.
 changeAddressGenerator :: HasConfigurations => AddressGenerator
-changeAddressGenerator accId passphrase = lift $ getNewAddress (accId, passphrase)
+changeAddressGenerator accId passphrase =
+    lift $ getNewAddress (Just $ getProtocolMagic dummyProtocolMagic)
+                         (accId, passphrase)
 
 -- | Generator which is directly used in endpoints.
 commonAddressGenerator :: AddressGenerator
 commonAddressGenerator accId passphrase = do
     ws <- askWalletSnapshot
     addrSeed <- pick arbitrary
-    let genAddress = genUniqueAddress ws (DeterminedSeed addrSeed) passphrase accId
+    let networkMagic = Just $ getProtocolMagic dummyProtocolMagic
+    let genAddress = genUniqueAddress networkMagic
+                                      ws
+                                      (DeterminedSeed addrSeed)
+                                      passphrase
+                                      accId
     -- can't catch under 'PropertyM', workarounding
     maddr <- lift $ (Just <$> genAddress) `catch` seedBusyHandler
     addr <- maybe (stop Discard) pure maddr

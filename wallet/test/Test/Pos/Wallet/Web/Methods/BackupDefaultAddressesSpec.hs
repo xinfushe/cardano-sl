@@ -27,15 +27,17 @@ spec = do
 runWithNetworkMagic :: Bool -> Spec
 runWithNetworkMagic requiresNetworkMagic = do
     withDefConfigurations requiresNetworkMagic $ \_ _ _ ->
-    describe ("restoreAddressFromWalletBackup (" <> show requiresNetworkMagic
-                  <> ")") $ modifyMaxSuccess (const 10) $ do
-        restoreWalletAddressFromBackupSpec
+        describe ("restoreAddressFromWalletBackup (requiresNetworkMagic="
+                      <> show requiresNetworkMagic
+                      <> ")") $ modifyMaxSuccess (const 10) $ do
+            restoreWalletAddressFromBackupSpec
 
 restoreWalletAddressFromBackupSpec :: HasConfigurations => Spec
 restoreWalletAddressFromBackupSpec =
     walletPropertySpec restoreWalletAddressFromBackupDesc $ do
         walletBackup   <- pick arbitrary
-        restoredWallet <- lift $ restoreWalletFromBackup walletBackup
+        -- COME BACK AND FIX THIS: Using Nothing for network magic
+        restoredWallet <- lift $ restoreWalletFromBackup Nothing walletBackup
         let noOfAccounts = cwAccountsNumber restoredWallet
         assertProperty (noOfAccounts > 0) $ "Exported wallet has no accounts!"
   where

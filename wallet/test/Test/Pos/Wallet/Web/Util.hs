@@ -38,7 +38,7 @@ import           Test.QuickCheck.Monadic (assert, pick)
 
 import           Pos.Chain.Block (Blund, LastKnownHeaderTag, blockHeader,
                      headerHashG)
-import           Pos.Chain.Txp (TxpConfiguration, Utxo)
+import           Pos.Chain.Txp (TxpConfiguration, Utxo, tcRequiresNetworkMagic)
 import           Pos.Client.KeyStorage (getSecretKeysPlain)
 import           Pos.Client.Txp.Balances (getBalance)
 import           Pos.Core (Address, BlockCount, Coin, HasConfiguration,
@@ -47,7 +47,7 @@ import           Pos.Core.Chrono (OldestFirst (..))
 import           Pos.Core.Common (IsBootstrapEraAddr (..), deriveLvl2KeyPair)
 import           Pos.Core.Genesis (poorSecretToEncKey)
 import           Pos.Core.Txp (TxIn, TxOut (..), TxOutAux (..))
-import           Pos.Crypto (EncryptedSecretKey, PassPhrase, ProtocolMagic,
+import           Pos.Crypto (EncryptedSecretKey, PassPhrase, ProtocolMagic (..),
                      ShouldCheckPassphrase (..), emptyPassphrase,
                      firstHardened)
 import           Pos.Generator.Block (genBlocks)
@@ -83,7 +83,7 @@ wpGenBlocks
     -> InplaceDB
     -> WalletProperty (OldestFirst [] Blund)
 wpGenBlocks pm txpConfig blkCnt enTxPayload inplaceDB = do
-    params <- genBlockGenParams pm (tcRequiresNetworkMagic) blkCnt
+    params <- genBlockGenParams pm (tcRequiresNetworkMagic txpConfig) blkCnt
                                 enTxPayload inplaceDB
     g <- pick $ MkGen $ \qc _ -> qc
     lift $ modifyStateLock HighPriority ApplyBlock $ \prevTip -> do -- FIXME is ApplyBlock the right one?
@@ -113,8 +113,11 @@ wpGenBlock pm txpConfig = fmap (Data.List.head . toList) ... wpGenBlocks pm txpC
 -- Returns corresponding passphrases.
 importWallets
     :: HasConfigurations
-    => Int -> Gen PassPhrase -> WalletProperty [PassPhrase]
-importWallets numLimit passGen = do
+    => Maybe Int32
+    -> Int
+    -> Gen PassPhrase
+    -> WalletProperty [PassPhrase]
+importWallets nm numLimit passGen = do
     let secrets =
             map poorSecretToEncKey $
             fromMaybe (error "Generated secrets are unknown") genesisSecretsPoor
@@ -124,21 +127,26 @@ importWallets numLimit passGen = do
         passwds <- vectorOf l passGen
         pure (seks, passwds)
     let wuses = map mkGenesisWalletUserSecret encSecrets
-    lift $ mapM_ (uncurry importWalletDo) (zip passphrases wuses)
+    lift $ mapM_ (uncurry $ importWalletDo nm) (zip passphrases wuses)
     skeys <- lift getSecretKeysPlain
     assertProperty (not (null skeys)) "Empty set of imported keys"
     pure passphrases
 
 importSomeWallets
     :: HasConfigurations
-    => Gen PassPhrase -> WalletProperty [PassPhrase]
-importSomeWallets = importWallets 10
+    => Maybe Int32
+    -> Gen PassPhrase
+    -> WalletProperty [PassPhrase]
+importSomeWallets nm = importWallets nm 10
 
 importSingleWallet
     :: HasConfigurations
-    => Gen PassPhrase -> WalletProperty PassPhrase
-importSingleWallet passGen =
-    fromMaybe (error "No wallets imported") . (fmap fst . uncons) <$> importWallets 1 passGen
+    => Maybe Int32
+    -> Gen PassPhrase
+    -> WalletProperty PassPhrase
+importSingleWallet nm passGen =
+    fromMaybe (error "No wallets imported") . (fmap fst . uncons)
+        <$> importWallets nm 1 passGen
 
 mostlyEmptyPassphrases :: Gen PassPhrase
 mostlyEmptyPassphrases =
@@ -150,16 +158,19 @@ mostlyEmptyPassphrases =
 -- | Take passphrases of our wallets
 -- and return some address from one of our wallets and id of this wallet.
 -- BE CAREFUL: this functions might take long time b/c it uses @deriveLvl2KeyPair@
-deriveRandomAddress :: [PassPhrase] -> WalletProperty (CId Addr, CId Wal)
-deriveRandomAddress passphrases = do
+deriveRandomAddress
+    :: Maybe Int32
+    -> [PassPhrase]
+    -> WalletProperty (CId Addr, CId Wal)
+deriveRandomAddress nm passphrases = do
     skeys <- lift getSecretKeysPlain
     let l = length skeys
     assert (l > 0)
     walletIdx <- pick $ choose (0, l - 1)
     let sk = skeys !! walletIdx
-    let walId = encToCId sk
+    let walId = encToCId nm sk
     let psw = passphrases !! walletIdx
-    addressMB <- pick $ genWalletAddress sk psw
+    addressMB <- pick $ genWalletAddress nm sk psw
     address <- maybeStopProperty "deriveRandomAddress: couldn't derive HD address" addressMB
     pure (encodeCType address, walId)
 
@@ -172,13 +183,15 @@ deriveRandomAddress passphrases = do
 -- secret key
 -- BE CAREFUL: this functions might take long time b/c it uses @deriveLvl2KeyPair@
 genWalletLvl2KeyPair
-    :: EncryptedSecretKey
+    :: Maybe Int32
+    -> EncryptedSecretKey
     -> PassPhrase
     -> Gen (Maybe (Address, EncryptedSecretKey))
-genWalletLvl2KeyPair sk psw = do
+genWalletLvl2KeyPair nm sk psw = do
     accountIdx <- getDerivingIndex <$> arbitrary
     addressIdx <- getDerivingIndex <$> arbitrary
     pure $ deriveLvl2KeyPair
+        nm
         (IsBootstrapEraAddr True)
         (ShouldCheckPassphrase False)
         psw sk accountIdx addressIdx
@@ -187,20 +200,22 @@ genWalletLvl2KeyPair sk psw = do
 -- and generate arbitrary wallet address
 -- BE CAREFUL: this functions might take long time b/c it uses @deriveLvl2KeyPair@
 genWalletAddress
-    :: EncryptedSecretKey
+    :: Maybe Int32
+    -> EncryptedSecretKey
     -> PassPhrase
     -> Gen (Maybe Address)
-genWalletAddress sk psw = fst <<$>> genWalletLvl2KeyPair sk psw
+genWalletAddress nm sk psw = fst <<$>> genWalletLvl2KeyPair nm sk psw
 
 -- | Generate utxo which contains only addresses from given wallet
 -- BE CAREFUL: @deriveLvl2KeyPair@ is called `size` times here -
 -- generating large utxos will take a long time
 genWalletUtxo
-    :: EncryptedSecretKey
+    :: Maybe Int32
+    -> EncryptedSecretKey
     -> PassPhrase
     -> Int                -- Size of Utxo
     -> Gen (Maybe Utxo)
-genWalletUtxo sk psw size =
+genWalletUtxo nm sk psw size =
     fmap M.fromList . sequence <$> replicateM size genOutput
   where
     genOutput :: Gen (Maybe (TxIn, TxOutAux))
@@ -208,7 +223,7 @@ genWalletUtxo sk psw size =
         txIn <- arbitrary
         coin <- arbitrary
         (\address -> (txIn, TxOutAux $ TxOut address coin)) <<$>>
-            genWalletAddress sk psw
+            genWalletAddress nm sk psw
 
 ----------------------------------------------------------------------------
 -- Wallet properties

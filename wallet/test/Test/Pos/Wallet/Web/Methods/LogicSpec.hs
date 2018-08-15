@@ -10,10 +10,12 @@ import           Universum
 import           Test.Hspec (Spec, describe)
 import           Test.Hspec.QuickCheck (prop)
 
+import           Pos.Crypto (ProtocolMagic (..))
 import           Pos.Launcher (HasConfigurations)
 import           Pos.Wallet.Web.Methods.Logic (getAccounts, getWallets)
 
 import           Test.Pos.Configuration (withDefConfigurations)
+import           Test.Pos.Crypto.Dummy (dummyProtocolMagic)
 import           Test.Pos.Util.QuickCheck.Property (stopProperty)
 import           Test.Pos.Wallet.Web.Mode (WalletProperty)
 
@@ -34,9 +36,10 @@ runWithNetworkMagic requiresNetworkMagic = do
 
 emptyWallet :: HasConfigurations => WalletProperty ()
 emptyWallet = do
-    wallets <- lift getWallets
+    let networkMagic = Just $ getProtocolMagic dummyProtocolMagic
+    wallets <- lift $ getWallets networkMagic
     unless (null wallets) $
         stopProperty "Wallets aren't empty"
-    accounts <- lift $ getAccounts Nothing
+    accounts <- lift $ getAccounts networkMagic Nothing
     unless (null accounts) $
         stopProperty "Accounts aren't empty"

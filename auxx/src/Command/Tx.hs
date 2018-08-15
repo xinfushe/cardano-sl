@@ -48,9 +48,9 @@ import           Pos.Core.Configuration (genesisBlockVersionData,
 import           Pos.Core.Txp (TxAux (..), TxIn (TxInUtxo), TxOut (..),
                      TxOutAux (..), txaF)
 import           Pos.Core.Update (BlockVersionData (..))
-import           Pos.Crypto (EncryptedSecretKey, ProtocolMagic, emptyPassphrase,
-                     encToPublic, fakeSigner, hash, safeToPublic, toPublic,
-                     withSafeSigners)
+import           Pos.Crypto (EncryptedSecretKey, ProtocolMagic (..),
+                     emptyPassphrase, encToPublic, fakeSigner, hash,
+                     safeToPublic, toPublic, withSafeSigners)
 import           Pos.Infra.Diffusion.Types (Diffusion (..))
 import           Pos.Util.UserSecret (usWallet, userSecret, wusRootKey)
 import           Pos.Util.Util (maybeThrow)
@@ -112,16 +112,17 @@ sendToAllGenesis pm diffusion (SendToAllGenesisParams genesisTxsPerThread txsPer
         let startAt = fromMaybe 0 . readMaybe . fromMaybe "" $ startAtTxt :: Int
         -- construct a transaction, and add it to the queue
         let addTx secretKey = do
-                let signer = fakeSigner secretKey
-                    publicKey = toPublic secretKey
+                let networkMagic = Just $ getProtocolMagic pm
+                    signer       = fakeSigner secretKey
+                    publicKey    = toPublic secretKey
                 -- construct transaction output
-                outAddr <- makePubKeyAddressAuxx publicKey
+                outAddr <- makePubKeyAddressAuxx networkMagic publicKey
                 let txOut1 = TxOut {
                     txOutAddress = outAddr,
                     txOutValue = mkCoin 1
                     }
                     txOuts = TxOutAux txOut1 :| []
-                utxo <- getOwnUtxoForPk $ safeToPublic signer
+                utxo <- getOwnUtxoForPk networkMagic $ safeToPublic signer
                 etx <- createTx pm mempty utxo signer txOuts publicKey
                 case etx of
                     Left err -> logError (sformat ("Error: "%build%" while trying to contruct tx") err)
@@ -226,12 +227,17 @@ send
     -> NonEmpty TxOut
     -> m ()
 send pm diffusion idx outputs = do
+    let networkMagic = Just $ getProtocolMagic pm
     skey <- takeSecret
     let curPk = encToPublic skey
-    let plainAddresses = map (flip makePubKeyAddress curPk . IsBootstrapEraAddr) [False, True]
+    let plainAddresses = map (\ibea ->
+                                makePubKeyAddress networkMagic
+                                                  (IsBootstrapEraAddr ibea)
+                                                  curPk)
+                             [False, True]
     let (hdAddresses, hdSecrets) = unzip $ map
             (\ibea -> fromMaybe (error "send: pass mismatch") $
-                    deriveFirstHDAddress (IsBootstrapEraAddr ibea) emptyPassphrase skey) [False, True]
+                    deriveFirstHDAddress networkMagic (IsBootstrapEraAddr ibea) emptyPassphrase skey) [False, True]
     let allAddresses = hdAddresses ++ plainAddresses
     let allSecrets = hdSecrets ++ [skey, skey]
     etx <- withSafeSigners allSecrets (pure emptyPassphrase) $ \signers -> runExceptT @AuxxException $ do

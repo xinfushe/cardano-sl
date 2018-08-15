@@ -29,7 +29,7 @@ import           Pos.Core (Address, Coin, TxFeePolicy (..), mkCoin, sumCoins,
                      unsafeGetCoin, unsafeSubCoin)
 import           Pos.Core.Txp (Tx (..), TxAux (..), _TxOut)
 import           Pos.Core.Update (bvdTxFeePolicy)
-import           Pos.Crypto (PassPhrase)
+import           Pos.Crypto (PassPhrase, ProtocolMagic (..))
 import           Pos.DB.Class (MonadGState (..))
 import           Pos.Launcher (HasConfigurations)
 import           Pos.Util.CompileInfo (withCompileInfo)
@@ -63,13 +63,18 @@ deriving instance Eq CTx
 -- TODO remove HasCompileInfo when MonadWalletWebMode will be splitted.
 spec :: Spec
 spec = do
-       requiresNetworkMagic <- pick arbitrary
-       withCompileInfo $
-       withDefConfigurations requiresNetworkMagic $ \_ txpConfig _ ->
-       describe "Wallet.Web.Methods.Payment" $ modifyMaxSuccess (const 10) $ do
-    describe "newPaymentBatch" $ do
-        describe "Submitting a payment when restoring" (rejectPaymentIfRestoringSpec txpConfig)
-        describe "One payment" (oneNewPaymentBatchSpec txpConfig)
+    runWithNetworkMagic True
+    runWithNetworkMagic False
+
+runWithNetworkMagic :: Bool -> Spec
+runWithNetworkMagic requiresNetworkMagic = withCompileInfo $
+    withDefConfigurations requiresNetworkMagic $ \_ txpConfig _ ->
+        describe ("Wallet.Web.Methods.Payment (requiresNetworkMagic="
+                       <> show requiresNetworkMagic
+                       <> ")") $ modifyMaxSuccess (const 10) $ do
+            describe "newPaymentBatch" $ do
+                describe "Submitting a payment when restoring" (rejectPaymentIfRestoringSpec txpConfig)
+                describe "One payment" (oneNewPaymentBatchSpec txpConfig)
 
 data PaymentFixture = PaymentFixture {
       pswd        :: PassPhrase
@@ -86,19 +91,23 @@ data PaymentFixture = PaymentFixture {
 -- | Generic block of code to be reused across all the different payment specs.
 newPaymentFixture :: HasConfigurations => WalletProperty PaymentFixture
 newPaymentFixture = do
-    passphrases <- importSomeWallets mostlyEmptyPassphrases
+    let networkMagic = Just $ getProtocolMagic dummyProtocolMagic
+    passphrases <- importSomeWallets networkMagic mostlyEmptyPassphrases
     let l = length passphrases
     destLen <- pick $ choose (1, l)
     -- FIXME: we are sending to at most dstLen (which is small) because
     -- deriveRandomAddress is an expensive operation so it might
     -- take a longer time for test to complete for a longer lists
-    (dstCAddrs, dstWalIds) <- fmap unzip $ replicateM destLen $ deriveRandomAddress passphrases
-    rootsWIds <- lift myRootAddresses
+    (dstCAddrs, dstWalIds) <-
+        fmap unzip
+            $ replicateM destLen
+            $ deriveRandomAddress networkMagic passphrases
+    rootsWIds <- lift $ myRootAddresses networkMagic
     idx <- pick $ choose (0, l - 1)
     let walId = rootsWIds !! idx
     let pswd = passphrases !! idx
     let noOneAccount = sformat ("There is no one account for wallet: "%build) walId
-    srcAccount <- maybeStopProperty noOneAccount =<< (lift $ (fmap fst . uncons) <$> getAccounts (Just walId))
+    srcAccount <- maybeStopProperty noOneAccount =<< (lift $ (fmap fst . uncons) <$> getAccounts networkMagic (Just walId))
     srcAccId <- lift $ decodeCTypeOrFail (caId srcAccount)
 
     ws <- WS.askWalletSnapshot
