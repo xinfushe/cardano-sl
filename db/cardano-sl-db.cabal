@@ -216,11 +216,13 @@ executable db-explore
   hs-source-dirs:      main
   main-is:             db-explore.hs
   build-depends:       base
+                     , binary
                      , bytestring
                      , cardano-sl-chain
                      , cardano-sl-core
                      , cardano-sl-crypto
                      , cardano-sl-db
+                     , cardano-sl-util
                      , conduit
                      , containers
                      , formatting

@@ -14,18 +14,14 @@ import           Universum
 
 import           Control.Monad (when)
 import           Control.Monad.Trans.Except (ExceptT, throwE)
-import           Data.ByteArray (alloc, withByteArray)
+import           Data.Binary (decode, encode)
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy as LBS
-import           Data.Conduit (ConduitT, awaitForever, runConduit, yield, (.|))
-import           Data.Conduit.List (consume, sourceList)
-import qualified Data.List as List
+import           Data.Either (partitionEithers)
 import qualified Data.Text as Text
-import           Foreign.Storable (peek, poke, sizeOf)
 import           Formatting (build, sformat, (%))
-import qualified Prelude
 import           System.Environment (lookupEnv)
-import           System.FilePath (dropExtension)
+import           System.FilePath (dropExtension, (</>))
 import           System.IO (IOMode (..), SeekMode (..), hClose, hSeek,
                      openBinaryFile, withBinaryFile)
 
@@ -34,18 +30,25 @@ import           Pos.Chain.Block (HeaderHash, blockHeaderHash)
 import           Pos.Core (CoreConfiguration (..), EpochIndex (..),
                      EpochOrSlot (..), GenesisConfiguration (..),
                      HasConfiguration, LocalSlotIndex (..), ProtocolMagic,
-                     SlotId (..), getEpochOrSlot, withCoreConfigurations)
+                     SlotId (..), epochSlots, getEpochOrSlot,
+                     withCoreConfigurations)
 import           Pos.Crypto.Hashing (decodeAbstractHash)
 import           Pos.DB.Block (dbGetSerBlockRealDefault,
-                     dbGetSerUndoRealDefault, getFirstGenesisBlockHash,
+                     dbGetSerBlundRealDefault, dbGetSerUndoRealDefault,
+                     dbPutSerBlundsRealDefault, getFirstGenesisBlockHash,
                      resolveForwardLink)
 import           Pos.DB.BlockIndex (getHeader, getTipHeader)
-import           Pos.DB.Class (MonadDBRead (..), Serialized (..),
-                     SerializedBlock, dbGetSerBlock)
-import           Pos.DB.Rocks.Functions (closeNodeDBs, dbGetDefault,
-                     dbIterSourceDefault, openNodeDBs)
-import           Pos.DB.Rocks.Types
-
+import           Pos.DB.Class (DBTag (MiscDB), MonadDB (..), MonadDBRead (..),
+                     Serialized (..), SerializedBlock, dbGetSerBlock)
+import           Pos.DB.Epoch.Index (SlotIndexOffset (..), getEpochBlockOffset,
+                     writeEpochIndex)
+import           Pos.DB.Misc.Common (miscGetBi, miscPutBi)
+import           Pos.DB.Rocks.Functions (closeNodeDBs, dbDeleteDefault,
+                     dbGetDefault, dbIterSourceDefault, dbPutDefault,
+                     dbWriteBatchDefault, openNodeDBs)
+import           Pos.DB.Rocks.Types (NodeDBs (..), epochDataDir, epochLock,
+                     getBlockIndexDB, getNodeDBs)
+import           Pos.Util.Concurrent.RWLock (whenAcquireWrite)
 
 main :: IO ()
 main = do
@@ -85,9 +88,15 @@ instance HasConfiguration => MonadDBRead ExploreDB where
     dbIterSource = dbIterSourceDefault
     dbGetSerBlock = dbGetSerBlockRealDefault
     dbGetSerUndo = dbGetSerUndoRealDefault
+    dbGetSerBlund = dbGetSerBlundRealDefault
 
+instance HasConfiguration => MonadDB ExploreDB where
+    dbPut = dbPutDefault
+    dbWriteBatch = dbWriteBatchDefault
+    dbDelete = dbDeleteDefault
+    dbPutSerBlunds = dbPutSerBlundsRealDefault
 
-exploreDB :: (MonadCatch m, MonadDBRead m, MonadReader NodeDBs m, MonadIO m) => m ()
+exploreDB :: (MonadCatch m, MonadDB m, MonadMask m, MonadReader NodeDBs m, MonadIO m) => m ()
 exploreDB = do
     liftIO $ putStrLn ("Database ok!" :: Text)
     _blocksDB <- getBlockIndexDB
@@ -108,17 +117,87 @@ exploreDB = do
     let indexPath = dropExtension epochFP ++ ".index"
 
     res <- runExceptT $ do
-        (_, bhashs0) <- getHeaderHashesForEpoch gen
+        when False $ do
+            (_, bhashs0) <- getHeaderHashesForEpoch gen
 
-        xs <- lift $ consolidateEpochBlocks epochFP bhashs0
-        liftIO $ writeEpochIndex indexPath xs
+            xs <- consolidateEpochBlocks epochFP bhashs0
+            liftIO $ writeEpochIndex epochSlots indexPath xs
 
-        liftIO $ putStrLn ("------------------------" :: Text)
-        testEpochData bhashs0 epochFP indexPath
+            liftIO $ putStrLn ("------------------------" :: Text)
+            testEpochData bhashs0 epochFP indexPath
 
-    liftIO $ either (putStrLn . renderEpochConError) pure res
+        when False $ do
+            liftIO $ putStrLn ("Deleting ConsolidatedEpochHash" :: Text)
+            deleteConsolidatedEpochHash
 
-testEpochData :: (MonadDBRead m, MonadIO m) => [SlotIndexHash] -> FilePath -> FilePath -> ExceptT EpochConError m ()
+        consoldidateEpochs
+
+    liftIO $ either (putStrLn . renderConsolidateError) pure res
+
+
+getConsolidatedEpochHash :: MonadDBRead m => m (Maybe HeaderHash)
+getConsolidatedEpochHash =
+    miscGetBi consolidatedEpochHashKey
+
+putConsolidatedEpochHash :: MonadDB m => HeaderHash -> m ()
+putConsolidatedEpochHash hhash =
+    miscPutBi consolidatedEpochHashKey hhash
+
+deleteConsolidatedEpochHash :: MonadDB m => m ()
+deleteConsolidatedEpochHash =
+    dbDelete MiscDB consolidatedEpochHashKey
+
+consolidatedEpochHashKey :: ByteString
+consolidatedEpochHashKey = "consolidatedEpochHash"
+
+getNextEpochBoundaryHash :: MonadDBRead m => m HeaderHash
+getNextEpochBoundaryHash =
+   getConsolidatedEpochHash >>= \case
+     Just eh -> pure eh
+     Nothing -> getFirstGenesisBlockHash
+
+consoldidateEpochs :: (MonadCatch m, MonadDB m, MonadIO m, MonadMask m, MonadReader NodeDBs m) => ExceptT ConsolidateError m ()
+consoldidateEpochs = ExceptT $ do
+    elock <- view epochLock <$> getNodeDBs
+    mr <- whenAcquireWrite elock $ do
+            liftIO $ putStrLn ("Consolidating epochs" :: Text)
+            tipEpoch <- getTipEpoch
+            startHash <- getNextEpochBoundaryHash
+            startEpoch <- getBlockHeaderEpoch startHash
+            if tipEpoch < 2
+                then pure $ Right ()
+                else consoldateEpoch startHash startEpoch (tipEpoch - 1)
+    pure $ fromMaybe (Right ()) mr
+
+consoldateEpoch :: (MonadCatch m, MonadDB m, MonadIO m, MonadMask m, MonadReader NodeDBs m) => HeaderHash -> EpochIndex -> EpochIndex -> m (Either ConsolidateError ())
+consoldateEpoch startHash startEpoch endEpoch
+    | startEpoch >= endEpoch = pure $ Right ()
+    | otherwise = runExceptT $ loop startHash startEpoch
+  where
+    loop :: (MonadCatch m, MonadDB m, MonadIO m, MonadMask m, MonadReader NodeDBs m) => HeaderHash -> EpochIndex -> ExceptT ConsolidateError m ()
+    loop hhash epoch = do
+        (epochBoundary, hashes) <- getHeaderHashesForEpoch hhash
+        (epochPath, indexPath) <- mkEpochPaths epoch . view epochDataDir <$> getNodeDBs
+        liftIO $ print (epochPath, indexPath)
+
+        xs <- consolidateEpochBlocks epochPath hashes
+        liftIO $ writeEpochIndex epochSlots indexPath xs
+
+        -- Write starting point for next consildation to the MiscDB.
+        putConsolidatedEpochHash epochBoundary
+        when (epoch < endEpoch) $
+            loop epochBoundary (epoch + 1)
+
+mkEpochPaths :: EpochIndex -> FilePath -> (FilePath, FilePath)
+mkEpochPaths epoch dir =
+    (dir </> epochStr ++ ".epoch", dir </> epochStr ++ ".index")
+  where
+    epochStr = replicate (5 - epochStrLen) '0' ++ epochShow
+    epochShow = show $ getEpochIndex epoch
+    epochStrLen = length epochShow
+
+
+testEpochData :: (MonadDBRead m, MonadIO m) => [SlotIndexHash] -> FilePath -> FilePath -> ExceptT ConsolidateError m ()
 testEpochData xs epochPath indexPath = do
     mapM_ testBlock xs
     putStrLn ("All blocks are good!" :: Text)
@@ -126,24 +205,23 @@ testEpochData xs epochPath indexPath = do
     testBlock (SlotIndexHash lsi hh) = do
         when (getSlotIndex lsi `mod` 100 == 0) $
             putStrLn $ sformat ("Checking slot index " % build % " of " % build) (getSlotIndex lsi) (length xs)
-        mblk1 <- unSerialized <$$> dbGetSerBlock hh
-        blk1 <- maybe (throwE $ ECBlockLookupFailed "testEpochData" lsi hh) pure mblk1
+        mblk1 <- unSerialized <$$> dbGetSerBlund hh
+        blk1 <- maybe (throwE $ CEBlockLookupFailed "testEpochData" lsi hh) pure mblk1
         blk2 <- unSerialized <$> getEpochBlock epochPath indexPath lsi
         when (blk1 /= blk2) $
-            throwE $ ECBlockMismatch "testEpochData" lsi
+            throwE $ CEBlockMismatch "testEpochData" lsi
 
-getEpochBlock :: MonadIO m => FilePath -> FilePath -> LocalSlotIndex -> ExceptT EpochConError m SerializedBlock
+getEpochBlock :: MonadIO m => FilePath -> FilePath -> LocalSlotIndex -> ExceptT ConsolidateError m SerializedBlock
 getEpochBlock epochPath indexPath lsi = do
     moff <- liftIO $ getEpochBlockOffset indexPath lsi
-    off <- maybe (throwE $ ECBOffsetFail "testEpochData") pure moff
+    off <- maybe (throwE $ CEBOffsetFail "testEpochData") pure moff
     liftIO . withBinaryFile epochPath ReadMode $ \ hdl -> do
         hSeek hdl AbsoluteSeek $ fromIntegral off
         tag <- BS.hGet hdl 4
-        when (tag /= "blck") $
+        when (tag /= "blnd") $
           error . Text.pack $ "getEpochBlock: bad tag " ++ show (tag, lsi, off)
         bslen <- BS.hGet hdl 4
-        len <- unpackInt32 bslen
-        Serialized <$> BS.hGet hdl (fromIntegral len)
+        Serialized <$> BS.hGet hdl (fromIntegral $ unpackWord32 bslen)
 
 
 walkFirstEpoch :: (MonadCatch m, MonadDBRead m, MonadReader NodeDBs m, MonadIO m) => m ()
@@ -172,51 +250,48 @@ reportHash hhash = do
                           Right sid -> getEpochIndex (siEpoch sid) < 2
                           Left _    -> True
 
-data EpochConError
-    = ECFinalBlockNotBoundary !Text
-    | ECExpectedGenesis !Text !HeaderHash
-    | ECExcpectedMain !Text !HeaderHash
-    | ECForwardLink !Text !HeaderHash
-    | ECEoSLookupFailed !Text !HeaderHash
-    | ECBlockLookupFailed !Text !LocalSlotIndex !HeaderHash
-    | ECBOffsetFail !Text
-    | ECBlockMismatch !Text !LocalSlotIndex
+data ConsolidateError
+    = CEFinalBlockNotBoundary !Text
+    | CEExpectedGenesis !Text !HeaderHash
+    | CEExcpectedMain !Text !HeaderHash
+    | CEForwardLink !Text !HeaderHash
+    | CEEoSLookupFailed !Text !HeaderHash
+    | CEBlockLookupFailed !Text !LocalSlotIndex !HeaderHash
+    | CEBOffsetFail !Text
+    | CEBlockMismatch !Text !LocalSlotIndex
+    | CEBBlockNotFound !Text !LocalSlotIndex !HeaderHash
 
-renderEpochConError :: EpochConError -> Text
-renderEpochConError = \case
-    ECFinalBlockNotBoundary fn ->
+renderConsolidateError :: ConsolidateError -> Text
+renderConsolidateError = \case
+    CEFinalBlockNotBoundary fn ->
         fn <> ": Final block is not an epoch boundary block"
-    ECExpectedGenesis fn h ->
+    CEExpectedGenesis fn h ->
         fn <> sformat (": hash " % build % " should be an epoch boundary hash.") h
-    ECExcpectedMain fn h ->
+    CEExcpectedMain fn h ->
         fn <> sformat (": hash " % build % " should be a main block hash.") h
-    ECForwardLink fn h ->
+    CEForwardLink fn h ->
         fn <> sformat (": failed to follow hash " % build) h
-    ECEoSLookupFailed fn h ->
+    CEEoSLookupFailed fn h ->
         fn <> sformat (": EpochOrSlot lookup failed on hash " % build) h
-    ECBlockLookupFailed fn lsi h ->
+    CEBlockLookupFailed fn lsi h ->
         fn <> sformat (": block lookup failed on (" % build % ", " % build % ")") lsi h
-    ECBOffsetFail fn ->
+    CEBOffsetFail fn ->
         fn <> ": Failed to find offset"
-    ECBlockMismatch fn lsi ->
+    CEBlockMismatch fn lsi ->
         fn <> sformat (": block mismatch at index " % build) lsi
+    CEBBlockNotFound fn lsi hh ->
+        fn <> sformat (": block mssing : " % build % " " % build) lsi hh
 
 data SlotIndexHash
     = SlotIndexHash !LocalSlotIndex !HeaderHash
 
 -- Use sized types here because we store these as binary in the
 -- epoch index file.
--- The 'Int32' is the length of the block for the given slot index or
+-- The 'Word32' is the length of the block for the given slot index or
 -- -1 if that slot index is empty.
-data SlotIndexLength = SlotIndexLength
-    { silSlotIndex :: !Word16
-    , silLength    :: !Word32
-    } deriving Eq
-
-data SlotIndexOffset = SlotIndexOffset
-    { sioSlotIndex :: !Word16
-    , sioOffset    :: !Int64
-    }
+data SlotIndexLength
+    = SlotIndexLength !Word16 !Word32
+    deriving Eq
 
 
 -- https://gist.github.com/dcoutts/cbdf941b263687d91a911f79bfbd89a8
@@ -225,95 +300,65 @@ data SlotIndexOffset = SlotIndexOffset
 -- epoch ordered by ascending 'LocalSlotIndex', write out a file containing all
 -- the blocks to a single file specified by 'FilePath' and return a
 -- '[SlotIndexLength]' which is used to write the epoch index file.
-consolidateEpochBlocks :: (MonadReader NodeDBs m, MonadDBRead m, MonadIO m) => FilePath -> [SlotIndexHash] -> m [SlotIndexLength]
-consolidateEpochBlocks fpath xs = do
-    hdl <- liftIO $ openBinaryFile fpath WriteMode
-    liftIO $ BS.hPutStr hdl epochFileHeader
-    ys <- runConduit $ sourceList xs .| consolidate hdl .| consume
-    liftIO $ hClose hdl
-    pure ys
+consolidateEpochBlocks :: (MonadReader NodeDBs m, MonadDBRead m, MonadIO m, MonadMask m) => FilePath -> [SlotIndexHash] -> ExceptT ConsolidateError m [SlotIndexOffset]
+consolidateEpochBlocks fpath xs = ExceptT $ do
+    ys <- bracket
+            (liftIO $ openBinaryFile fpath WriteMode)
+            (liftIO . hClose)
+            (\hdl -> do
+                liftIO $ BS.hPutStr hdl epochFileHeader
+                mapM (consolidate hdl) xs
+                )
+    pure $ case partitionEithers ys of
+            ([], zs) -> Right $ epochIndexToOffset zs
+            (e:_, _) -> Left e
   where
-    consolidate :: (HasConfiguration, MonadDBRead m, MonadReader NodeDBs m, MonadIO m) => Handle -> ConduitT SlotIndexHash SlotIndexLength m ()
-    consolidate hdl =
-        awaitForever $ \(SlotIndexHash lsi hh) -> do
-            mbs <- unSerialized <$$> lift (dbGetSerBlock hh)
-            len <- liftIO $ do
-                case mbs of
-                    Nothing -> do
-                        putStrLn $ sformat ("consolidate: " % build % " " % build) lsi hh
-                        pure 0
-                    Just rbs -> do
-                        let rbsLen = BS.length rbs
-                        blkLen <- packInt32 $ fromIntegral rbsLen
-                        LBS.hPutStr hdl $ LBS.fromChunks ["blck", blkLen, rbs]
-                        pure $ fromIntegral (rbsLen + 8)
-            yield $ SlotIndexLength (getSlotIndex lsi) len
+    consolidate :: (HasConfiguration, MonadDBRead m, MonadReader NodeDBs m, MonadIO m) => Handle -> SlotIndexHash -> m (Either ConsolidateError SlotIndexLength)
+    consolidate hdl  (SlotIndexHash lsi hh) = do
+        mbs <- unSerialized <$$> dbGetSerBlund hh
+        case mbs of
+            Nothing ->
+                pure . Left $ CEBBlockNotFound "consolidateEpochBlocks" lsi hh
+            Just rbs -> do
+                let rbsLen = BS.length rbs
+                liftIO $ do
+                    let blkLen = packWord32 $ fromIntegral rbsLen
+                    LBS.hPutStr hdl $ LBS.fromChunks ["blnd", blkLen, rbs]
+                pure . Right $ SlotIndexLength (getSlotIndex lsi) (fromIntegral $ rbsLen + 8)
 
 
 epochFileHeader :: ByteString
 epochFileHeader = "Epoch data v1\n"
 
-indexFileHeader :: ByteString
-indexFileHeader = "Epoch index v1\n"
+packWord32 :: Word32 -> ByteString
+packWord32 = LBS.toStrict . encode
 
-
-packInt32 :: Int32 -> IO ByteString
-packInt32 i32 =
-    alloc (sizeOf i32) (\p -> poke p i32)
-
-unpackInt32 :: ByteString -> IO Int32
-unpackInt32 bs =
-    withByteArray bs peek
-
-writeEpochIndex :: FilePath -> [SlotIndexLength] -> IO ()
-writeEpochIndex fpath xs =
-    -- TODO: Make this production ready.
-    withFile fpath WriteMode $ \ hdl -> do
-        BS.hPutStr hdl indexFileHeader
-        BS.hPutStrLn hdl $ show (map (\x -> (silSlotIndex x, silLength x)) xs)
-
-readEpochIndex :: FilePath -> IO [SlotIndexLength]
-readEpochIndex fpath =
-    -- TODO: Make this production ready.
-    withFile fpath ReadMode $ \ hdl -> do
-        _ <- BS.hGetLine hdl
-        map (uncurry SlotIndexLength) . Prelude.read . BS.unpack
-            <$> BS.hGetContents hdl
+unpackWord32 :: ByteString -> Word32
+unpackWord32 = decode . LBS.fromStrict
 
 epochIndexToOffset :: [SlotIndexLength] -> [SlotIndexOffset]
 epochIndexToOffset =
     snd . mapAccumL convert (fromIntegral $ BS.length epochFileHeader)
   where
-    convert :: Int64 -> SlotIndexLength -> (Int64, SlotIndexOffset)
+    convert :: Word64 -> SlotIndexLength -> (Word64, SlotIndexOffset)
     convert offset (SlotIndexLength a b) =
         (offset + fromIntegral b, SlotIndexOffset a offset)
 
-readEpochOffsets :: FilePath -> IO [SlotIndexOffset]
-readEpochOffsets fpath =
-    epochIndexToOffset <$> readEpochIndex fpath
-
-findEpochBlockOffset :: LocalSlotIndex -> [SlotIndexOffset] -> Maybe Int64
-findEpochBlockOffset (UnsafeLocalSlotIndex lsi) xs =
-    sioOffset <$> List.find (\x -> sioSlotIndex x == lsi) xs
-
-getEpochBlockOffset :: FilePath -> LocalSlotIndex -> IO (Maybe Int64)
-getEpochBlockOffset fpath lsi =
-    findEpochBlockOffset lsi <$> readEpochOffsets fpath
 
 -- | Given the hash of an epoch boundary block, return a pair of the next
 -- epoch boundary hash and a list of the header hashes of the main blocks
 -- between the two boundary blocks.
-getHeaderHashesForEpoch :: MonadDBRead m => HeaderHash -> ExceptT EpochConError m (HeaderHash, [SlotIndexHash])
+getHeaderHashesForEpoch :: MonadDBRead m => HeaderHash -> ExceptT ConsolidateError m (HeaderHash, [SlotIndexHash])
 getHeaderHashesForEpoch ghash = do
     mbh <- isMainBlockHeader ghash
     when mbh $
-        throwE $ ECExpectedGenesis "getHeaderHashesForEpoch" ghash
+        throwE $ CEExpectedGenesis "getHeaderHashesForEpoch" ghash
     (ng, bhs) <- loop [] ghash
     whenM (isMainBlockHeader ng) $
-        throwE $ ECFinalBlockNotBoundary "getHeaderHashesForEpoch"
+        throwE $ CEFinalBlockNotBoundary "getHeaderHashesForEpoch"
     pure (ng, reverse bhs)
   where
-    loop :: MonadDBRead m => [SlotIndexHash] -> HeaderHash -> ExceptT EpochConError m (HeaderHash, [SlotIndexHash])
+    loop :: MonadDBRead m => [SlotIndexHash] -> HeaderHash -> ExceptT ConsolidateError m (HeaderHash, [SlotIndexHash])
     loop !acc hash = do
         mnext <- resolveForwardLink hash
         next <- maybe (throwE $ errorHash hash) pure mnext
@@ -324,17 +369,17 @@ getHeaderHashesForEpoch ghash = do
                 )
 
     errorHash hash =
-        ECForwardLink "getHeaderHashesForEpoch" hash
+        CEForwardLink "getHeaderHashesForEpoch" hash
 
 
-getLocalSlotIndex :: MonadDBRead m => HeaderHash -> ExceptT EpochConError m LocalSlotIndex
+getLocalSlotIndex :: MonadDBRead m => HeaderHash -> ExceptT ConsolidateError m LocalSlotIndex
 getLocalSlotIndex hash = do
     meos <- getHeaderEpochOrSlot hash
     case meos of
-        Nothing -> throwE $ ECEoSLookupFailed "getLocalSlotIndex" hash
+        Nothing -> throwE $ CEEoSLookupFailed "getLocalSlotIndex" hash
         Just eos ->
             case unEpochOrSlot eos of
-                Left _ -> throwE $ ECExcpectedMain "getLocalSlotIndex" hash
+                Left _ -> throwE $ CEExcpectedMain "getLocalSlotIndex" hash
                 Right sid -> pure $ siSlot sid
 
 isMainBlockHeader :: MonadDBRead m => HeaderHash -> m Bool
@@ -346,6 +391,21 @@ isMainBlockHeader hh =
 getHeaderEpochOrSlot :: MonadDBRead m => HeaderHash -> m (Maybe EpochOrSlot)
 getHeaderEpochOrSlot =
     fmap2 getEpochOrSlot . getHeader
+
+getTipEpoch :: MonadDBRead m => m EpochIndex
+getTipEpoch = do
+    getBlockHeaderEpoch =<< fmap blockHeaderHash getTipHeader
+
+
+getBlockHeaderEpoch :: MonadDBRead m => HeaderHash -> m EpochIndex
+getBlockHeaderEpoch hhash = do
+    meos <- getHeaderEpochOrSlot hhash
+    case meos of
+        Nothing -> error "getBlockHeaderEpoch: Nothing"
+        Just eos ->
+            case unEpochOrSlot eos of
+                Left eid  -> pure eid
+                Right sid -> pure $ siEpoch sid
 
 
 printEpochOrSlot :: MonadIO m => String -> Maybe EpochOrSlot -> m ()
