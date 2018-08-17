@@ -64,7 +64,8 @@ import qualified Hedgehog.Range as Range
 
 import           Pos.Binary.Class (Bi)
 import           Pos.Crypto (PassPhrase)
-import           Pos.Crypto.Configuration (ProtocolMagic (..))
+import           Pos.Crypto.Configuration (ProtocolMagic (..),
+                     RequiresNetworkMagic (..))
 import           Pos.Crypto.Hashing (AbstractHash (..), HashAlgorithm, WithHash,
                      abstractHash, withHash)
 import           Pos.Crypto.HD (HDAddressPayload (..), HDPassphrase (..))
@@ -87,6 +88,10 @@ import           Pos.Crypto.Signing.Redeem (RedeemPublicKey, RedeemSecretKey,
 
 genProtocolMagic :: Gen ProtocolMagic
 genProtocolMagic = ProtocolMagic <$> (Gen.int32 Range.constantBounded)
+                                 <*> genRequiresNetworkMagic
+
+genRequiresNetworkMagic :: Gen RequiresNetworkMagic
+genRequiresNetworkMagic = Gen.element [NMMustBeNothing, NMMustBeJust]
 
 ----------------------------------------------------------------------------
 -- Sign Tag Generator

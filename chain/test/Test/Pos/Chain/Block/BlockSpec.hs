@@ -12,10 +12,10 @@ module Test.Pos.Chain.Block.BlockSpec
 
 import           Universum
 
-import           Serokell.Util (isVerSuccess)
-import           Test.Hspec (Spec, describe, it)
+import           Serokell.Util (VerificationRes (..), isVerSuccess)
+import           Test.Hspec (Spec, describe, it, runIO)
 import           Test.Hspec.QuickCheck (modifyMaxSuccess, prop)
-import           Test.QuickCheck (Property, (===), (==>))
+import           Test.QuickCheck (Property, arbitrary, generate, (===), (==>))
 
 import           Pos.Binary.Class (Bi)
 import           Pos.Chain.Block (BlockHeader (..), BlockSignature (..),
@@ -34,27 +34,35 @@ import           Pos.Core.Configuration (defaultCoreConfiguration,
                      withGenesisSpec)
 import           Pos.Core.Delegation (HeavyDlgIndex (..), LightDlgIndices (..))
 import           Pos.Crypto (ProtocolMagic (..), ProxySecretKey (pskIssuerPk),
-                     SecretKey, SignTag (..), createPsk, proxySign, sign,
-                     toPublic)
+                     RequiresNetworkMagic (..), SecretKey, SignTag (..),
+                     createPsk, proxySign, sign, toPublic)
 
 import           Test.Pos.Chain.Block.Arbitrary as BT
 import           Test.Pos.Crypto.Dummy (dummyProtocolMagic)
 
 -- This tests are quite slow, hence max success is at most 20.
 spec :: Spec
-spec = withGenesisSpec 0 defaultCoreConfiguration id $ \_ ->
-    describe "Block properties" $ modifyMaxSuccess (min 20) $ do
-        describe "mkMainHeader" $ do
-            prop mainHeaderFormationDesc mainHeaderFormation
-        describe "mkGenesisHeader" $ do
-            prop genesisHeaderFormationDesc genesisHeaderFormation
-        describe "verifyHeader" $ do
-            prop verifyHeaderDesc validateGoodMainHeader
-            prop invalidProtocolMagicHeaderDesc
-                 validateBadProtocolMagicMainHeader
-        describe "verifyHeaders" $ modifyMaxSuccess (const 1) $ do
-            prop verifyHeadersDesc validateGoodHeaderChain
-            emptyHeaderChain (NewestFirst [])
+spec = do
+    runWithMagic NMMustBeNothing
+    runWithMagic NMMustBeJust
+
+runWithMagic :: RequiresNetworkMagic -> Spec
+runWithMagic rnm = do
+    let pm = dummyProtocolMagic
+    describe ("(requiresNetworkMagic=" ++ show rnm ++ ")") $
+        withGenesisSpec 0 (defaultCoreConfiguration pm) id $ \_ ->
+            describe "Block properties" $ modifyMaxSuccess (min 20) $ do
+                describe "mkMainHeader" $ do
+                    prop mainHeaderFormationDesc (mainHeaderFormation pm)
+                describe "mkGenesisHeader" $ do
+                    prop genesisHeaderFormationDesc (genesisHeaderFormation pm)
+                describe "verifyHeader" $ do
+                    prop verifyHeaderDesc (validateGoodMainHeader pm)
+                    prop invalidProtocolMagicHeaderDesc
+                         (validateBadProtocolMagicMainHeader pm)
+                describe "verifyHeaders" $ modifyMaxSuccess (const 1) $ do
+                    prop verifyHeadersDesc (validateGoodHeaderChain pm)
+                    emptyHeaderChain pm (NewestFirst [])
   where
     mainHeaderFormationDesc =
         "Manually generating a main header block and using mkMainHeader is the same"
@@ -67,10 +75,11 @@ spec = withGenesisSpec 0 defaultCoreConfiguration id $ \_ ->
         "Successfully verifies a correct chain of block headers"
     verifyEmptyHsDesc = "Successfully validates an empty header chain"
     emptyHeaderChain
-        :: NewestFirst [] BlockHeader
+        :: ProtocolMagic
+        -> NewestFirst [] BlockHeader
         -> Spec
-    emptyHeaderChain l =
-        it verifyEmptyHsDesc $ isVerSuccess $ Block.verifyHeaders dummyProtocolMagic Nothing l
+    emptyHeaderChain pm l =
+        it verifyEmptyHsDesc $ isVerSuccess $ Block.verifyHeaders pm Nothing l
 
 -- | Both of the following tests are boilerplate - they use `mkGenericHeader` to create
 -- headers and then compare these with manually built headers.
@@ -80,19 +89,20 @@ spec = withGenesisSpec 0 defaultCoreConfiguration id $ \_ ->
 
 genesisHeaderFormation
     :: HasConfiguration
-    => Maybe BlockHeader
+    => ProtocolMagic
+    -> Maybe BlockHeader
     -> EpochIndex
     -> GenesisBody
     -> Property
-genesisHeaderFormation prevHeader epoch body = header === manualHeader
+genesisHeaderFormation pm prevHeader epoch body = header === manualHeader
   where
     header = mkGenesisHeader
-        dummyProtocolMagic
+        pm
         (maybe (Left (GenesisHash genesisHash)) Right prevHeader)
         epoch
         body
     manualHeader = UnsafeGenericBlockHeader
-        { _gbhProtocolMagic = dummyProtocolMagic
+        { _gbhProtocolMagic = pm
         , _gbhPrevBlock     = h
         , _gbhBodyProof     = proof
         , _gbhConsensus     = consensus h proof
@@ -108,25 +118,26 @@ genesisHeaderFormation prevHeader epoch body = header === manualHeader
 
 mainHeaderFormation
     :: HasConfiguration
-    => Maybe BlockHeader
+    => ProtocolMagic
+    -> Maybe BlockHeader
     -> SlotId
     -> Either SecretKey (SecretKey, SecretKey, Bool)
     -> MainBody
     -> MainExtraHeaderData
     -> Property
-mainHeaderFormation prevHeader slotId signer body extra =
+mainHeaderFormation pm prevHeader slotId signer body extra =
     correctSigner signer ==> (header === manualHeader)
   where
     correctSigner (Left  _        ) = True
     correctSigner (Right (i, d, _)) = i /= d
-    header = mkGenericHeader @MainBlockchain dummyProtocolMagic
-                                                 prevHash
-                                                 body
-                                                 consensus
-                                                 extra
+    header = mkGenericHeader @MainBlockchain pm
+                                             prevHash
+                                             body
+                                             consensus
+                                             extra
     manualHeader =
         UnsafeGenericBlockHeader
-        { _gbhProtocolMagic = dummyProtocolMagic
+        { _gbhProtocolMagic = pm
         , _gbhPrevBlock = prevHash
         , _gbhBodyProof = proof
         , _gbhConsensus = consensus proof
@@ -139,7 +150,7 @@ mainHeaderFormation prevHeader slotId signer body extra =
         let epoch = siEpoch slotId
             delegatePK = toPublic delegateSK
             curried :: Bi w => w -> ProxySecretKey w
-            curried = createPsk dummyProtocolMagic issuerSK delegatePK
+            curried = createPsk pm issuerSK delegatePK
             proxy =
                 if isSigEpoch
                     then Right $ curried $ HeavyDlgIndex epoch
@@ -147,13 +158,13 @@ mainHeaderFormation prevHeader slotId signer body extra =
         in (delegateSK, Just $ proxy)
     difficulty = maybe 0 (succ . view difficultyL) prevHeader
     makeSignature toSign (Left psk) =
-        BlockPSignatureLight $ proxySign dummyProtocolMagic SignMainBlockLight sk psk toSign
+        BlockPSignatureLight $ proxySign pm SignMainBlockLight sk psk toSign
     makeSignature toSign (Right psk) =
-        BlockPSignatureHeavy $ proxySign dummyProtocolMagic SignMainBlockHeavy sk psk toSign
+        BlockPSignatureHeavy $ proxySign pm SignMainBlockHeavy sk psk toSign
     signature p =
         let toSign = MainToSign prevHash p slotId difficulty extra
         in maybe
-               (BlockSignature (sign dummyProtocolMagic SignMainBlock sk toSign))
+               (BlockSignature (sign pm SignMainBlock sk toSign))
                (makeSignature toSign)
                pSk
     consensus p =
@@ -169,20 +180,20 @@ mainHeaderFormation prevHeader slotId signer body extra =
 -- GenesisBlock ∪ MainBlock
 ----------------------------------------------------------------------------
 
-validateGoodMainHeader :: BT.HeaderAndParams -> Bool
-validateGoodMainHeader (BT.getHAndP -> (params, header)) =
-    isVerSuccess $ Block.verifyHeader dummyProtocolMagic params header
+validateGoodMainHeader :: ProtocolMagic -> BT.HeaderAndParams -> Property
+validateGoodMainHeader pm (BT.getHAndP -> (params, header)) =
+    VerSuccess === Block.verifyHeader pm params header
 
 -- FIXME should sharpen this test to ensure that it fails with the expected
 -- reason.
-validateBadProtocolMagicMainHeader :: BT.HeaderAndParams -> Bool
-validateBadProtocolMagicMainHeader (BT.getHAndP -> (params, header)) =
-    let protocolMagic' = ProtocolMagic (getProtocolMagic dummyProtocolMagic + 1)
+validateBadProtocolMagicMainHeader :: ProtocolMagic -> BT.HeaderAndParams -> Bool
+validateBadProtocolMagicMainHeader pm (BT.getHAndP -> (params, header)) =
+    let protocolMagic' = pm { getProtocolMagic = getProtocolMagic pm + 1 }
         header' = case header of
             BlockHeaderGenesis h -> BlockHeaderGenesis (h { _gbhProtocolMagic = protocolMagic' })
             BlockHeaderMain h    -> BlockHeaderMain    (h { _gbhProtocolMagic = protocolMagic' })
-    in  not $ isVerSuccess $ Block.verifyHeader dummyProtocolMagic params header'
+    in  not $ isVerSuccess $ Block.verifyHeader pm params header'
 
-validateGoodHeaderChain :: BT.BlockHeaderList -> Bool
-validateGoodHeaderChain (BT.BHL (l, _)) =
-    isVerSuccess $ Block.verifyHeaders dummyProtocolMagic Nothing (NewestFirst l)
+validateGoodHeaderChain :: ProtocolMagic -> BT.BlockHeaderList -> Property
+validateGoodHeaderChain pm (BT.BHL (l, _)) =
+    VerSuccess === Block.verifyHeaders pm Nothing (NewestFirst l)

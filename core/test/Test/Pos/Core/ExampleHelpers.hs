@@ -26,6 +26,7 @@ module Test.Pos.Core.ExampleHelpers
         , exampleOpening
         , exampleOpeningsMap
         , exampleProtocolConstants
+        , exampleProtocolMagic
         , exampleProxySKBlockInfo
         , examplePublicKey
         , exampleRedeemPublicKey
@@ -140,17 +141,18 @@ import           Pos.Core.Update (ApplicationName (..), BlockVersion (..),
                      mkUpdateProposalWSign, mkUpdateVoteSafe)
 import           Pos.Crypto (AbstractHash (..), EncShare (..),
                      HDAddressPayload (..), Hash, ProtocolMagic (..),
-                     RedeemPublicKey, RedeemSignature, SafeSigner (..),
-                     Secret (..), SecretKey (..), SecretProof (..),
-                     SignTag (..), VssKeyPair, VssPublicKey (..), abstractHash,
-                     decryptShare, deterministic, deterministicVssKeyGen, hash,
+                     RedeemPublicKey, RedeemSignature,
+                     RequiresNetworkMagic (..), SafeSigner (..), Secret (..),
+                     SecretKey (..), SecretProof (..), SignTag (..),
+                     VssKeyPair, VssPublicKey (..), abstractHash, decryptShare,
+                     deterministic, deterministicVssKeyGen, hash,
                      redeemDeterministicKeyGen, redeemSign, safeCreatePsk,
                      sign, toVssPublicKey)
 import           Pos.Crypto.Signing (ProxyCert (..), ProxySecretKey (..),
                      PublicKey (..))
 
 import           Test.Pos.Core.Gen (genProtocolConstants)
-import           Test.Pos.Crypto.Bi (getBytes)
+import           Test.Pos.Crypto.Bi (exampleProtocolMagic, getBytes)
 import           Test.Pos.Crypto.Gen (genProtocolMagic)
 
 --------------------------------------------------------------------------------
@@ -228,7 +230,7 @@ exampleCommitmentOpening =
 exampleCommitmentSignature :: CommitmentSignature
 exampleCommitmentSignature =
     sign
-      (ProtocolMagic 0)
+      exampleProtocolMagic
       SignForTestingOnly
       exampleSecretKey
       (exampleEpochIndex, exampleCommitment)
@@ -329,7 +331,7 @@ exampleRedeemPublicKey :: RedeemPublicKey
 exampleRedeemPublicKey = fromJust (fst <$> redeemDeterministicKeyGen (getBytes 0 32))
 
 exampleRedeemSignature :: RedeemSignature TxSigData
-exampleRedeemSignature = redeemSign (ProtocolMagic 0) SignForTestingOnly rsk exampleTxSigData
+exampleRedeemSignature = redeemSign exampleProtocolMagic SignForTestingOnly rsk exampleTxSigData
     where
         rsk = fromJust (snd <$> redeemDeterministicKeyGen (getBytes 0 32))
 
@@ -435,7 +437,7 @@ exampleTxProof = TxProof 32 mroot hashWit
     hashWit = hash $ [(V.fromList [(PkWitness examplePublicKey exampleTxSig)])]
 
 exampleTxSig :: TxSig
-exampleTxSig = sign (ProtocolMagic 0) SignForTestingOnly exampleSecretKey exampleTxSigData
+exampleTxSig = sign exampleProtocolMagic SignForTestingOnly exampleSecretKey exampleTxSigData
 
 exampleTxSigData :: TxSigData
 exampleTxSigData = TxSigData exampleHashTx
@@ -474,7 +476,7 @@ exampleUpdateProposalToSign :: UpdateProposalToSign
     ( mkUpdateProposalWSign pm bv bvm sv hm ua ss
     , UpdateProposalToSign bv bvm sv hm ua )
   where
-    pm  = ProtocolMagic 0
+    pm  = exampleProtocolMagic
     bv  = exampleBlockVersion
     bvm = exampleBlockVersionModifier
     sv  = exampleSoftwareVersion
@@ -485,7 +487,7 @@ exampleUpdateProposalToSign :: UpdateProposalToSign
 exampleUpdateVote :: UpdateVote
 exampleUpdateVote = mkUpdateVoteSafe pm ss ui ar
   where
-    pm = ProtocolMagic 0
+    pm = exampleProtocolMagic
     ss = exampleSafeSigner 0
     ui = exampleUpId
     ar = True
@@ -497,7 +499,7 @@ exampleVoteId = (exampleUpId, examplePublicKey, False)
 exampleVssCertificate :: VssCertificate
 exampleVssCertificate =
     mkVssCertificate
-        (ProtocolMagic 0)
+        exampleProtocolMagic
         exampleSecretKey
         (asBinary (toVssPublicKey $ deterministicVssKeyGen ("golden" :: ByteString)))
         (EpochIndex 11)
@@ -507,7 +509,7 @@ exampleVssCertificates offset num =  map vssCert [0..num-1]
     where
         secretKeyList = (exampleSecretKeys offset num)
         vssCert index = mkVssCertificate
-                           (ProtocolMagic 0)
+                           exampleProtocolMagic
                            (secretKeyList !! index)
                            (asBinary (toVssPublicKey $ deterministicVssKeyGen (getBytes index 128)))
                            (EpochIndex 122)
@@ -525,7 +527,7 @@ staticHeavyDlgIndexes :: [HeavyDlgIndex]
 staticHeavyDlgIndexes = map (HeavyDlgIndex . EpochIndex) [5,1,3,27,99,247]
 
 staticProtocolMagics :: [ProtocolMagic]
-staticProtocolMagics = map ProtocolMagic [0..5]
+staticProtocolMagics = zipWith ProtocolMagic [0..5] (cycle [NMMustBeJust, NMMustBeNothing])
 
 staticProxySKHeavys :: [ProxySKHeavy]
 staticProxySKHeavys = zipWith4 safeCreatePsk
@@ -689,7 +691,8 @@ exampleGenesisDelegation = UnsafeGenesisDelegation (HM.fromList
 exampleProtocolConstants :: GenesisProtocolConstants
 exampleProtocolConstants = GenesisProtocolConstants
     { gpcK = 37
-    , gpcProtocolMagic = ProtocolMagic {getProtocolMagic = 1783847074}
+    , gpcProtocolMagic = ProtocolMagic { getProtocolMagic = 1783847074
+                                       , getRequiresNetworkMagic = NMMustBeNothing }
     , gpcVssMaxTTL = VssMaxTTL {getVssMaxTTL = 1477558317}
     , gpcVssMinTTL = VssMinTTL {getVssMinTTL = 744040476}}
 

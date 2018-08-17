@@ -562,7 +562,9 @@ instance Arbitrary ProtocolConstants where
         ProtocolConstants <$> choose (1, 20000) <*> pure vssMin <*> pure vssMax
 
 instance Arbitrary G.GenesisProtocolConstants where
-    arbitrary = flip G.genesisProtocolConstantsFromProtocolConstants dummyProtocolMagic <$> arbitrary
+    arbitrary = flip G.genesisProtocolConstantsFromProtocolConstants
+                     dummyProtocolMagic
+                 <$> arbitrary
 
 instance Arbitrary G.GenesisData where
     arbitrary = G.GenesisData

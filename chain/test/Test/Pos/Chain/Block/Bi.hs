@@ -20,8 +20,8 @@ import           Pos.Core (EpochIndex (..), ProtocolMagic (..))
 import           Pos.Core.Attributes (mkAttributes)
 import           Pos.Core.Configuration (GenesisHash (..))
 import           Pos.Core.Delegation (DlgPayload (..))
-import           Pos.Crypto (Hash, SignTag (..), abstractHash, createPsk, hash,
-                     proxySign, sign, toPublic)
+import           Pos.Crypto (Hash, RequiresNetworkMagic (..), SignTag (..),
+                     abstractHash, createPsk, hash, proxySign, sign, toPublic)
 
 import           Test.Pos.Binary.Helpers.GoldenRoundTrip (goldenTestBi,
                      roundTripsBiBuildable, roundTripsBiShow)
@@ -221,13 +221,13 @@ exampleBlockHeaderGenesis = (BlockHeaderGenesis exampleGenesisBlockHeader)
 
 exampleBlockHeaderMain :: MainBlockHeader
 exampleBlockHeaderMain =
-  mkMainHeaderExplicit (ProtocolMagic 0) exampleHeaderHash
+  mkMainHeaderExplicit (ProtocolMagic 0 NMUndefined) exampleHeaderHash
                        exampleChainDifficulty exampleSlotId
                        exampleSecretKey Nothing
                        exampleMainBody exampleMainExtraHeaderData
 
 exampleBlockSignature :: BlockSignature
-exampleBlockSignature = BlockSignature (sign (ProtocolMagic 7)
+exampleBlockSignature = BlockSignature (sign (ProtocolMagic 7 NMUndefined)
                                               SignMainBlock
                                               exampleSecretKey
                                               exampleMainToSign)
@@ -238,7 +238,7 @@ exampleBlockPSignatureLight = BlockPSignatureLight sig
     sig = proxySign pm SignProxySK delegateSk psk exampleMainToSign
     [delegateSk, issuerSk] = exampleSecretKeys 5 2
     psk = createPsk pm issuerSk (toPublic delegateSk) exampleLightDlgIndices
-    pm = ProtocolMagic 2
+    pm = ProtocolMagic 2 NMUndefined
 
 exampleBlockPSignatureHeavy :: BlockSignature
 exampleBlockPSignatureHeavy = BlockPSignatureHeavy sig
@@ -246,7 +246,7 @@ exampleBlockPSignatureHeavy = BlockPSignatureHeavy sig
     sig = proxySign pm SignProxySK delegateSk psk exampleMainToSign
     [delegateSk, issuerSk] = exampleSecretKeys 5 2
     psk = createPsk pm issuerSk (toPublic delegateSk) (staticHeavyDlgIndexes !! 0)
-    pm = ProtocolMagic 2
+    pm = ProtocolMagic 2 NMUndefined
 
 exampleMainConsensusData :: MainConsensusData
 exampleMainConsensusData = MainConsensusData exampleSlotId
@@ -262,7 +262,7 @@ exampleMainExtraHeaderData =
                         (abstractHash (MainExtraBodyData (mkAttributes ())))
 
 exampleGenesisBlockHeader :: GenesisBlockHeader
-exampleGenesisBlockHeader = mkGenesisHeader (ProtocolMagic 0)
+exampleGenesisBlockHeader = mkGenesisHeader (ProtocolMagic 0 NMUndefined)
                                             (Left (GenesisHash prevHash))
                                             (EpochIndex 11)
                                             exampleGenesisBody
@@ -272,7 +272,7 @@ exampleGenesisBlockHeader = mkGenesisHeader (ProtocolMagic 0)
 -- We use `Nothing` as the ProxySKBlockInfo to avoid clashing key errors
 -- (since we use example keys which aren't related to each other)
 exampleMainBlockHeader :: MainBlockHeader
-exampleMainBlockHeader = mkMainHeaderExplicit (ProtocolMagic 7)
+exampleMainBlockHeader = mkMainHeaderExplicit (ProtocolMagic 7 NMUndefined)
                                               exampleHeaderHash
                                               exampleChainDifficulty
                                               exampleSlotId

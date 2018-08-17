@@ -5,6 +5,7 @@ module Pos.Logic.Pure
     , blockVersionData
     ) where
 
+import qualified Prelude as P
 import           Universum
 
 import qualified Data.ByteString as BS
@@ -249,7 +250,8 @@ blockSignature :: BlockSignature
 blockSignature = BlockSignature (coerce (signRaw protocolMagic Nothing secretKey mempty))
 
 protocolMagic :: ProtocolMagic
-protocolMagic = ProtocolMagic 0
+protocolMagic = ProtocolMagic 0 (P.error "ProtocolMagic in blocks has \
+                                         \no `requiresNetworkMagic`")
 
 extraHeaderData :: ExtraHeaderData MainBlockchain
 extraHeaderData = MainExtraHeaderData

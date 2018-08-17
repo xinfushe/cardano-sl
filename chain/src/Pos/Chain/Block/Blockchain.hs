@@ -40,7 +40,7 @@ import           Data.SafeCopy (SafeCopy (..), contain, safeGet, safePut)
 import           Formatting (build, sformat, (%))
 
 import           Pos.Binary.Class (Bi (..), encodeListLen, enforceSize)
-import           Pos.Crypto (ProtocolMagic (..))
+import           Pos.Crypto (ProtocolMagic (..), RequiresNetworkMagic (..))
 
 ----------------------------------------------------------------------------
 -- Blockchain class
@@ -138,7 +138,9 @@ instance ( Typeable b
               <> encode (_gbhExtra bh)
     decode = do
         enforceSize "GenericBlockHeader b" 5
-        _gbhProtocolMagic <- ProtocolMagic <$> decode
+        _gbhProtocolMagic <-
+            ProtocolMagic <$> decode
+                          <*> pure NMUndefined
         _gbhPrevBlock <- decode
         _gbhBodyProof <- decode
         _gbhConsensus <- decode

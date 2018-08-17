@@ -12,8 +12,8 @@ module Test.Pos.Core.CborSpec
 
 import           Universum
 
-import           Test.Hspec (Spec, describe)
-import           Test.QuickCheck (Arbitrary (..))
+import           Test.Hspec (Spec, describe, runIO)
+import           Test.QuickCheck (Arbitrary (..), generate)
 import           Test.QuickCheck.Arbitrary.Generic (genericArbitrary,
                      genericShrink)
 
@@ -83,40 +83,48 @@ instance Bi (Attributes X2) where
 
 
 spec :: Spec
-spec = withGenesisSpec 0 defaultCoreConfiguration id $ \_ ->
-    describe "Cbor Bi instances" $ do
-        describe "Core.Address" $ do
-            binaryTest @Address
-            binaryTest @Address'
-            binaryTest @AddrType
-            binaryTest @AddrStakeDistribution
-            binaryTest @AddrSpendingData
-        describe "Core.Types" $ do
-            binaryTest @Timestamp
-            binaryTest @TimeDiff
-            binaryTest @EpochIndex
-            binaryTest @Coin
-            binaryTest @CoinPortion
-            binaryTest @LocalSlotIndex
-            binaryTest @SlotId
-            binaryTest @EpochOrSlot
-            binaryTest @SharedSeed
-            binaryTest @ChainDifficulty
-            binaryTest @SoftforkRule
-            binaryTest @BlockVersionData
-            binaryTest @(Attributes ())
-            binaryTest @(Attributes AddrAttributes)
-        describe "Core.Fee" $ do
-            binaryTest @Coeff
-            binaryTest @TxSizeLinear
-            binaryTest @TxFeePolicy
-        describe "Core.Script" $ do
-            binaryTest @Script
-        describe "Core.Vss" $ do
-            binaryTest @VssCertificate
-        describe "Core.Version" $ do
-            binaryTest @ApplicationName
-            binaryTest @SoftwareVersion
-            binaryTest @BlockVersion
-        describe "Merkle" $ do
-            binaryTest @(MerkleTree Int32)
+spec = do
+    runWithMagic NMMustBeNothing
+    runWithMagic NMMustBeJust
+
+runWithMagic :: RequiresNetworkMagic -> Spec
+runWithMagic rnm = do
+    pm <- (\ident -> ProtocolMagic ident rnm) <$> runIO (generate arbitrary)
+    describe ("(requiresNetworkMagic=" ++ show rnm ++ ")") $
+        withGenesisSpec 0 (defaultCoreConfiguration pm) id $ \_ ->
+            describe "Cbor Bi instances" $ do
+                describe "Core.Address" $ do
+                    binaryTest @Address
+                    binaryTest @Address'
+                    binaryTest @AddrType
+                    binaryTest @AddrStakeDistribution
+                    binaryTest @AddrSpendingData
+                describe "Core.Types" $ do
+                    binaryTest @Timestamp
+                    binaryTest @TimeDiff
+                    binaryTest @EpochIndex
+                    binaryTest @Coin
+                    binaryTest @CoinPortion
+                    binaryTest @LocalSlotIndex
+                    binaryTest @SlotId
+                    binaryTest @EpochOrSlot
+                    binaryTest @SharedSeed
+                    binaryTest @ChainDifficulty
+                    binaryTest @SoftforkRule
+                    binaryTest @BlockVersionData
+                    binaryTest @(Attributes ())
+                    binaryTest @(Attributes AddrAttributes)
+                describe "Core.Fee" $ do
+                    binaryTest @Coeff
+                    binaryTest @TxSizeLinear
+                    binaryTest @TxFeePolicy
+                describe "Core.Script" $ do
+                    binaryTest @Script
+                describe "Core.Vss" $ do
+                    binaryTest @VssCertificate
+                describe "Core.Version" $ do
+                    binaryTest @ApplicationName
+                    binaryTest @SoftwareVersion
+                    binaryTest @BlockVersion
+                describe "Merkle" $ do
+                    binaryTest @(MerkleTree Int32)

@@ -35,9 +35,9 @@ import           Pos.Core.Ssc (SscPayload (..), SscProof (..))
 import           Pos.Core.Txp (Tx (..), TxAux (..), TxIn (..), TxInWitness (..),
                      TxOut (..), TxOutAux (..), TxSigData (..))
 import           Pos.Core.Update (ApplicationName (..), SoftforkRule (..))
-import           Pos.Crypto (AbstractHash (..), Hash, ProtocolMagic (..),
-                     PublicKey (..), SignTag (..), Signature, abstractHash,
-                     hash, redeemDeterministicKeyGen, sign)
+import           Pos.Crypto (AbstractHash (..), Hash, PublicKey (..),
+                     SignTag (..), Signature, abstractHash, hash,
+                     redeemDeterministicKeyGen, sign)
 
 
 import           Test.Pos.Binary.Helpers (SizeTestConfig (..), scfg, sizeTest)
@@ -69,7 +69,7 @@ import           Test.Pos.Core.ExampleHelpers (exampleAddrSpendingData_PubKey,
                      feedEpochSlots, feedPM, staticHeavyDlgIndexes,
                      staticProxySKHeavys)
 import           Test.Pos.Core.Gen
-import           Test.Pos.Crypto.Bi (getBytes)
+import           Test.Pos.Crypto.Bi (exampleProtocolMagic, getBytes)
 import           Test.Pos.Util.Golden (discoverGolden, eachOf)
 import           Test.Pos.Util.Tripping (discoverRoundTrip)
 
@@ -897,7 +897,7 @@ roundTripTxProof = eachOf 50 (feedPM genTxProof) roundTripsBiBuildable
 golden_TxSig :: Property
 golden_TxSig = goldenTestBi txSigGold "test/golden/TxSig"
     where
-        txSigGold = sign (ProtocolMagic 0) SignForTestingOnly
+        txSigGold = sign (exampleProtocolMagic) SignForTestingOnly
                          exampleSecretKey exampleTxSigData
 
 roundTripTxSig :: Property
@@ -1068,7 +1068,7 @@ sizeEstimates :: H.Group
 sizeEstimates =
   let check :: forall a. (Show a, Bi a) => Gen a -> Property
       check g = sizeTest $ scfg { gen = g }
-      pm = ProtocolMagic 0
+      pm = exampleProtocolMagic
       knownTxIn (TxInUnknown _ _) = False
       knownTxIn _                 = True
       pkOrRedeem (PubKeyASD _) = True
