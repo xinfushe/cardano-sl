@@ -113,7 +113,8 @@ import           Pos.Core.Delegation (HeavyDlgIndex (..), LightDlgIndices (..),
 import           Pos.Core.Genesis (FakeAvvmOptions (..),
                      GenesisAvvmBalances (..), GenesisDelegation (..),
                      GenesisInitializer (..), GenesisProtocolConstants (..),
-                     GenesisSpec (..), TestnetBalanceOptions (..))
+                     GenesisSpec (..), RequiresNetworkMagic (..),
+                     TestnetBalanceOptions (..))
 import           Pos.Core.Merkle (mkMerkleTree, mtRoot)
 import           Pos.Core.ProtocolConstants (ProtocolConstants, VssMaxTTL (..),
                      VssMinTTL (..))
@@ -680,7 +681,9 @@ exampleProtocolConstants = GenesisProtocolConstants
     { gpcK = 37
     , gpcProtocolMagic = ProtocolMagic {getProtocolMagic = 1783847074}
     , gpcVssMaxTTL = VssMaxTTL {getVssMaxTTL = 1477558317}
-    , gpcVssMinTTL = VssMinTTL {getVssMinTTL = 744040476}}
+    , gpcVssMinTTL = VssMinTTL {getVssMinTTL = 744040476}
+    , gpcRequiresNetworkMagic = NMMustBeNothing
+    }
 
 exampleGenesisInitializer :: GenesisInitializer
 exampleGenesisInitializer = GenesisInitializer

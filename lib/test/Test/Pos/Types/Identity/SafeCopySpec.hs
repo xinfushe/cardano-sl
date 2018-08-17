@@ -18,7 +18,7 @@ import           Test.Pos.Core.Arbitrary.Txp ()
 import           Test.Pos.Infra.Arbitrary.Txp ()
 
 spec :: Spec
-spec = withDefConfiguration $ \_ -> describe "Types" $ do
+spec = withDefConfiguration $ \_ _nm -> describe "Types" $ do
     describe "SafeCopy instances" $ do
         safeCopyTest @Core.EpochIndex
         safeCopyTest @Core.LocalSlotIndex

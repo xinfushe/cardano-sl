@@ -417,7 +417,7 @@ genMaxInputTx estimator = do
     -- Now build the transaction, attempting to make the encoded size of the transaction
     -- as large as possible.
     bimap pretty ((,maxTxSize) . encodedSize) <$> (
-        withDefConfiguration $ \pm -> do
+        withDefConfiguration $ \pm _nm -> do
             key    <- arbitrary
             inputs <- replicateM maxInputs ((,) <$> genIn <*> genOutAux)
             mkTx pm key (NE.fromList inputs) (NE.fromList [output]) [])
@@ -488,7 +488,7 @@ payRestrictInputsTo :: Word64
                     -> Policy
                     -> Gen RunResult
 payRestrictInputsTo maxInputs genU genP feeFunction adjustOptions bal amount policy =
-    withDefConfiguration $ \pm -> do
+    withDefConfiguration $ \pm _nm -> do
         utxo  <- genU bal
         payee <- genP utxo amount
         key   <- arbitrary

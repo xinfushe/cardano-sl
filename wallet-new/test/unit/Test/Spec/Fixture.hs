@@ -67,7 +67,7 @@ withActiveWalletFixture prepareFixtures cc = do
     generateFixtures <- prepareFixtures
     liftIO $ Keystore.bracketTestKeystore $ \keystore -> do
         WalletLayer.Kernel.bracketPassiveWallet devNull keystore mockNodeStateDef $ \passiveLayer passiveWallet -> do
-            withDefConfiguration $ \pm -> do
+            withDefConfiguration $ \pm _nm -> do
                 WalletLayer.Kernel.bracketActiveWallet pm passiveLayer passiveWallet diffusion $ \activeLayer activeWallet -> do
                     fixtures <- generateFixtures keystore activeWallet
                     cc keystore activeLayer activeWallet fixtures

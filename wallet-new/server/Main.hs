@@ -172,7 +172,7 @@ startEdgeNode :: HasCompileInfo
               => WalletStartupOptions
               -> IO ()
 startEdgeNode wso =
-  withConfigurations blPath conf $ \pm txpConfig ntpConfig -> do
+  withConfigurations blPath conf $ \pm _nm txpConfig ntpConfig -> do
       (sscParams, nodeParams) <- getParameters txpConfig ntpConfig
       case wsoWalletBackendParams wso of
         WalletLegacy legacyParams ->

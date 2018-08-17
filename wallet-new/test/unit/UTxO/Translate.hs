@@ -102,7 +102,7 @@ instance Monad m => MonadGState (TranslateT e m) where
 -- pure exceptions.
 runTranslateT :: Monad m => Exception e => TranslateT e m a -> m a
 runTranslateT (TranslateT ta) =
-    withDefConfiguration $ \pm ->
+    withDefConfiguration $ \pm _nm ->
     withDefUpdateConfiguration $
       let env :: TranslateEnv
           env = TranslateEnv {

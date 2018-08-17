@@ -38,7 +38,8 @@ import           Pos.Core.Common (Coeff (..), SharedSeed (..), TxFeePolicy (..),
 import           Pos.Core.Genesis (FakeAvvmOptions (..),
                      GenesisAvvmBalances (..), GenesisInitializer (..),
                      GenesisProtocolConstants (..), GenesisSpec (..),
-                     TestnetBalanceOptions (..), noGenesisDelegation)
+                     RequiresNetworkMagic (..), TestnetBalanceOptions (..),
+                     noGenesisDelegation)
 import           Pos.Core.ProtocolConstants (VssMaxTTL (..), VssMinTTL (..))
 import           Pos.Core.Slotting (EpochIndex (..))
 import           Pos.Core.Update (BlockVersionData (..), SoftforkRule (..))
@@ -162,6 +163,9 @@ defaultGenesisSpec = UnsafeGenesisSpec
                             (ProtocolMagic 55550001)
                             (VssMaxTTL 6)
                             (VssMinTTL 2)
+                            -- TODO mhueschen : should this be threaded in?
+                            -- we might want to test both cases.
+                            NMMustBeJust
   )
   (GenesisInitializer (TestnetBalanceOptions 12 4 6e17 0.99 True)
                       (FakeAvvmOptions 10 100000)

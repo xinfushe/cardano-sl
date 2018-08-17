@@ -18,7 +18,7 @@ import           Test.Pos.Core.Arbitrary ()
 import           Test.Pos.Helpers (canonicalJsonTest)
 
 spec :: Spec
-spec = withDefConfiguration $ \_ -> describe "Genesis" $ modifyMaxSuccess (const 10) $ do
+spec = withDefConfiguration $ \_ _nm -> describe "Genesis" $ modifyMaxSuccess (const 10) $ do
     describe "Canonical encoding" $ do
         canonicalJsonTest @GenesisProtocolConstants
         canonicalJsonTest @GenesisAvvmBalances

@@ -37,6 +37,7 @@ import           System.Wlog (LoggerName, WithLogger, askLoggerName, logInfo,
 import           Ntp.Client (NtpConfiguration)
 
 import           Pos.Core (Address, decodeTextAddress)
+import           Pos.Core.Configuration (NetworkMagic)
 import           Pos.Core.Genesis (GenesisData)
 import           Pos.Core.Slotting (Timestamp (..))
 import           Pos.Util.Config (parseYamlConfig)
@@ -47,7 +48,6 @@ import           Pos.Chain.Ssc hiding (filter)
 import           Pos.Chain.Txp
 import           Pos.Chain.Update
 import           Pos.Configuration
-import           Pos.Core.Configuration
 
 -- | Product of all configurations required to run a node.
 data Configuration = Configuration
@@ -119,7 +119,8 @@ withConfigurationsM
     -> (GenesisData -> GenesisData)
     -- ^ change genesis data; this is useful if some parameters are passed as
     -- comand line arguments for some tools (profiling executables, benchmarks).
-    -> (HasConfigurations => ProtocolMagic -> TxpConfiguration -> NtpConfiguration -> m r)
+    -> (HasConfigurations => ProtocolMagic -> NetworkMagic
+        -> TxpConfiguration -> NtpConfiguration -> m r)
     -> m r
 withConfigurationsM logName mAssetLockPath cfo fn act = do
     logInfo' ("using configurations: " <> show cfo)
@@ -133,7 +134,8 @@ withConfigurationsM logName mAssetLockPath cfo fn act = do
         withSscConfiguration (ccSsc cfg) $
         withDlgConfiguration (ccDlg cfg) $
         withBlockConfiguration (ccBlock cfg) $
-        withNodeConfiguration (ccNode cfg) $ \ pm -> act pm (addAssetLock assetLock $ ccTxp cfg) (ccNtp cfg)
+        withNodeConfiguration (ccNode cfg) $ \ pm nm ->
+            act pm nm (addAssetLock assetLock $ ccTxp cfg) (ccNtp cfg)
 
     where
     logInfo' :: Text -> m ()
@@ -143,7 +145,8 @@ withConfigurations
     :: (WithLogger m, MonadThrow m, MonadIO m)
     => Maybe AssetLockPath
     -> ConfigurationOptions
-    -> (HasConfigurations => ProtocolMagic -> TxpConfiguration -> NtpConfiguration -> m r)
+    -> (HasConfigurations => ProtocolMagic -> NetworkMagic
+        -> TxpConfiguration -> NtpConfiguration -> m r)
     -> m r
 withConfigurations mAssetLockPath cfo act = do
     loggerName <- askLoggerName

@@ -221,7 +221,7 @@ bracketPassiveWallet postHook = do
 -- | Initialize active wallet in a manner suitable for generator-based testing
 bracketActiveWallet :: (Kernel.ActiveWallet -> IO a) -> IO a
 bracketActiveWallet test =
-    withDefConfiguration $ \pm -> do
+    withDefConfiguration $ \pm _nm -> do
         bracketPassiveWallet $ \passive ->
           Kernel.bracketActiveWallet pm passive diffusion $ \active ->
             test active

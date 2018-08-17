@@ -37,7 +37,7 @@ import           Pos.Chain.Update (HasUpdateConfiguration,
 import           Pos.Configuration (HasNodeConfiguration, withNodeConfiguration)
 import           Pos.Core (HasConfiguration, withGenesisSpec)
 import           Pos.Core.Configuration (CoreConfiguration (..),
-                     GenesisConfiguration (..))
+                     GenesisConfiguration (..), NetworkMagic)
 import           Pos.Core.Genesis (GenesisSpec (..))
 import           Pos.Core.Update (BlockVersionData)
 import           Pos.Crypto (ProtocolMagic)
@@ -91,7 +91,7 @@ withDefBlockConfiguration = withBlockConfiguration (ccBlock defaultTestConf)
 withDefDlgConfiguration :: (HasDlgConfiguration => r) -> r
 withDefDlgConfiguration = withDlgConfiguration (ccDlg defaultTestConf)
 
-withDefConfiguration :: (HasConfiguration => ProtocolMagic -> r) -> r
+withDefConfiguration :: (HasConfiguration => ProtocolMagic -> NetworkMagic -> r) -> r
 withDefConfiguration = withGenesisSpec 0 (ccCore defaultTestConf) id
 
 withStaticConfigurations :: (HasStaticConfigurations => TxpConfiguration -> NtpConfiguration -> r) -> r
@@ -104,6 +104,6 @@ withStaticConfigurations patak =
     withDefNtpConfiguration (patak $ TxpConfiguration 200 Set.empty)
 
 withDefConfigurations
-    :: (HasConfigurations => ProtocolMagic -> TxpConfiguration -> NtpConfiguration -> r) -> r
+    :: (HasConfigurations => ProtocolMagic -> NetworkMagic -> TxpConfiguration -> NtpConfiguration -> r) -> r
 withDefConfigurations bardaq =
-    withDefConfiguration $ \pm -> withStaticConfigurations (bardaq pm)
+    withDefConfiguration $ \pm nm -> withStaticConfigurations (bardaq pm nm)

@@ -9,11 +9,14 @@ module Pos.Core.Configuration
        , canonicalGenesisJson
        , prettyGenesisJson
 
+       , NetworkMagic (..)
+
        , module E
        ) where
 
 import           Universum
 
+import           Data.Bits (shift)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BSL
 import           System.FilePath ((</>))
@@ -28,7 +31,7 @@ import           Pos.Core.Configuration.GenesisHash as E
 import           Pos.Core.Configuration.Protocol as E
 import           Pos.Core.Genesis (GenesisData (..), GenesisDelegation,
                      GenesisInitializer (..), GenesisProtocolConstants (..),
-                     GenesisSpec (..),
+                     GenesisSpec (..), RequiresNetworkMagic (..),
                      genesisProtocolConstantsToProtocolConstants,
                      mkGenesisDelegation)
 import           Pos.Core.Genesis.Canonical (SchemaError)
@@ -89,7 +92,7 @@ withCoreConfigurations
     -> Maybe Integer
     -- ^ Optional seed which overrides one from testnet initializer if
     -- provided.
-    -> (HasConfiguration => ProtocolMagic -> m r)
+    -> (HasConfiguration => ProtocolMagic -> NetworkMagic -> m r)
     -> m r
 withCoreConfigurations conf@CoreConfiguration{..} fn confDir mSystemStart mSeed act = case ccGenesis of
     -- If a 'GenesisData' source file is given, we check its hash against the
@@ -111,8 +114,11 @@ withCoreConfigurations conf@CoreConfiguration{..} fn confDir mSystemStart mSeed 
             Right it -> return $ fn it
 
         let (_, theGenesisHash) = canonicalGenesisJson theGenesisData
-            pc = genesisProtocolConstantsToProtocolConstants (gdProtocolConsts theGenesisData)
-            pm = gpcProtocolMagic (gdProtocolConsts theGenesisData)
+            gProtocolConstants = gdProtocolConsts theGenesisData
+            pc = genesisProtocolConstantsToProtocolConstants gProtocolConstants
+            pm = gpcProtocolMagic gProtocolConstants
+            nm = makeNetworkMagic (gpcRequiresNetworkMagic gProtocolConstants)
+                                  pm
         when (theGenesisHash /= expectedHash) $
             throwM $ GenesisHashMismatch
                      (show theGenesisHash) (show expectedHash)
@@ -123,7 +129,7 @@ withCoreConfigurations conf@CoreConfiguration{..} fn confDir mSystemStart mSeed 
             withGenesisData theGenesisData $
             withGenesisHash theGenesisHash $
             withGeneratedSecrets Nothing $
-            act pm
+            act pm nm
 
     -- If a 'GenesisSpec' is given, we ensure we have a start time (needed if
     -- it's a testnet initializer) and then make a 'GenesisData' from it.
@@ -152,7 +158,7 @@ withGenesisSpec
     :: Timestamp
     -> CoreConfiguration
     -> (GenesisData -> GenesisData)
-    -> (HasConfiguration => ProtocolMagic -> r)
+    -> (HasConfiguration => ProtocolMagic -> NetworkMagic -> r)
     -> r
 withGenesisSpec theSystemStart conf@CoreConfiguration{..} fn val = case ccGenesis of
     GCSrc {} -> error "withGenesisSpec called with GCSrc"
@@ -189,10 +195,30 @@ withGenesisSpec theSystemStart conf@CoreConfiguration{..} fn val = case ccGenesi
              in withCoreConfiguration conf $
                   withGenesisHash theGenesisHash $
                   withGeneratedSecrets (Just ggdSecrets) $
-                  withGenesisData theGenesisData $ val pm
+                  withGenesisData theGenesisData $ val pm nm
       where
-        pm = gpcProtocolMagic (gsProtocolConstants spec)
-        pc = genesisProtocolConstantsToProtocolConstants (gsProtocolConstants spec)
+        gProtocolConstants = gsProtocolConstants spec
+        pm = gpcProtocolMagic gProtocolConstants
+        pc = genesisProtocolConstantsToProtocolConstants gProtocolConstants
+        nm = makeNetworkMagic (gpcRequiresNetworkMagic gProtocolConstants)
+                              pm
+
+data NetworkMagic
+    = NMNothing
+    | NMJust !Word8
+    deriving (Show, Eq)
+
+makeNetworkMagic :: RequiresNetworkMagic -> ProtocolMagic -> NetworkMagic
+makeNetworkMagic rnm pm = case rnm of
+    NMMustBeNothing -> NMNothing
+    NMMustBeJust    -> NMJust (convert (fromIntegral (getProtocolMagic pm)))
+  where
+    convert :: Word32 -> Word8
+    convert w = let b1 = fromIntegral $ shift        w     (-24)
+                    b2 = fromIntegral $ shift (shift w  8) (-24)
+                    b3 = fromIntegral $ shift (shift w 16) (-24)
+                    b4 = fromIntegral $ shift (shift w 24) (-24)
+                 in b1 + b2 + b3 + b4
 
 data ConfigurationError =
       -- | A system start time must be given when a testnet genesis is used.

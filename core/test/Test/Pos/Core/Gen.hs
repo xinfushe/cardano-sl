@@ -166,8 +166,9 @@ import           Pos.Core.Delegation (DlgPayload (..), HeavyDlgIndex (..),
 import           Pos.Core.Genesis (FakeAvvmOptions (..),
                      GenesisAvvmBalances (..), GenesisDelegation (..),
                      GenesisInitializer (..), GenesisProtocolConstants (..),
-                     GenesisSpec (..), TestnetBalanceOptions (..),
-                     mkGenesisDelegation, mkGenesisSpec)
+                     GenesisSpec (..), RequiresNetworkMagic (..),
+                     TestnetBalanceOptions (..), mkGenesisDelegation,
+                     mkGenesisSpec)
 import           Pos.Core.JsonLog.LogEvents (InvReqDataFlowLog (..))
 import           Pos.Core.Merkle (MerkleRoot (..), MerkleTree (..),
                      mkMerkleTree, mtRoot)
@@ -430,6 +431,10 @@ genGenesisProtocolConstants =
         <*> genProtocolMagic
         <*> genVssMaxTTL
         <*> genVssMinTTL
+        <*> genRequiresNetworkMagic
+
+genRequiresNetworkMagic :: Gen RequiresNetworkMagic
+genRequiresNetworkMagic = Gen.element [NMMustBeNothing, NMMustBeJust]
 
 genGenesisSpec :: ProtocolMagic -> Gen GenesisSpec
 genGenesisSpec pm = mkGenSpec >>=  either (error . toText) pure

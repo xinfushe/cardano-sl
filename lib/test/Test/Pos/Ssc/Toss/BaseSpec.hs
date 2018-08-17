@@ -48,7 +48,7 @@ import           Test.Pos.Configuration (withDefConfiguration)
 import           Test.Pos.Crypto.Dummy (dummyProtocolMagic)
 
 spec :: Spec
-spec = withDefConfiguration $ \_ -> describe "Ssc.Base" $ do
+spec = withDefConfiguration $ \_ _nm -> describe "Ssc.Base" $ do
     describe "verifyCommitment" $ do
         prop description_verifiesOkComm verifiesOkComm
     describe "verifyCommitmentSignature" $ do

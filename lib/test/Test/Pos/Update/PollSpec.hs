@@ -33,7 +33,7 @@ import           Test.Pos.DB.Update.Arbitrary ()
 import           Test.Pos.Util.QuickCheck.Property (formsMonoid)
 
 spec :: Spec
-spec = withDefConfiguration $ \_ -> describe "Poll" $ do
+spec = withDefConfiguration $ \_ _nm -> describe "Poll" $ do
     let smaller n = modifyMaxSuccess (const n)
     describe "modifyPollModifier" $ smaller 30 $ do
         prop

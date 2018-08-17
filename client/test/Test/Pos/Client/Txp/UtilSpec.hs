@@ -49,7 +49,7 @@ import           Test.Pos.Util.QuickCheck.Property (stopProperty)
 ----------------------------------------------------------------------------
 
 spec :: Spec
-spec = withDefConfigurations $ \_ _ _ ->
+spec = withDefConfigurations $ \_ _nm _ _ ->
     describe "Client.Txp.Util" $ do
         describe "createMTx" $ createMTxSpec
 

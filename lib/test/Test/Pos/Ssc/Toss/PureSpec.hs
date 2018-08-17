@@ -26,7 +26,7 @@ import           Test.Pos.Core.Arbitrary ()
 import           Test.Pos.Infra.Arbitrary.Ssc ()
 
 spec :: Spec
-spec = withDefConfiguration $ \_ -> describe "Toss" $ do
+spec = withDefConfiguration $ \_ _nm -> describe "Toss" $ do
     let smaller n = modifyMaxSuccess (const n)
     describe "PureToss" $ smaller 30 $ do
         prop "Adding and deleting a signed commitment in the 'PureToss' monad is the\

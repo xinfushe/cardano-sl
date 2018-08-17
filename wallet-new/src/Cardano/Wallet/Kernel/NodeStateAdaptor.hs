@@ -361,7 +361,7 @@ instance Exception NodeStateUnavailable
 mockNodeState :: (HasCallStack, MonadThrow m)
               => MockNodeStateParams -> NodeStateAdaptor m
 mockNodeState MockNodeStateParams{..} =
-    withDefConfiguration $ \_pm ->
+    withDefConfiguration $ \_pm _nm ->
     withDefUpdateConfiguration $
       Adaptor {
           withNodeState        = \_ -> throwM $ NodeStateUnavailable callStack
@@ -390,7 +390,7 @@ data MockNodeStateParams = NodeConstraints => MockNodeStateParams {
 -- 'NodeConstraints' that come from the test configuration
 defMockNodeStateParams :: MockNodeStateParams
 defMockNodeStateParams =
-    withDefConfiguration $ \_pm ->
+    withDefConfiguration $ \_pm _nm ->
     withDefUpdateConfiguration $ MockNodeStateParams {
         mockNodeStateTipSlotId = notDefined "mockNodeStateTipSlotId"
       }

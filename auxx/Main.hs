@@ -16,7 +16,7 @@ import           Ntp.Client (NtpConfiguration)
 import           Pos.Chain.Txp (TxpConfiguration)
 import qualified Pos.Client.CLI as CLI
 import           Pos.Context (NodeContext (..))
-import           Pos.Core (ConfigurationError, epochSlots)
+import           Pos.Core (ConfigurationError, NetworkMagic, epochSlots)
 import           Pos.Crypto (ProtocolMagic)
 import           Pos.DB.DB (initNodeDBs)
 import           Pos.DB.Txp (txpGlobalSettings)
@@ -100,8 +100,9 @@ action opts@AuxxOptions {..} command = do
     runWithoutNode :: PrintAction IO -> IO ()
     runWithoutNode printAction = printAction "Mode: light" >> rawExec Nothing Nothing Nothing opts Nothing command
 
-    runWithConfig :: HasConfigurations => PrintAction IO -> ProtocolMagic -> TxpConfiguration -> NtpConfiguration -> IO ()
-    runWithConfig printAction pm txpConfig ntpConfig = do
+    runWithConfig :: HasConfigurations => PrintAction IO -> ProtocolMagic -> NetworkMagic
+                  -> TxpConfiguration -> NtpConfiguration -> IO ()
+    runWithConfig printAction pm _nm txpConfig ntpConfig = do
         printAction "Mode: with-config"
         CLI.printInfoOnStart aoCommonNodeArgs ntpConfig txpConfig
         (nodeParams, tempDbUsed) <-

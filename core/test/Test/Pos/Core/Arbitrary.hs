@@ -30,8 +30,8 @@ import           Data.List ((!!))
 import qualified Data.Map as M
 import           Data.Time.Units (Second, TimeUnit (..), convertUnit)
 import           System.Random (Random)
-import           Test.QuickCheck (Arbitrary (..), Gen, choose, oneof, scale,
-                     shrinkIntegral, sized, suchThat)
+import           Test.QuickCheck (Arbitrary (..), Gen, choose, elements, oneof,
+                     scale, shrinkIntegral, sized, suchThat)
 import           Test.QuickCheck.Arbitrary.Generic (genericArbitrary,
                      genericShrink)
 import           Test.QuickCheck.Instances ()
@@ -559,7 +559,13 @@ instance Arbitrary ProtocolConstants where
         ProtocolConstants <$> choose (1, 20000) <*> pure vssMin <*> pure vssMax
 
 instance Arbitrary G.GenesisProtocolConstants where
-    arbitrary = flip G.genesisProtocolConstantsFromProtocolConstants dummyProtocolMagic <$> arbitrary
+    arbitrary = flip G.genesisProtocolConstantsFromProtocolConstants
+                     dummyProtocolMagic
+                 <$> arbitrary
+                 <*> arbitrary
+
+instance Arbitrary G.RequiresNetworkMagic where
+    arbitrary = elements [G.NMMustBeNothing, G.NMMustBeJust]
 
 instance (HasProtocolConstants) => Arbitrary G.GenesisData where
     arbitrary = G.GenesisData

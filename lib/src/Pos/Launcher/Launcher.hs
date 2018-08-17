@@ -11,7 +11,7 @@ import           Universum
 
 import           Pos.Chain.Ssc (SscParams)
 import           Pos.Chain.Txp (TxpConfiguration)
-import           Pos.Core.Configuration (epochSlots)
+import           Pos.Core.Configuration (NetworkMagic, epochSlots)
 import           Pos.Crypto (ProtocolMagic)
 import           Pos.DB.DB (initNodeDBs)
 import           Pos.DB.Txp (txpGlobalSettings)
@@ -35,12 +35,13 @@ runNodeReal
        , HasCompileInfo
        )
     => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> NodeParams
     -> SscParams
     -> [Diffusion (RealMode EmptyMempoolExt) -> RealMode EmptyMempoolExt ()]
     -> IO ()
-runNodeReal pm txpConfig np sscnp plugins =
+runNodeReal pm _nm txpConfig np sscnp plugins =
     bracketNodeResources np sscnp (txpGlobalSettings pm txpConfig) (initNodeDBs pm epochSlots) action
   where
     action :: NodeResources EmptyMempoolExt -> IO ()

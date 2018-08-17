@@ -42,7 +42,7 @@ import           Test.Pos.Crypto.Dummy (dummyProtocolMagic)
 import           Test.Pos.Util.QuickCheck (SmallGenerator (..), makeSmall)
 
 spec :: Spec
-spec = withDefConfiguration $ \_ -> withDefUpdateConfiguration $
+spec = withDefConfiguration $ \_ _nm -> withDefUpdateConfiguration $
   describe "Block.Logic.Creation" $ do
 
     -- Sampling the minimum empty block size

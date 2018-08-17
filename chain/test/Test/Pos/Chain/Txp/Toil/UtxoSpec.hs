@@ -52,7 +52,7 @@ import           Test.Pos.Util.QuickCheck.Property (qcIsLeft, qcIsRight)
 spec :: Spec
 spec =
     withGenesisSpec 0 defaultCoreConfiguration identity
-        $ \pm -> describe "Txp.Toil.Utxo" $ do
+        $ \pm _nm -> describe "Txp.Toil.Utxo" $ do
               describe "utxoGet (no modifier)" $ do
                   it "returns Nothing when given empty Utxo"
                       $ isNothing (utxoGetSimple mempty myTxIn)

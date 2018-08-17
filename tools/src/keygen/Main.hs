@@ -157,14 +157,15 @@ main :: IO ()
 main = do
     KeygenOptions{..} <- getKeygenOptions
     setupLogging Nothing $ productionB <> termSeveritiesOutB debugPlus
-    usingLoggerName "keygen" $ withConfigurations Nothing koConfigurationOptions $ \pm _ _ -> do
-        logInfo "Processing command"
-        case koCommand of
-            RearrangeMask msk       -> rearrange msk
-            GenerateKey path        -> genPrimaryKey path
-            GenerateVss path        -> genVssCert pm path
-            ReadKey path            -> readKey path
-            DumpAvvmSeeds opts      -> dumpAvvmSeeds opts
-            GenerateKeysBySpec gkbg -> generateKeysByGenesis gkbg
-            DumpGenesisData dgdPath dgdCanonical
-                                    -> CLI.dumpGenesisData dgdCanonical dgdPath
+    usingLoggerName "keygen" $ withConfigurations Nothing koConfigurationOptions $
+        \pm _nm _ _ -> do
+            logInfo "Processing command"
+            case koCommand of
+                RearrangeMask msk       -> rearrange msk
+                GenerateKey path        -> genPrimaryKey path
+                GenerateVss path        -> genVssCert pm path
+                ReadKey path            -> readKey path
+                DumpAvvmSeeds opts      -> dumpAvvmSeeds opts
+                GenerateKeysBySpec gkbg -> generateKeysByGenesis gkbg
+                DumpGenesisData dgdPath dgdCanonical
+                                        -> CLI.dumpGenesisData dgdCanonical dgdPath

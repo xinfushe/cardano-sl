@@ -35,7 +35,7 @@ import           Test.Pos.Infra.Arbitrary.Ssc ()
 import           Test.Pos.Util.QuickCheck.Property (qcIsJust)
 
 spec :: Spec
-spec = withDefConfiguration $ \_ -> describe "Ssc.VssCertData" $ do
+spec = withDefConfiguration $ \_ _nm -> describe "Ssc.VssCertData" $ do
     describe "verifyInsertVssCertData" $
         prop description_verifyInsertVssCertData verifyInsertVssCertData
     describe "verifyDeleteVssCertData" $

@@ -175,7 +175,8 @@ genGenesisInitializer = do
 -- This function creates 'CoreConfiguration' from 'TestParams' and
 -- uses it to satisfy 'HasConfiguration'.
 withTestParams :: TestParams -> (HasConfiguration => ProtocolMagic -> r) -> r
-withTestParams TestParams {..} = withGenesisSpec _tpStartTime coreConfiguration id
+withTestParams TestParams {..} f = withGenesisSpec _tpStartTime coreConfiguration
+                                                   id (\pm _nm -> f pm)
   where
     defaultCoreConf :: CoreConfiguration
     defaultCoreConf = ccCore defaultTestConf

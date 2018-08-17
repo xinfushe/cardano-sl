@@ -58,7 +58,7 @@ main = do
 
 action :: ExplorerNodeArgs -> IO ()
 action (ExplorerNodeArgs (cArgs@CommonNodeArgs{..}) ExplorerArgs{..}) =
-    withConfigurations blPath conf $ \pm txpConfig ntpConfig ->
+    withConfigurations blPath conf $ \pm _nm txpConfig ntpConfig ->
     withCompileInfo $ do
         CLI.printInfoOnStart cArgs ntpConfig txpConfig
         logInfo $ "Explorer is enabled!"
