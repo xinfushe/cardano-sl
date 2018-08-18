@@ -28,6 +28,7 @@ library
                        Pos.Core.ProtocolConstants
 
                        Pos.Core.NetworkAddress
+                       Pos.Core.NetworkMagic
 
                        Pos.Core.Common
                        Pos.Core.Configuration

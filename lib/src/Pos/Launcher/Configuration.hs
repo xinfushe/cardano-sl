@@ -37,8 +37,8 @@ import           System.Wlog (LoggerName, WithLogger, askLoggerName, logInfo,
 import           Ntp.Client (NtpConfiguration)
 
 import           Pos.Core (Address, decodeTextAddress)
-import           Pos.Core.Configuration (NetworkMagic)
 import           Pos.Core.Genesis (GenesisData)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Core.Slotting (Timestamp (..))
 import           Pos.Util.Config (parseYamlConfig)
 
@@ -48,6 +48,7 @@ import           Pos.Chain.Ssc hiding (filter)
 import           Pos.Chain.Txp
 import           Pos.Chain.Update
 import           Pos.Configuration
+import           Pos.Core.Configuration
 
 -- | Product of all configurations required to run a node.
 data Configuration = Configuration

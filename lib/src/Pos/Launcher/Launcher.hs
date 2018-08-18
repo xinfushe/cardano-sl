@@ -11,7 +11,8 @@ import           Universum
 
 import           Pos.Chain.Ssc (SscParams)
 import           Pos.Chain.Txp (TxpConfiguration)
-import           Pos.Core.Configuration (NetworkMagic, epochSlots)
+import           Pos.Core.Configuration (epochSlots)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Crypto (ProtocolMagic)
 import           Pos.DB.DB (initNodeDBs)
 import           Pos.DB.Txp (txpGlobalSettings)

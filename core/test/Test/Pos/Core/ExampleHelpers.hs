@@ -113,9 +113,9 @@ import           Pos.Core.Delegation (HeavyDlgIndex (..), LightDlgIndices (..),
 import           Pos.Core.Genesis (FakeAvvmOptions (..),
                      GenesisAvvmBalances (..), GenesisDelegation (..),
                      GenesisInitializer (..), GenesisProtocolConstants (..),
-                     GenesisSpec (..), RequiresNetworkMagic (..),
-                     TestnetBalanceOptions (..))
+                     GenesisSpec (..), TestnetBalanceOptions (..))
 import           Pos.Core.Merkle (mkMerkleTree, mtRoot)
+import           Pos.Core.NetworkMagic (RequiresNetworkMagic (..))
 import           Pos.Core.ProtocolConstants (ProtocolConstants, VssMaxTTL (..),
                      VssMinTTL (..))
 import           Pos.Core.Slotting (EpochIndex (..), FlatSlotId,

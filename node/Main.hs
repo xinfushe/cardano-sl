@@ -21,7 +21,7 @@ import           Pos.Chain.Txp (TxpConfiguration)
 import           Pos.Client.CLI (CommonNodeArgs (..), NodeArgs (..),
                      SimpleNodeArgs (..))
 import qualified Pos.Client.CLI as CLI
-import           Pos.Core.Configuration (NetworkMagic)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Crypto (ProtocolMagic)
 import           Pos.Launcher (HasConfigurations, NodeParams (..),
                      loggerBracket, runNodeReal, withConfigurations)

@@ -37,8 +37,9 @@ import           Pos.Chain.Update (HasUpdateConfiguration,
 import           Pos.Configuration (HasNodeConfiguration, withNodeConfiguration)
 import           Pos.Core (HasConfiguration, withGenesisSpec)
 import           Pos.Core.Configuration (CoreConfiguration (..),
-                     GenesisConfiguration (..), NetworkMagic)
+                     GenesisConfiguration (..))
 import           Pos.Core.Genesis (GenesisSpec (..))
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Core.Update (BlockVersionData)
 import           Pos.Crypto (ProtocolMagic)
 import           Pos.Launcher.Configuration (Configuration (..),

@@ -166,12 +166,12 @@ import           Pos.Core.Delegation (DlgPayload (..), HeavyDlgIndex (..),
 import           Pos.Core.Genesis (FakeAvvmOptions (..),
                      GenesisAvvmBalances (..), GenesisDelegation (..),
                      GenesisInitializer (..), GenesisProtocolConstants (..),
-                     GenesisSpec (..), RequiresNetworkMagic (..),
-                     TestnetBalanceOptions (..), mkGenesisDelegation,
-                     mkGenesisSpec)
+                     GenesisSpec (..), TestnetBalanceOptions (..),
+                     mkGenesisDelegation, mkGenesisSpec)
 import           Pos.Core.JsonLog.LogEvents (InvReqDataFlowLog (..))
 import           Pos.Core.Merkle (MerkleRoot (..), MerkleTree (..),
                      mkMerkleTree, mtRoot)
+import           Pos.Core.NetworkMagic (RequiresNetworkMagic (..))
 import           Pos.Core.ProtocolConstants (ProtocolConstants (..),
                      VssMaxTTL (..), VssMinTTL (..))
 import           Pos.Core.Slotting (EpochIndex (..), EpochOrSlot (..),
