@@ -49,6 +49,7 @@ import           Pos.Core (Address, ChainDifficulty, GenesisHash (..),
                      HasConfiguration, Timestamp (..), difficultyL, epochSlots,
                      genesisHash)
 import           Pos.Core.JsonLog (CanJsonLog (..))
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Crypto (ProtocolMagic, WithHash (..), withHash)
 import           Pos.DB (MonadDBRead, MonadGState)
 import           Pos.DB.Block (getBlock)
@@ -173,7 +174,7 @@ class (Monad m, HasConfiguration) => MonadTxHistory m where
         :: ProtocolMagic -> [Address] -> m (Map TxId TxHistoryEntry)
     getLocalHistory
         :: [Address] -> m (Map TxId TxHistoryEntry)
-    saveTx :: ProtocolMagic -> TxpConfiguration -> (TxId, TxAux) -> m ()
+    saveTx :: ProtocolMagic -> NetworkMagic -> TxpConfiguration -> (TxId, TxAux) -> m ()
 
     default getBlockHistory
         :: (MonadTrans t, MonadTxHistory m', t m' ~ m)
@@ -188,10 +189,11 @@ class (Monad m, HasConfiguration) => MonadTxHistory m where
     default saveTx
         :: (MonadTrans t, MonadTxHistory m', t m' ~ m)
         => ProtocolMagic
+        -> NetworkMagic
         -> TxpConfiguration
         -> (TxId, TxAux)
         -> m ()
-    saveTx pm txpConfig = lift . saveTx pm txpConfig
+    saveTx pm nm txpConfig = lift . saveTx pm nm txpConfig
 
 instance {-# OVERLAPPABLE #-}
     (MonadTxHistory m, MonadTrans t, Monad (t m)) =>
@@ -268,10 +270,11 @@ instance Exception SaveTxException where
 
 saveTxDefault :: TxHistoryEnv ctx m
               => ProtocolMagic
+              -> NetworkMagic
               -> TxpConfiguration
               -> (TxId, TxAux) -> m ()
-saveTxDefault pm txpConfig txw = do
-    res <- txpProcessTx pm txpConfig txw
+saveTxDefault pm nm txpConfig txw = do
+    res <- txpProcessTx pm nm txpConfig txw
     eitherToThrow (first SaveTxToilFailure res)
 
 txHistoryListToMap :: [TxHistoryEntry] -> Map TxId TxHistoryEntry

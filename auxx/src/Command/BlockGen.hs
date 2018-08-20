@@ -16,6 +16,7 @@ import           Pos.Chain.Txp (TxpConfiguration)
 import           Pos.Client.KeyStorage (getSecretKeysPlain)
 import           Pos.Core (genesisData)
 import           Pos.Core.Genesis (gdBootStakeholders)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Crypto (ProtocolMagic, encToSecret)
 import           Pos.DB.Txp (txpGlobalSettings)
 import           Pos.Generator.Block (BlockGenParams (..), genBlocks,
@@ -30,26 +31,29 @@ import           Mode (MonadAuxxMode)
 
 generateBlocks :: MonadAuxxMode m
                => ProtocolMagic
+               -> NetworkMagic
                -> TxpConfiguration
                -> GenBlocksParams -> m ()
-generateBlocks pm txpConfig GenBlocksParams{..} = withStateLock HighPriority ApplyBlock $ \_ -> do
-    seed <- liftIO $ maybe randomIO pure bgoSeed
-    logInfo $ "Generating with seed " <> show seed
+generateBlocks pm nm txpConfig GenBlocksParams{..} =
+    withStateLock HighPriority ApplyBlock $ \_ -> do
+        seed <- liftIO $ maybe randomIO pure bgoSeed
+        logInfo $ "Generating with seed " <> show seed
 
-    allSecrets <- mkAllSecretsSimple . map encToSecret <$> getSecretKeysPlain
+        allSecrets <- mkAllSecretsSimple . map encToSecret <$> getSecretKeysPlain
 
-    let bgenParams =
-            BlockGenParams
-                { _bgpSecrets         = allSecrets
-                , _bgpGenStakeholders = gdBootStakeholders genesisData
-                , _bgpBlockCount      = fromIntegral bgoBlockN
-                -- tx generation is disalbed for now
-                , _bgpTxGenParams     = def & tgpTxCountRange .~ (0,0)
-                , _bgpInplaceDB       = True
-                , _bgpSkipNoKey       = True
-                , _bgpTxpGlobalSettings = txpGlobalSettings pm txpConfig
-                }
-    withCompileInfo $ evalRandT (genBlocks pm txpConfig bgenParams (const ())) (mkStdGen seed)
-    -- We print it twice because there can be a ton of logs and
-    -- you don't notice the first message.
-    logInfo $ "Generated with seed " <> show seed
+        let bgenParams =
+                BlockGenParams
+                    { _bgpSecrets         = allSecrets
+                    , _bgpGenStakeholders = gdBootStakeholders genesisData
+                    , _bgpBlockCount      = fromIntegral bgoBlockN
+                    -- tx generation is disalbed for now
+                    , _bgpTxGenParams     = def & tgpTxCountRange .~ (0,0)
+                    , _bgpInplaceDB       = True
+                    , _bgpSkipNoKey       = True
+                    , _bgpTxpGlobalSettings = txpGlobalSettings pm nm txpConfig
+                    }
+        withCompileInfo $ evalRandT (genBlocks pm nm txpConfig bgenParams (const ()))
+                                    (mkStdGen seed)
+        -- We print it twice because there can be a ton of logs and
+        -- you don't notice the first message.
+        logInfo $ "Generated with seed " <> show seed

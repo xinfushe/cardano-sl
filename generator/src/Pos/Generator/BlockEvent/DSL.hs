@@ -38,6 +38,7 @@ import           Pos.Chain.Txp (TxpConfiguration)
 import           Pos.Core.Chrono (NE, NewestFirst (..), OldestFirst (..),
                      toOldestFirst, _NewestFirst)
 import           Pos.Core.Genesis (GenesisWStakeholders)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Crypto (ProtocolMagic)
 import           Pos.Generator.Block (BlockTxpGenMode, MonadBlockGen)
 import           Pos.Generator.BlockEvent (BlockApplyResult (..),
@@ -118,14 +119,15 @@ snapshotEq snapshotId = emitEvent $
 runBlockEventGenT
     :: BlockTxpGenMode g ctx m
     => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> AllSecrets
     -> GenesisWStakeholders
     -> BlockEventGenT g m ()
     -> RandT g m BlockScenario
-runBlockEventGenT pm txpConfig secrets genStakeholders m = do
+runBlockEventGenT pm nm txpConfig secrets genStakeholders m = do
     (annotations, preBlockScenario) <- runBlockEventGenT' m
-    genBlocksInStructure pm txpConfig secrets genStakeholders annotations preBlockScenario
+    genBlocksInStructure pm nm txpConfig secrets genStakeholders annotations preBlockScenario
 
 runBlockEventGenT' ::
     (MonadBlockGen ctx m) =>

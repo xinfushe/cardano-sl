@@ -13,6 +13,7 @@ import           Test.QuickCheck.Monadic (assert)
 import           Pos.Binary.Class (decodeFull, serialize')
 import           Pos.Binary.Communication (serializeMsgSerializedBlock)
 import           Pos.Chain.Txp (TxpConfiguration (..))
+import           Pos.Core.NetworkMagic (RequiresNetworkMagic (..))
 import           Pos.DB.Class (Serialized (..))
 import           Pos.Network.Block.Types (MsgBlock (..),
                      MsgSerializedBlock (..))
@@ -31,19 +32,26 @@ import           Test.Pos.Crypto.Dummy (dummyProtocolMagic)
 serializeMsgSerializedBlockSpec
     :: (HasStaticConfigurations) => Spec
 serializeMsgSerializedBlockSpec = do
-    prop desc $ blockPropertyTestable $ do
-        (block, _) <- bpGenBlock dummyProtocolMagic (TxpConfiguration 200 Set.empty) (EnableTxPayload True) (InplaceDB True)
-        let sb = Serialized $ serialize' block
-        assert $ serializeMsgSerializedBlock (MsgSerializedBlock sb) == serialize' (MsgBlock block)
-    prop descNoBlock $ blockPropertyTestable $ do
-        let msg :: MsgSerializedBlock
-            msg = MsgNoSerializedBlock "no block"
-            msg' :: MsgBlock
-            msg' = MsgNoBlock "no block"
-        assert $ serializeMsgSerializedBlock msg == serialize' msg'
-    where
-    desc = "serializeMsgSerializedBlock for MsgSerializedBlock should create the same ByteString as serialize' for MsgBlock"
-    descNoBlock = "serializeMsgSerializedBlock MsgNoSerializedBlock should create the same ByteString as serialize' for MsgNoBlock"
+    go NMMustBeNothing
+    go NMMustBeJust
+  where
+    go :: RequiresNetworkMagic -> Spec
+    go rnm = do
+        let addNetworkMagicBlurb msg = msg <> " (requiresNetworkMagic=" <> show rnm <> ")"
+        let desc = addNetworkMagicBlurb "serializeMsgSerializedBlock for MsgSerializedBlock should \
+                                        \create the same ByteString as serialize' for MsgBlock"
+        let descNoBlock = addNetworkMagicBlurb "serializeMsgSerializedBlock MsgNoSerializedBlock should \
+                                               \create the same ByteString as serialize' for MsgNoBlock"
+        prop desc $ blockPropertyTestable rnm $ do
+            (block, _) <- bpGenBlock dummyProtocolMagic (TxpConfiguration 200 Set.empty) (EnableTxPayload True) (InplaceDB True)
+            let sb = Serialized $ serialize' block
+            assert $ serializeMsgSerializedBlock (MsgSerializedBlock sb) == serialize' (MsgBlock block)
+        prop descNoBlock $ blockPropertyTestable rnm $ do
+            let msg :: MsgSerializedBlock
+                msg = MsgNoSerializedBlock "no block"
+                msg' :: MsgBlock
+                msg' = MsgNoBlock "no block"
+            assert $ serializeMsgSerializedBlock msg == serialize' msg'
 
 
 -- |

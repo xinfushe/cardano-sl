@@ -42,7 +42,7 @@ import           Pos.Chain.Txp (TxpConfiguration, Utxo)
 import           Pos.Client.KeyStorage (getSecretKeysPlain)
 import           Pos.Client.Txp.Balances (getBalance)
 import           Pos.Core (Address, BlockCount, Coin, HasConfiguration,
-                     genesisSecretsPoor)
+                     NetworkMagic, genesisSecretsPoor)
 import           Pos.Core.Chrono (OldestFirst (..))
 import           Pos.Core.Common (IsBootstrapEraAddr (..), deriveLvl2KeyPair)
 import           Pos.Core.Genesis (poorSecretToEncKey)
@@ -77,13 +77,14 @@ import           Test.Pos.Wallet.Web.Mode (WalletProperty)
 wpGenBlocks
     :: HasConfigurations
     => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> Maybe BlockCount
     -> EnableTxPayload
     -> InplaceDB
     -> WalletProperty (OldestFirst [] Blund)
-wpGenBlocks pm txpConfig blkCnt enTxPayload inplaceDB = do
-    params <- genBlockGenParams pm blkCnt enTxPayload inplaceDB
+wpGenBlocks pm nm txpConfig blkCnt enTxPayload inplaceDB = do
+    params <- genBlockGenParams pm nm blkCnt enTxPayload inplaceDB
     g <- pick $ MkGen $ \qc _ -> qc
     lift $ modifyStateLock HighPriority ApplyBlock $ \prevTip -> do -- FIXME is ApplyBlock the right one?
         blunds <- OldestFirst <$> evalRandT (genBlocks pm txpConfig params maybeToList) g
@@ -98,11 +99,13 @@ wpGenBlocks pm txpConfig blkCnt enTxPayload inplaceDB = do
 wpGenBlock
     :: HasConfigurations
     => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> EnableTxPayload
     -> InplaceDB
     -> WalletProperty Blund
-wpGenBlock pm txpConfig = fmap (Data.List.head . toList) ... wpGenBlocks pm txpConfig (Just 1)
+wpGenBlock pm nm txpConfig =
+    fmap (Data.List.head . toList) ... wpGenBlocks pm nm txpConfig (Just 1)
 
 ----------------------------------------------------------------------------
 -- Wallet test helpers

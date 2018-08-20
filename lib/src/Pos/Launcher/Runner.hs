@@ -35,6 +35,7 @@ import           Pos.Core (StakeholderId, addressHash)
 import           Pos.Core.Configuration (HasProtocolConstants,
                      protocolConstants)
 import           Pos.Core.JsonLog (jsonLog)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Crypto (ProtocolMagic, toPublic)
 import           Pos.DB.Txp (MonadTxpLocal)
 import           Pos.Diffusion.Full (FullDiffusionConfiguration (..),
@@ -77,11 +78,12 @@ runRealMode
        -- though they should use only @RealModeContext@
        )
     => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> NodeResources ext
     -> (Diffusion (RealMode ext) -> RealMode ext a)
     -> IO a
-runRealMode pm txpConfig nr@NodeResources {..} act = runServer
+runRealMode pm nm txpConfig nr@NodeResources {..} act = runServer
     pm
     ncNodeParams
     (EkgNodeMetrics nrEkgStore)
@@ -95,7 +97,7 @@ runRealMode pm txpConfig nr@NodeResources {..} act = runServer
     ourStakeholderId :: StakeholderId
     ourStakeholderId = addressHash (toPublic npSecretKey)
     logic :: Logic (RealMode ext)
-    logic = logicFull pm txpConfig ourStakeholderId securityParams jsonLog
+    logic = logicFull pm nm txpConfig ourStakeholderId securityParams jsonLog
     makeLogicIO :: Diffusion IO -> Logic IO
     makeLogicIO diffusion = hoistLogic (elimRealMode pm nr diffusion) logic
     act' :: Diffusion IO -> IO a

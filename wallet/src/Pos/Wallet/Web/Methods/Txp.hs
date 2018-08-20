@@ -75,13 +75,14 @@ coinDistrToOutputs distr = do
 submitAndSaveNewPtx
     :: TxSubmissionMode ctx m
     => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> WalletDB
     -> (TxAux -> m Bool)
     -> PendingTx
     -> m ()
-submitAndSaveNewPtx pm txpConfig db submit =
-    submitAndSavePtx pm txpConfig db submit ptxFirstSubmissionHandler
+submitAndSaveNewPtx pm nm txpConfig db submit =
+    submitAndSavePtx pm nm txpConfig db submit ptxFirstSubmissionHandler
 
 gatherPendingTxsSummary :: MonadWalletWebMode ctx m => m [PendingTxsSummary]
 gatherPendingTxsSummary =

@@ -36,6 +36,7 @@ import           Pos.Chain.Txp (ExtendedLocalToilM, LocalToilState (..),
 import           Pos.Core (EpochIndex, ProtocolMagic, siEpoch)
 import           Pos.Core.JsonLog (CanJsonLog (..))
 import           Pos.Core.JsonLog.LogEvents (MemPoolModifyReason (..))
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Core.Reporting (reportError)
 import           Pos.Core.Slotting (MonadSlots (..))
 import           Pos.Core.Txp (TxAux (..), TxId, TxUndo)
@@ -65,9 +66,11 @@ type TxpProcessTransactionMode ctx m =
 -- only.
 txProcessTransaction
     :: ( TxpProcessTransactionMode ctx m)
-    => ProtocolMagic -> TxpConfiguration -> (TxId, TxAux) -> m (Either ToilVerFailure ())
-txProcessTransaction pm txpConfig itw =
-    withStateLock LowPriority ProcessTransaction $ \__tip -> txProcessTransactionNoLock pm txpConfig itw
+    => ProtocolMagic -> NetworkMagic -> TxpConfiguration -> (TxId, TxAux)
+    -> m (Either ToilVerFailure ())
+txProcessTransaction pm nm txpConfig itw =
+    withStateLock LowPriority ProcessTransaction $
+        \__tip -> txProcessTransactionNoLock pm nm txpConfig itw
 
 -- | Unsafe version of 'txProcessTransaction' which doesn't take a
 -- lock. Can be used in tests.
@@ -77,10 +80,11 @@ txProcessTransactionNoLock
        , MempoolExt m ~ ()
        )
     => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> (TxId, TxAux)
     -> m (Either ToilVerFailure ())
-txProcessTransactionNoLock pm txpConfig =
+txProcessTransactionNoLock pm nm txpConfig =
     txProcessTransactionAbstract buildContext processTxHoisted
   where
     buildContext :: Utxo -> TxAux -> m ()
@@ -92,7 +96,7 @@ txProcessTransactionNoLock pm txpConfig =
         -> (TxId, TxAux)
         -> ExceptT ToilVerFailure (ExtendedLocalToilM () ()) TxUndo
     processTxHoisted bvd =
-        mapExceptT extendLocalToilM ... (processTx pm txpConfig bvd)
+        mapExceptT extendLocalToilM ... (processTx pm nm txpConfig bvd)
 
 txProcessTransactionAbstract ::
        forall extraEnv extraState ctx m a.
@@ -180,8 +184,8 @@ txNormalize
        ( TxpLocalWorkMode ctx m
        , MempoolExt m ~ ()
        )
-    => ProtocolMagic -> TxpConfiguration -> m ()
-txNormalize pm txpConfig =
+    => ProtocolMagic -> NetworkMagic -> TxpConfiguration -> m ()
+txNormalize pm nm txpConfig =
     txNormalizeAbstract buildContext $ normalizeToilHoisted
   where
     buildContext :: Utxo -> [TxAux] -> m ()
@@ -194,7 +198,7 @@ txNormalize pm txpConfig =
         -> ExtendedLocalToilM () () ()
     normalizeToilHoisted bvd epoch txs =
         extendLocalToilM $
-            normalizeToil pm txpConfig bvd epoch $ HM.toList txs
+            normalizeToil pm nm txpConfig bvd epoch $ HM.toList txs
 
 txNormalizeAbstract ::
        (TxpLocalWorkMode ctx m, MempoolExt m ~ extraState)

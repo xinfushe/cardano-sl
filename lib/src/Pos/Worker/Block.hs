@@ -37,6 +37,7 @@ import           Pos.Core (ChainDifficulty, FlatSlotId, HasProtocolConstants,
 import           Pos.Core.Chrono (OldestFirst (..))
 import           Pos.Core.Conc (delay)
 import           Pos.Core.JsonLog (CanJsonLog (..))
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Core.Reporting (HasMisbehaviorMetrics, MetricMonitor (..),
                      MetricMonitorState, noReportMonitor, recordValue)
 import           Pos.Core.Update (BlockVersionData (..))
@@ -76,12 +77,13 @@ blkWorkers
        , HasMisbehaviorMetrics ctx
        )
     => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> [Diffusion m -> m ()]
-blkWorkers pm txpConfig =
-    [ blkCreatorWorker pm txpConfig
+blkWorkers pm nm txpConfig =
+    [ blkCreatorWorker pm nm txpConfig
     , informerWorker
-    , retrievalWorker pm txpConfig
+    , retrievalWorker pm nm txpConfig
     , recoveryTriggerWorker pm
     ]
 
@@ -115,12 +117,14 @@ blkCreatorWorker
        , HasMisbehaviorMetrics ctx
        )
     => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> Diffusion m -> m ()
-blkCreatorWorker pm txpConfig =
+blkCreatorWorker pm nm txpConfig =
     \diffusion -> onNewSlot onsp $ \slotId ->
         recoveryCommGuard "onNewSlot worker, blkCreatorWorker" $
-        blockCreator pm txpConfig slotId diffusion `catchAny` onBlockCreatorException
+        blockCreator pm nm txpConfig slotId diffusion
+            `catchAny` onBlockCreatorException
   where
     onBlockCreatorException = reportOrLogE "blockCreator failed: "
     onsp :: OnNewSlotParams
@@ -133,13 +137,14 @@ blockCreator
        , HasMisbehaviorMetrics ctx
        )
     => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> SlotId
     -> Diffusion m -> m ()
-blockCreator pm txpConfig (slotId@SlotId {..}) diffusion = do
+blockCreator pm nm txpConfig (slotId@SlotId {..}) diffusion = do
 
     -- First of all we create genesis block if necessary.
-    mGenBlock <- createGenesisBlockAndApply pm txpConfig siEpoch
+    mGenBlock <- createGenesisBlockAndApply pm nm txpConfig siEpoch
     whenJust mGenBlock $ \createdBlk -> do
         logInfo $ sformat ("Created genesis block:\n" %build) createdBlk
         jsonLog $ jlCreatedBlock (Left createdBlk)
@@ -191,22 +196,23 @@ blockCreator pm txpConfig (slotId@SlotId {..}) diffusion = do
                   "delegated by heavy psk: "%build)
                  ourHeavyPsk
            | weAreLeader ->
-                 onNewSlotWhenLeader pm txpConfig slotId Nothing diffusion
+                 onNewSlotWhenLeader pm nm txpConfig slotId Nothing diffusion
            | heavyWeAreDelegate ->
                  let pske = swap <$> dlgTransM
-                 in onNewSlotWhenLeader pm txpConfig slotId pske diffusion
+                 in onNewSlotWhenLeader pm nm txpConfig slotId pske diffusion
            | otherwise -> pass
 
 onNewSlotWhenLeader
     :: ( BlockWorkMode ctx m
        )
     => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> SlotId
     -> ProxySKBlockInfo
     -> Diffusion m
     -> m ()
-onNewSlotWhenLeader pm txpConfig slotId pske diffusion = do
+onNewSlotWhenLeader pm nm txpConfig slotId pske diffusion = do
     let logReason =
             sformat ("I have a right to create a block for the slot "%slotIdF%" ")
                     slotId
@@ -226,7 +232,7 @@ onNewSlotWhenLeader pm txpConfig slotId pske diffusion = do
   where
     onNewSlotWhenLeaderDo = do
         logInfoS "It's time to create a block for current slot"
-        createdBlock <- createMainBlockAndApply pm txpConfig slotId pske
+        createdBlock <- createMainBlockAndApply pm nm txpConfig slotId pske
         either whenNotCreated whenCreated createdBlock
         logInfoS "onNewSlotWhenLeader: done"
     whenCreated createdBlk = do

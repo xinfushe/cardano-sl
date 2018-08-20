@@ -44,6 +44,7 @@ import           Pos.Chain.Update (PollModifier)
 import           Pos.Core (epochIndexL)
 import           Pos.Core.Chrono (NE, NewestFirst (..), OldestFirst (..))
 import           Pos.Core.Exception (assertionFailed)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Core.Reporting (MonadReporting)
 import           Pos.Core.Update (BlockVersion, BlockVersionData)
 import           Pos.Crypto (ProtocolMagic)
@@ -125,14 +126,15 @@ type MonadMempoolNormalization ctx m
 normalizeMempool
     :: MonadMempoolNormalization ctx m
     => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> m ()
-normalizeMempool pm txpConfig = do
+normalizeMempool pm nm txpConfig = do
     -- We normalize all mempools except the delegation one.
     -- That's because delegation mempool normalization is harder and is done
     -- within block application.
     sscNormalize pm
-    txpNormalize pm txpConfig
+    txpNormalize pm nm txpConfig
     usNormalize
 
 -- | Applies a definitely valid prefix of blocks. This function is unsafe,

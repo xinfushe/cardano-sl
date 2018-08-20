@@ -13,6 +13,7 @@ import           Pos.Chain.Block (ComponentBlock (..), HeaderHash, headerHash,
 import           Pos.Chain.Txp (TxpConfiguration)
 import           Pos.Core (HasConfiguration, SlotId (..), epochIndexL)
 import           Pos.Core.Chrono (NewestFirst (..))
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Core.Txp (TxAux, TxUndo)
 import           Pos.Crypto (ProtocolMagic)
 import           Pos.DB (SomeBatchOp (..))
@@ -31,12 +32,13 @@ import           Pos.Explorer.Txp.Toil (EGlobalToilM, ExplorerExtraLookup (..),
 -- | Settings used for global transactions data processing used by explorer.
 explorerTxpGlobalSettings :: HasConfiguration
                           => ProtocolMagic
+                          -> NetworkMagic
                           -> TxpConfiguration
                           -> TxpGlobalSettings
-explorerTxpGlobalSettings pm txpConfig =
+explorerTxpGlobalSettings pm nm txpConfig =
     -- verification is same
-    (txpGlobalSettings pm txpConfig)
-    { tgsApplyBlocks = applyBlocksWith pm txpConfig applySettings
+    (txpGlobalSettings pm nm txpConfig)
+    { tgsApplyBlocks = applyBlocksWith pm nm txpConfig applySettings
     , tgsRollbackBlocks = processBlunds rollbackSettings . getNewestFirst
     }
 

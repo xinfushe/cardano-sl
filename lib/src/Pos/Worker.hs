@@ -13,6 +13,7 @@ import           Pos.Worker.Block (blkWorkers)
 -- Message instances.
 import           Pos.Chain.Txp (TxpConfiguration)
 import           Pos.Context (NodeContext (..))
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Crypto (ProtocolMagic)
 import           Pos.Infra.Diffusion.Types (Diffusion)
 import           Pos.Infra.Network.CLI (launchStaticConfigMonitoring)
@@ -28,13 +29,14 @@ import           Pos.WorkMode (WorkMode)
 allWorkers
     :: forall ext ctx m . WorkMode ctx m
     => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> NodeResources ext
     -> [Diffusion m -> m ()]
-allWorkers pm txpConfig NodeResources {..} = mconcat
+allWorkers pm nm txpConfig NodeResources {..} = mconcat
     [ sscWorkers pm
     , usWorkers
-    , blkWorkers pm txpConfig
+    , blkWorkers pm nm txpConfig
     , dlgWorkers
     , [properSlottingWorker, staticConfigMonitoringWorker]
     ]

@@ -52,6 +52,7 @@ module Pos.Core.Common.Address
 
        ) where
 
+import qualified Prelude
 import           Universum
 
 import           Control.Lens (makePrisms)
@@ -270,7 +271,12 @@ makePubKeyAddressImpl path (IsBootstrapEraAddr isBootstrapEra) key =
         | isBootstrapEra = BootstrapEraDistr
         | otherwise = SingleKeyDistr (addressHash key)
     attrs =
-        AddrAttributes {aaStakeDistribution = distr, aaPkDerivationPath = path}
+        AddrAttributes { aaStakeDistribution = distr
+                       , aaPkDerivationPath = path
+                       , aaNetworkMagic = Prelude.undefined
+                       }
+        -- mhueschen: leaving these undefined's for Luke ^
+        -- TODO mhueschen : make sure this gets fixed ^
 
 -- | A function for making an address from a validation 'Script'.  It
 -- takes an optional 'StakeholderId'. If it's given, it will receive
@@ -281,7 +287,9 @@ makeScriptAddress stakeholder scr = makeAddress spendingData attrs
   where
     spendingData = ScriptASD scr
     aaStakeDistribution = maybe BootstrapEraDistr SingleKeyDistr stakeholder
-    attrs = AddrAttributes {aaPkDerivationPath = Nothing, ..}
+    attrs = AddrAttributes { aaPkDerivationPath = Nothing
+                           , aaNetworkMagic = Prelude.undefined
+                           , ..}
 
 -- | A function for making an address from 'RedeemPublicKey'.
 makeRedeemAddress :: RedeemPublicKey -> Address
@@ -289,8 +297,10 @@ makeRedeemAddress key = makeAddress spendingData attrs
   where
     spendingData = RedeemASD key
     attrs =
-        AddrAttributes
-        {aaStakeDistribution = BootstrapEraDistr, aaPkDerivationPath = Nothing}
+        AddrAttributes { aaStakeDistribution = BootstrapEraDistr
+                       , aaPkDerivationPath = Nothing
+                       , aaNetworkMagic = Prelude.undefined
+                       }
 
 -- | Create address from secret key in hardened way.
 createHDAddressH

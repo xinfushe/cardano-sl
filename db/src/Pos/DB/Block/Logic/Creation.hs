@@ -41,6 +41,7 @@ import           Pos.Core.Context (HasPrimaryKey, getOurSecretKey)
 import           Pos.Core.Exception (assertionFailed, reportFatalError)
 import           Pos.Core.JsonLog (CanJsonLog (..))
 import           Pos.Core.JsonLog.LogEvents (MemPoolModifyReason (..))
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Core.Reporting (HasMisbehaviorMetrics, reportError)
 import           Pos.Core.Ssc (SscPayload)
 import           Pos.Core.Txp (TxAux (..), mkTxPayload)
@@ -119,12 +120,13 @@ createGenesisBlockAndApply ::
        , HasMisbehaviorMetrics ctx
        )
     => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> EpochIndex
     -> m (Maybe GenesisBlock)
 -- Genesis block for 0-th epoch is hardcoded.
-createGenesisBlockAndApply _ _ 0 = pure Nothing
-createGenesisBlockAndApply pm txpConfig epoch = do
+createGenesisBlockAndApply _ _ _ 0 = pure Nothing
+createGenesisBlockAndApply pm nm txpConfig epoch = do
     tipHeader <- DB.getTipHeader
     -- preliminary check outside the lock,
     -- must be repeated inside the lock
@@ -133,7 +135,7 @@ createGenesisBlockAndApply pm txpConfig epoch = do
         then modifyStateLock
                  HighPriority
                  ApplyBlock
-                 (\_ -> createGenesisBlockDo pm txpConfig epoch)
+                 (\_ -> createGenesisBlockDo pm nm txpConfig epoch)
         else return Nothing
 
 createGenesisBlockDo
@@ -142,10 +144,11 @@ createGenesisBlockDo
        , HasMisbehaviorMetrics ctx
        )
     => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> EpochIndex
     -> m (HeaderHash, Maybe GenesisBlock)
-createGenesisBlockDo pm txpConfig epoch = do
+createGenesisBlockDo pm nm txpConfig epoch = do
     tipHeader <- DB.getTipHeader
     logDebug $ sformat msgTryingFmt epoch tipHeader
     needCreateGenesisBlock epoch tipHeader >>= \case
@@ -173,7 +176,7 @@ createGenesisBlockDo pm txpConfig epoch = do
                     (ShouldCallBListener True)
                     (one (Left blk, undo))
                     (Just pollModifier)
-                normalizeMempool pm txpConfig
+                normalizeMempool pm nm txpConfig
                 pure (newTip, Just blk)
     logShouldNot =
         logDebug
@@ -227,17 +230,18 @@ createMainBlockAndApply ::
        , HasLens' ctx (StateLockMetrics MemPoolModifyReason)
        )
     => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> SlotId
     -> ProxySKBlockInfo
     -> m (Either Text MainBlock)
-createMainBlockAndApply pm txpConfig sId pske =
+createMainBlockAndApply pm nm txpConfig sId pske =
     modifyStateLock HighPriority ApplyBlock createAndApply
   where
     createAndApply tip =
         createMainBlockInternal pm sId pske >>= \case
             Left reason -> pure (tip, Left reason)
-            Right blk -> convertRes <$> applyCreatedBlock pm txpConfig pske blk
+            Right blk -> convertRes <$> applyCreatedBlock pm nm txpConfig pske blk
     convertRes createdBlk = (headerHash createdBlk, Right createdBlk)
 
 ----------------------------------------------------------------------------
@@ -359,11 +363,12 @@ applyCreatedBlock ::
     , MonadCreateBlock ctx m
     )
     => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> ProxySKBlockInfo
     -> MainBlock
     -> m MainBlock
-applyCreatedBlock pm txpConfig pske createdBlock = applyCreatedBlockDo False createdBlock
+applyCreatedBlock pm nm txpConfig pske createdBlock = applyCreatedBlockDo False createdBlock
   where
     slotId = createdBlock ^. BC.mainBlockSlot
     applyCreatedBlockDo :: Bool -> MainBlock -> m MainBlock
@@ -382,7 +387,7 @@ applyCreatedBlock pm txpConfig pske createdBlock = applyCreatedBlockDo False cre
                     (ShouldCallBListener True)
                     (one (Right blockToApply, undo))
                     (Just pollModifier)
-                normalizeMempool pm txpConfig
+                normalizeMempool pm nm txpConfig
                 pure blockToApply
     clearMempools :: m ()
     clearMempools = do

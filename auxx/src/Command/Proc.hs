@@ -26,6 +26,7 @@ import           Pos.Core.Common (AddrAttributes (..), AddrSpendingData (..),
                      makeAddress)
 import           Pos.Core.Configuration (genesisSecretKeys)
 import           Pos.Core.Delegation (HeavyDlgIndex (..))
+import           Pos.Core.NetworkMagic (NetworkMagic (..))
 import           Pos.Core.Txp (TxOut (..))
 import           Pos.Core.Update (SoftwareVersion (..))
 import           Pos.Crypto (ProtocolMagic, PublicKey, emptyPassphrase,
@@ -64,12 +65,13 @@ import           Repl (PrintAction)
 createCommandProcs ::
        forall m. (MonadIO m, CanLog m, HasLoggerName m)
     => Maybe ProtocolMagic
+    -> Maybe NetworkMagic
     -> Maybe TxpConfiguration
     -> Maybe (Dict (MonadAuxxMode m))
     -> PrintAction m
     -> Maybe (Diffusion m)
     -> [CommandProc m]
-createCommandProcs mpm mTxpConfig hasAuxxMode printAction mDiffusion = rights . fix $ \commands -> [
+createCommandProcs mpm mnm mTxpConfig hasAuxxMode printAction mDiffusion = rights . fix $ \commands -> [
 
     return CommandProc
     { cpName = "L"
@@ -100,6 +102,7 @@ createCommandProcs mpm mTxpConfig hasAuxxMode printAction mDiffusion = rights . 
     },
 
     let name = "addr" in
+    needsNetworkMagic name >>= \nm ->
     needsAuxxMode name >>= \Dict ->
     return CommandProc
     { cpName = name
@@ -113,7 +116,7 @@ createCommandProcs mpm mTxpConfig hasAuxxMode printAction mDiffusion = rights . 
         addr <- case mDistr of
             Nothing -> makePubKeyAddressAuxx pk
             Just distr -> return $
-                makeAddress (PubKeyASD pk) (AddrAttributes Nothing distr)
+                makeAddress (PubKeyASD pk) (AddrAttributes Nothing distr nm)
         return $ ValueAddress addr
     , cpHelp = "address for the specified public key. a stake distribution \
              \ can be specified manually (by default it uses the current epoch \
@@ -403,6 +406,7 @@ createCommandProcs mpm mTxpConfig hasAuxxMode printAction mDiffusion = rights . 
 
     let name = "generate-blocks" in
     needsProtocolMagic name >>= \pm ->
+    needsNetworkMagic name >>= \nm ->
     needsAuxxMode name >>= \Dict ->
     needsTxpConfig name >>= \txpConfig ->
     return CommandProc
@@ -413,7 +417,7 @@ createCommandProcs mpm mTxpConfig hasAuxxMode printAction mDiffusion = rights . 
         bgoSeed <- getArgOpt tyInt "seed"
         return GenBlocksParams{..}
     , cpExec = \params -> do
-        generateBlocks pm txpConfig params
+        generateBlocks pm nm txpConfig params
         return ValueUnit
     , cpHelp = "generate <n> blocks"
     },
@@ -521,6 +525,9 @@ createCommandProcs mpm mTxpConfig hasAuxxMode printAction mDiffusion = rights . 
     needsProtocolMagic :: Name -> Either UnavailableCommand ProtocolMagic
     needsProtocolMagic name =
         maybe (Left $ UnavailableCommand name "ProtocolMagic is not available") Right mpm
+    needsNetworkMagic :: Name -> Either UnavailableCommand NetworkMagic
+    needsNetworkMagic name =
+        maybe (Left $ UnavailableCommand name "NetworkMagic is not available") Right mnm
     needsTxpConfig :: Name -> Either UnavailableCommand TxpConfiguration
     needsTxpConfig name =
         maybe (Left $ UnavailableCommand name "TxpConfiguration is not available") Right mTxpConfig

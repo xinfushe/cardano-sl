@@ -71,6 +71,7 @@ import           Pos.Core.Conc (currentTime)
 import           Pos.Core.Configuration (HasGenesisBlockVersionData,
                      withGenesisBlockVersionData)
 import           Pos.Core.Genesis (GenesisInitializer (..), GenesisSpec (..))
+import           Pos.Core.NetworkMagic (NetworkMagic, makeNetworkMagic)
 import           Pos.Core.Reporting (HasMisbehaviorMetrics (..),
                      MonadReporting (..))
 import           Pos.Core.Slotting (MonadSlotsData)
@@ -252,10 +253,12 @@ initBlockTestContext ::
        ( HasConfiguration
        , HasDlgConfiguration
        )
-    => TestParams
+    => ProtocolMagic
+    -> NetworkMagic
+    -> TestParams
     -> (BlockTestContext -> Emulation a)
     -> Emulation a
-initBlockTestContext tp@TestParams {..} callback = do
+initBlockTestContext pm nm tp@TestParams {..} callback = do
     clockVar <- Emulation ask
     dbPureVar <- newDBPureVar
     (futureLrcCtx, putLrcCtx) <- newInitFuture "lrcCtx"
@@ -281,7 +284,7 @@ initBlockTestContext tp@TestParams {..} callback = do
             btcSscState <- mkSscState
             _gscSlogGState <- mkSlogGState
             btcTxpMem <- mkTxpLocalData
-            let btcTxpGlobalSettings = txpGlobalSettings dummyProtocolMagic _tpTxpConfiguration
+            let btcTxpGlobalSettings = txpGlobalSettings pm nm _tpTxpConfiguration
             let btcSlotId = Nothing
             let btcParams = tp
             let btcGState = GS.GStateContext {_gscDB = DB.PureDB dbPureVar, ..}
@@ -312,12 +315,14 @@ runBlockTestMode ::
        ( HasDlgConfiguration
        , HasConfiguration
        )
-    => TestParams
+    => ProtocolMagic
+    -> NetworkMagic
+    -> TestParams
     -> BlockTestMode a
     -> IO a
-runBlockTestMode tp action =
+runBlockTestMode pm nm tp action =
     runEmulation (getTimestamp $ tp ^. tpStartTime) $
-    initBlockTestContext tp (runReaderT action)
+    initBlockTestContext pm nm tp (runReaderT action)
 
 ----------------------------------------------------------------------------
 -- Property
@@ -329,13 +334,15 @@ type BlockProperty = PropertyM BlockTestMode
 -- 'TestParams'.
 blockPropertyToProperty
     :: (HasDlgConfiguration, Testable a)
-    => Gen TestParams
+    => ProtocolMagic
+    -> NetworkMagic
+    -> Gen TestParams
     -> (HasConfiguration => BlockProperty a)
     -> Property
-blockPropertyToProperty tpGen blockProperty =
+blockPropertyToProperty pm nm tpGen blockProperty =
     forAll tpGen $ \tp ->
         withTestParams tp $ \_ ->
-        monadic (ioProperty . runBlockTestMode tp) blockProperty
+        monadic (ioProperty . runBlockTestMode pm nm tp) blockProperty
 
 -- | Simplified version of 'blockPropertyToProperty' which uses
 -- 'Arbitrary' instance to generate 'TestParams'.
@@ -353,7 +360,9 @@ blockPropertyTestable ::
        (HasDlgConfiguration, Testable a)
     => (HasConfiguration => BlockProperty a)
     -> Property
-blockPropertyTestable = blockPropertyToProperty arbitrary
+blockPropertyTestable bp = forAll arbitrary $ \(pm, rnm) -> do
+    let nm = makeNetworkMagic rnm pm
+    blockPropertyToProperty pm nm arbitrary bp
 
 ----------------------------------------------------------------------------
 -- Boilerplate TestInitContext instances

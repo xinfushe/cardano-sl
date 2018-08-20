@@ -37,6 +37,7 @@ import           Pos.Core (AddrAttributes (..), AddrStakeDistribution (..),
 import           Pos.Core.Common (integerToCoin)
 import qualified Pos.Core.Common as Fee (TxFeePolicy (..),
                      calculateTxSizeLinear)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Core.Txp (Tx (..), TxAux (..), TxId, TxOut (..), TxUndo,
                      TxpUndo, checkTxAux, toaOut, txOutAddress)
 import           Pos.Core.Update (BlockVersionData (..), isBootstrapEraBVD)
@@ -59,14 +60,16 @@ import           Pos.Util (liftEither)
 -- data is just ignored.
 verifyToil ::
        ProtocolMagic
+    -> NetworkMagic
     -> BlockVersionData
     -> Set Address
     -> EpochIndex
     -> Bool
     -> [TxAux]
     -> ExceptT ToilVerFailure UtxoM TxpUndo
-verifyToil pm bvd lockedAssets curEpoch verifyAllIsKnown =
-    mapM (verifyAndApplyTx pm bvd lockedAssets curEpoch verifyAllIsKnown . withTxId)
+verifyToil pm nm bvd lockedAssets curEpoch verifyAllIsKnown =
+    mapM (verifyAndApplyTx pm nm bvd lockedAssets curEpoch verifyAllIsKnown
+              . withTxId)
 
 -- | Apply transactions from one block. They must be valid (for
 -- example, it implies topological sort).
@@ -90,28 +93,32 @@ rollbackToil txun = do
 -- if transaction is valid.
 processTx
     :: ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> BlockVersionData
     -> EpochIndex
     -> (TxId, TxAux)
     -> ExceptT ToilVerFailure LocalToilM TxUndo
-processTx pm txpConfig bvd curEpoch tx@(id, aux) = do
+processTx pm nm txpConfig bvd curEpoch tx@(id, aux) = do
     whenM (lift $ hasTx id) $ throwError ToilKnown
     whenM ((>= memPoolLimitTx txpConfig) <$> lift memPoolSize) $
         throwError (ToilOverwhelmed $ memPoolLimitTx txpConfig)
-    undo <- mapExceptT utxoMToLocalToilM $ verifyAndApplyTx pm bvd (tcAssetLockedSrcAddrs txpConfig) curEpoch True tx
+    undo <- mapExceptT utxoMToLocalToilM $
+        verifyAndApplyTx pm nm bvd (tcAssetLockedSrcAddrs txpConfig)
+                         curEpoch True tx
     undo <$ lift (putTxWithUndo id aux undo)
 
 -- | Get rid of invalid transactions.
 -- All valid transactions will be added to mem pool and applied to utxo.
 normalizeToil
     :: ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> BlockVersionData
     -> EpochIndex
     -> [(TxId, TxAux)]
     -> LocalToilM ()
-normalizeToil pm txpConfig bvd curEpoch txs = mapM_ normalize ordered
+normalizeToil pm nm txpConfig bvd curEpoch txs = mapM_ normalize ordered
   where
     -- If there is a cycle in the tx list, topsortTxs returns Nothing.
     -- Why is that not an error? And if its not an error, why bother
@@ -121,7 +128,7 @@ normalizeToil pm txpConfig bvd curEpoch txs = mapM_ normalize ordered
     normalize ::
            (TxId, TxAux)
         -> LocalToilM ()
-    normalize = void . runExceptT . processTx pm txpConfig bvd curEpoch
+    normalize = void . runExceptT . processTx pm nm txpConfig bvd curEpoch
 
 ----------------------------------------------------------------------------
 -- Verify and Apply logic
@@ -131,20 +138,21 @@ normalizeToil pm txpConfig bvd curEpoch txs = mapM_ normalize ordered
 -- care about stakes for local txp.
 verifyAndApplyTx ::
        ProtocolMagic
+    -> NetworkMagic
     -> BlockVersionData
     -> Set Address
     -> EpochIndex
     -> Bool
     -> (TxId, TxAux)
     -> ExceptT ToilVerFailure UtxoM TxUndo
-verifyAndApplyTx pm adoptedBVD lockedAssets curEpoch verifyVersions tx@(_, txAux) = do
+verifyAndApplyTx pm nm adoptedBVD lockedAssets curEpoch verifyVersions tx@(_, txAux) = do
     whenLeft (checkTxAux txAux) (throwError . ToilInconsistentTxAux)
     vtur@VerifyTxUtxoRes {..} <- Utxo.verifyTxUtxo pm ctx lockedAssets txAux
     liftEither $ verifyGState adoptedBVD curEpoch txAux vtur
     lift $ applyTxToUtxo' tx
     pure vturUndo
   where
-    ctx = Utxo.VTxContext verifyVersions
+    ctx = Utxo.VTxContext verifyVersions nm
 
 isRedeemTx :: TxUndo -> Bool
 isRedeemTx resolvedOuts = all isRedeemAddress inputAddresses

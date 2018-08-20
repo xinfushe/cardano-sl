@@ -27,6 +27,7 @@ import           Pos.Communication (NodeId)
 import           Pos.Core (HasConfiguration, StakeholderId, addressHash)
 import           Pos.Core.Chrono (NE, NewestFirst, OldestFirst)
 import           Pos.Core.Delegation (ProxySKHeavy)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Core.Ssc (getCertId, getCommitmentsMap, lookupVss)
 import           Pos.Core.Txp (TxAux (..), TxMsgContents (..))
 import           Pos.Core.Update (BlockVersionData, UpdateProposal (..),
@@ -96,12 +97,13 @@ logicFull
     :: forall ctx m .
        ( LogicWorkMode ctx m )
     => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> StakeholderId
     -> SecurityParams
     -> (JLEvent -> m ()) -- ^ JSON log callback. FIXME replace by structured logging solution
     -> Logic m
-logicFull pm txpConfig ourStakeholderId securityParams jsonLogTx =
+logicFull pm nm txpConfig ourStakeholderId securityParams jsonLogTx =
     let
         getSerializedBlock :: HeaderHash -> m (Maybe SerializedBlock)
         getSerializedBlock = DB.dbGetSerBlock
@@ -153,7 +155,7 @@ logicFull pm txpConfig ourStakeholderId securityParams jsonLogTx =
             { toKey = pure . Tagged . hash . taTx . getTxMsgContents
             , handleInv = \(Tagged txId) -> not . HM.member txId . _mpLocalTxs <$> withTxpLocalData getMemPool
             , handleReq = \(Tagged txId) -> fmap TxMsgContents . HM.lookup txId . _mpLocalTxs <$> withTxpLocalData getMemPool
-            , handleData = \(TxMsgContents txAux) -> Txp.handleTxDo pm txpConfig jsonLogTx txAux
+            , handleData = \(TxMsgContents txAux) -> Txp.handleTxDo pm nm txpConfig jsonLogTx txAux
             }
 
         postUpdate = KeyVal

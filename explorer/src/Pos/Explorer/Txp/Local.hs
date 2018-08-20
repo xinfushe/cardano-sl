@@ -15,6 +15,7 @@ import qualified Data.HashMap.Strict as HM
 import           Pos.Chain.Txp (ToilVerFailure (..), TxpConfiguration, Utxo)
 import           Pos.Core (EpochIndex, Timestamp)
 import           Pos.Core.JsonLog (CanJsonLog (..))
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Core.Txp (TxAux (..), TxId)
 import           Pos.Core.Update (BlockVersionData)
 import           Pos.Crypto (ProtocolMagic)
@@ -48,19 +49,21 @@ eTxProcessTransaction ::
        , CanJsonLog m
        )
     => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> (TxId, TxAux)
     -> m (Either ToilVerFailure ())
-eTxProcessTransaction pm txpConfig itw =
-    withStateLock LowPriority ProcessTransaction $ \__tip -> eTxProcessTransactionNoLock pm txpConfig itw
+eTxProcessTransaction pm nm txpConfig itw =
+    withStateLock LowPriority ProcessTransaction $ \__tip -> eTxProcessTransactionNoLock pm nm txpConfig itw
 
 eTxProcessTransactionNoLock ::
        forall ctx m. (ETxpLocalWorkMode ctx m)
     => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> (TxId, TxAux)
     -> m (Either ToilVerFailure ())
-eTxProcessTransactionNoLock pm txpConfig itw = getCurrentSlot >>= \case
+eTxProcessTransactionNoLock pm nm txpConfig itw = getCurrentSlot >>= \case
     Nothing   -> pure $ Left ToilSlotUnknown
     Just slot -> do
         -- First get the current @SlotId@ so we can calculate the time.
@@ -78,7 +81,7 @@ eTxProcessTransactionNoLock pm txpConfig itw = getCurrentSlot >>= \case
         -> (TxId, TxAux)
         -> ExceptT ToilVerFailure ELocalToilM ()
     processTx' mTxTimestamp bvd epoch tx =
-        eProcessTx pm txpConfig bvd epoch tx (TxExtra Nothing mTxTimestamp)
+        eProcessTx pm nm txpConfig bvd epoch tx (TxExtra Nothing mTxTimestamp)
 
 -- | 1. Recompute UtxoView by current MemPool
 --   2. Remove invalid transactions from MemPool
@@ -86,9 +89,10 @@ eTxProcessTransactionNoLock pm txpConfig itw = getCurrentSlot >>= \case
 eTxNormalize
     :: forall ctx m . (ETxpLocalWorkMode ctx m)
     => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> m ()
-eTxNormalize pm txpConfig = do
+eTxNormalize pm nm txpConfig = do
     extras <- MM.insertionsMap . view eemLocalTxsExtra <$> withTxpLocalData getTxpExtra
     txNormalizeAbstract buildExplorerExtraLookup (normalizeToil' extras)
   where
@@ -100,4 +104,4 @@ eTxNormalize pm txpConfig = do
         -> ELocalToilM ()
     normalizeToil' extras bvd epoch txs =
         let toNormalize = HM.toList $ HM.intersectionWith (,) txs extras
-        in eNormalizeToil pm txpConfig bvd epoch toNormalize
+        in eNormalizeToil pm nm txpConfig bvd epoch toNormalize

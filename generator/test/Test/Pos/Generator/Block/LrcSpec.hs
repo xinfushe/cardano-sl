@@ -136,6 +136,8 @@ lrcCorrectnessProp txpConfig = do
     -- but rather want to use our knowledge.
     let blkCount0 = 8 * k - 1
     () <$ bpGenBlocks dummyProtocolMagic
+                      (makeNetworkMagic NMMustBeNothing dummyProtocolMagic)
+                      -- TODO mhueschen ^ should we test this with both RequiresProtocolMagic values?
                       txpConfig
                       (Just blkCount0)
                       (EnableTxPayload False)
@@ -153,6 +155,8 @@ lrcCorrectnessProp txpConfig = do
     -- already applied 1 blocks, hence 'pred'.
     blkCount1 <- pred <$> pick (choose (k, 2 * k))
     () <$ bpGenBlocks dummyProtocolMagic
+                      (makeNetworkMagic NMMustBeNothing dummyProtocolMagic)
+                      -- TODO mhueschen ^ should we test this with both RequiresProtocolMagic values?
                       txpConfig
                       (Just blkCount1)
                       (EnableTxPayload False)
@@ -303,6 +307,8 @@ lessThanKAfterCrucialProp txpConfig = do
     -- at least 'k'.
     let shouldSucceed = inLast2K >= k
     () <$ bpGenBlocks dummyProtocolMagic
+                      (makeNetworkMagic NMMustBeNothing dummyProtocolMagic)
+                      -- TODO mhueschen ^ should we test this with both RequiresProtocolMagic values?
                       txpConfig
                       (Just toGenerate)
                       (EnableTxPayload False)

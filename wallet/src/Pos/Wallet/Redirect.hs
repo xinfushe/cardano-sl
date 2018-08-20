@@ -33,6 +33,7 @@ import           Pos.Chain.Update (ConfirmedProposalState)
 import qualified Pos.Context as PC
 import           Pos.Core (ChainDifficulty, HasConfiguration, Timestamp,
                      difficultyL, getCurrentTimestamp)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Core.Txp (Tx, TxAux (..), TxId, TxUndo)
 import           Pos.Crypto (ProtocolMagic, WithHash (..))
 import qualified Pos.DB.BlockIndex as DB
@@ -135,12 +136,14 @@ txpProcessTxWebWallet
     , WS.WalletDbReader ctx m
     )
     => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> (TxId, TxAux)
     -> m (Either ToilVerFailure ())
-txpProcessTxWebWallet pm txpConfig tx@(txId, txAux) = do
+txpProcessTxWebWallet pm nm txpConfig tx@(txId, txAux) = do
     db <- WS.askWalletDB
-    txProcessTransaction pm txpConfig tx >>= traverse (const $ addTxToWallets db)
+    txProcessTransaction pm nm txpConfig tx >>=
+        traverse (const $ addTxToWallets db)
   where
     addTxToWallets :: WS.WalletDB -> m ()
     addTxToWallets db = do
@@ -166,6 +169,7 @@ txpNormalizeWebWallet
        , MempoolExt m ~ ()
        )
     => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> m ()
 txpNormalizeWebWallet = txNormalize

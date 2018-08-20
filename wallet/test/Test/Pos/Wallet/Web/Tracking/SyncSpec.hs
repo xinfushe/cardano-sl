@@ -48,9 +48,10 @@ import           Test.Pos.Wallet.Web.Mode (walletPropertySpec)
 import           Test.Pos.Wallet.Web.Util (importSomeWallets, wpGenBlocks)
 
 spec :: Spec
-spec = withDefConfigurations $ \_ _nm _ _ -> do
+spec = withDefConfigurations $ \_ nm _ _ -> do
     describe "Pos.Wallet.Web.Tracking.BListener" $ modifyMaxSuccess (const 10) $ do
-        describe "Two applications and rollbacks" twoApplyTwoRollbacksSpec
+        describe "Two applications and rollbacks" (twoApplyTwoRollbacksSpec nm)
+        -- TODO mhueschen : should this spec get run twice with 2 different networkmagics?
     xdescribe "Pos.Wallet.Web.Tracking.evalChange (pending, CSL-2473)" $ do
         prop evalChangeDiffAccountsDesc evalChangeDiffAccounts
         prop evalChangeSameAccountsDesc evalChangeSameAccounts
@@ -60,8 +61,8 @@ spec = withDefConfigurations $ \_ _nm _ _ -> do
     evalChangeSameAccountsDesc =
       "Outgoing transaction from account to the same account."
 
-twoApplyTwoRollbacksSpec :: HasConfigurations => Spec
-twoApplyTwoRollbacksSpec = walletPropertySpec twoApplyTwoRollbacksDesc $ do
+twoApplyTwoRollbacksSpec :: HasConfigurations => NetworkMagic -> Spec
+twoApplyTwoRollbacksSpec nm = walletPropertySpec twoApplyTwoRollbacksDesc $ do
     let k = fromIntegral blkSecurityParam :: Word64
     -- During these tests we need to manually switch back to the old synchronous
     -- way of restoring.
@@ -75,6 +76,7 @@ twoApplyTwoRollbacksSpec = walletPropertySpec twoApplyTwoRollbacksDesc $ do
     applyBlocksCnt2 <- pick $ choose (1, k `div` 2)
     let txpConfig = TxpConfiguration 200 Set.empty
     blunds1 <- wpGenBlocks dummyProtocolMagic
+                           nm
                            txpConfig
                            (Just $ BlockCount applyBlocksCnt1)
                            (EnableTxPayload True)

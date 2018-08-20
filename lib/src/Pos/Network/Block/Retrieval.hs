@@ -24,6 +24,7 @@ import           Pos.Chain.Txp (TxpConfiguration)
 import           Pos.Core (difficultyL, isMoreDifficult)
 import           Pos.Core.Chrono (NE, OldestFirst (..), _OldestFirst)
 import           Pos.Core.Conc (delay)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Core.Reporting (HasMisbehaviorMetrics)
 import           Pos.Crypto (ProtocolMagic, shortHashF)
 import           Pos.DB.Block (ClassifyHeaderRes (..), classifyNewHeader,
@@ -60,9 +61,10 @@ retrievalWorker
        , HasMisbehaviorMetrics ctx
        )
     => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> Diffusion m -> m ()
-retrievalWorker pm txpConfig diffusion = do
+retrievalWorker pm nm txpConfig diffusion = do
     logInfo "Starting retrievalWorker loop"
     mainLoop
   where
@@ -114,7 +116,7 @@ retrievalWorker pm txpConfig diffusion = do
         logDebug $ "handleContinues: " <> pretty hHash
         classifyNewHeader pm header >>= \case
             CHContinues ->
-                void $ getProcessBlocks pm txpConfig diffusion nodeId (headerHash header) [hHash]
+                void $ getProcessBlocks pm nm txpConfig diffusion nodeId (headerHash header) [hHash]
             res -> logDebug $
                 "processContHeader: expected header to " <>
                 "be continuation, but it's " <> show res
@@ -170,7 +172,7 @@ retrievalWorker pm txpConfig diffusion = do
                                         "already present in db"
         logDebug "handleRecovery: fetching blocks"
         checkpoints <- toList <$> getHeadersOlderExp Nothing
-        void $ streamProcessBlocks pm txpConfig diffusion nodeId (headerHash rHeader) checkpoints
+        void $ streamProcessBlocks pm nm txpConfig diffusion nodeId (headerHash rHeader) checkpoints
 
 ----------------------------------------------------------------------------
 -- Entering and exiting recovery mode
@@ -280,13 +282,14 @@ getProcessBlocks
        , HasMisbehaviorMetrics ctx
        )
     => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> Diffusion m
     -> NodeId
     -> HeaderHash
     -> [HeaderHash]
     -> m ()
-getProcessBlocks pm txpConfig diffusion nodeId desired checkpoints = do
+getProcessBlocks pm nm txpConfig diffusion nodeId desired checkpoints = do
     result <- Diffusion.getBlocks diffusion nodeId desired checkpoints
     case OldestFirst <$> nonEmpty (getOldestFirst result) of
       Nothing -> do
@@ -299,7 +302,7 @@ getProcessBlocks pm txpConfig diffusion nodeId desired checkpoints = do
           logDebug $ sformat
               ("Retrieved "%int%" blocks")
               (blocks ^. _OldestFirst . to NE.length)
-          handleBlocks pm txpConfig blocks diffusion
+          handleBlocks pm nm txpConfig blocks diffusion
           -- If we've downloaded any block with bigger
           -- difficulty than ncRecoveryHeader, we're
           -- gracefully exiting recovery mode.
@@ -326,19 +329,20 @@ streamProcessBlocks
        , HasMisbehaviorMetrics ctx
        )
     => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> Diffusion m
     -> NodeId
     -> HeaderHash
     -> [HeaderHash]
     -> m ()
-streamProcessBlocks pm txpConfig diffusion nodeId desired checkpoints = do
+streamProcessBlocks pm nm txpConfig diffusion nodeId desired checkpoints = do
     logInfo "streaming start"
     r <- Diffusion.streamBlocks diffusion nodeId desired checkpoints writeCallback
     case r of
          Nothing -> do
              logInfo "streaming not supported, reverting to batch mode"
-             getProcessBlocks pm txpConfig diffusion nodeId desired checkpoints
+             getProcessBlocks pm nm txpConfig diffusion nodeId desired checkpoints
          Just _  -> do
              logInfo "streaming done"
              return ()
@@ -346,4 +350,5 @@ streamProcessBlocks pm txpConfig diffusion nodeId desired checkpoints = do
     writeCallback :: [Block] -> m ()
     writeCallback [] = return ()
     writeCallback (block:blocks) =
-        handleBlocks pm txpConfig (OldestFirst (NE.reverse $ block :| blocks)) diffusion
+        handleBlocks pm nm txpConfig
+                     (OldestFirst (NE.reverse $ block :| blocks)) diffusion

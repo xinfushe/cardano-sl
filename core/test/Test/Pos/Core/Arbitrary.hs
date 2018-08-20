@@ -57,6 +57,8 @@ import           Pos.Core.Constants (sharedSeedLength)
 import           Pos.Core.Delegation (HeavyDlgIndex (..), LightDlgIndices (..))
 import qualified Pos.Core.Genesis as G
 import           Pos.Core.Merkle (MerkleTree, mkMerkleTree)
+import           Pos.Core.NetworkMagic (NetworkMagic (..),
+                     RequiresNetworkMagic (..))
 import           Pos.Core.ProtocolConstants (ProtocolConstants (..),
                      VssMaxTTL (..), VssMinTTL (..))
 import           Pos.Core.Ssc (VssCertificate, mkVssCertificate,
@@ -257,6 +259,9 @@ instance Arbitrary AddrStakeDistribution where
                     portion <-
                         CoinPortion <$> choose (1, max 1 (limit - 1))
                     genPortions (n - 1) (portion : res)
+
+instance Arbitrary NetworkMagic where
+    arbitrary = oneof [pure NMNothing, NMJust <$> arbitrary]
 
 instance Arbitrary AddrAttributes where
     arbitrary = genericArbitrary
@@ -564,8 +569,8 @@ instance Arbitrary G.GenesisProtocolConstants where
                  <$> arbitrary
                  <*> arbitrary
 
-instance Arbitrary G.RequiresNetworkMagic where
-    arbitrary = elements [G.NMMustBeNothing, G.NMMustBeJust]
+instance Arbitrary RequiresNetworkMagic where
+    arbitrary = elements [NMMustBeNothing, NMMustBeJust]
 
 instance (HasProtocolConstants) => Arbitrary G.GenesisData where
     arbitrary = G.GenesisData

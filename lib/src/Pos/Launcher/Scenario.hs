@@ -24,6 +24,7 @@ import           Pos.Core (addressHash, genesisData)
 import           Pos.Core.Conc (mapConcurrently)
 import           Pos.Core.Genesis (GenesisData (..), GenesisDelegation (..),
                      GenesisWStakeholders (..), gdFtsSeed)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Crypto (ProtocolMagic, pskDelegatePk)
 import qualified Pos.DB.BlockIndex as DB
 import qualified Pos.GState as GS
@@ -107,13 +108,14 @@ runNode
        , WorkMode ctx m
        )
     => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> NodeResources ext
     -> [Diffusion m -> m ()]
     -> Diffusion m -> m ()
-runNode pm txpConfig nr plugins = runNode' nr workers' plugins
+runNode pm nm txpConfig nr plugins = runNode' nr workers' plugins
   where
-    workers' = allWorkers pm txpConfig nr
+    workers' = allWorkers pm nm txpConfig nr
 
 -- | This function prints a very useful message when node is started.
 nodeStartMsg :: (HasUpdateConfiguration, WithLogger m) => m ()

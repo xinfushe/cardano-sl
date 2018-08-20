@@ -25,6 +25,7 @@ import           Pos.Chain.Txp (TxpConfiguration)
 import           Pos.Core.Chrono (NE, NewestFirst, OldestFirst)
 import           Pos.Core.Configuration (HasConfiguration)
 import           Pos.Core.Exception (CardanoFatalError (..))
+import           Pos.Core.NetworkMagic (RequiresNetworkMagic, makeNetworkMagic)
 import           Pos.Core.Slotting (EpochOrSlot (..), SlotId, getEpochOrSlot)
 import           Pos.DB.Block (BlockLrcMode, getVerifyBlocksContext',
                      rollbackBlocks, verifyAndApplyBlocks)
@@ -71,10 +72,11 @@ verifyAndApplyBlocks' ::
        , BlockLrcMode BlockTestContext m
        , MonadTxpLocal m
        )
-    => TxpConfiguration
+    => RequiresNetworkMagic
+    -> TxpConfiguration
     -> OldestFirst NE Blund
     -> m ()
-verifyAndApplyBlocks' txpConfig blunds = do
+verifyAndApplyBlocks' rnm txpConfig blunds = do
     let -- We cannot simply take `getCurrentSlot` since blocks are generated in
         --`MonadBlockGen` which locally changes its current slot.  We just take
         -- the last slot of all generated blocks.
@@ -82,9 +84,10 @@ verifyAndApplyBlocks' txpConfig blunds = do
         curSlot = lastSlot (map fst . IL.toList $ blunds)
     ctx <- getVerifyBlocksContext' curSlot
 
+    let nm = makeNetworkMagic rnm dummyProtocolMagic
     satisfySlotCheck blocks $ do
         _ :: (HeaderHash, NewestFirst [] Blund) <- eitherToThrow =<<
-            verifyAndApplyBlocks dummyProtocolMagic txpConfig ctx True blocks
+            verifyAndApplyBlocks dummyProtocolMagic nm txpConfig ctx True blocks
         return ()
   where
     blocks = fst <$> blunds
@@ -94,12 +97,13 @@ runBlockEvent ::
        ( BlockLrcMode BlockTestContext m
        , MonadTxpLocal m
        )
-    => TxpConfiguration
+    => RequiresNetworkMagic
+    -> TxpConfiguration
     -> BlockEvent
     -> m BlockEventResult
 
-runBlockEvent txpConfig (BlkEvApply ev) =
-    (onSuccess <$ verifyAndApplyBlocks' txpConfig (ev ^. beaInput))
+runBlockEvent rnm txpConfig (BlkEvApply ev) =
+    (onSuccess <$ verifyAndApplyBlocks' rnm txpConfig (ev ^. beaInput))
         `catch` (return . onFailure)
   where
     onSuccess = case ev ^. beaOutValid of
@@ -109,7 +113,7 @@ runBlockEvent txpConfig (BlkEvApply ev) =
         BlockApplySuccess -> BlockEventFailure (IsExpected False) e
         BlockApplyFailure -> BlockEventFailure (IsExpected True) e
 
-runBlockEvent _ (BlkEvRollback ev) =
+runBlockEvent _ _ (BlkEvRollback ev) = do
     (onSuccess <$ rollbackBlocks dummyProtocolMagic (ev ^. berInput))
        `catch` (return . onFailure)
   where
@@ -131,7 +135,7 @@ runBlockEvent _ (BlkEvRollback ev) =
             in
                 BlockEventFailure (IsExpected isExpected) e
 
-runBlockEvent _ (BlkEvSnap ev) =
+runBlockEvent _ _ (BlkEvSnap ev) =
     (onSuccess <$ runSnapshotOperation ev)
         `catch` (return . onFailure)
   where
@@ -177,16 +181,17 @@ runBlockScenario ::
        , BlockLrcMode BlockTestContext m
        , MonadTxpLocal m
        )
-    => TxpConfiguration
+    => RequiresNetworkMagic
+    -> TxpConfiguration
     -> BlockScenario
     -> m BlockScenarioResult
-runBlockScenario _ (BlockScenario []) =
+runBlockScenario _ _ (BlockScenario []) =
     return BlockScenarioFinishedOk
-runBlockScenario txpConfig (BlockScenario (ev:evs)) = do
-    runBlockEvent txpConfig ev >>= \case
+runBlockScenario rnm txpConfig (BlockScenario (ev:evs)) = do
+    runBlockEvent rnm txpConfig ev >>= \case
         BlockEventSuccess (IsExpected isExp) ->
             if isExp
-                then runBlockScenario txpConfig (BlockScenario evs)
+                then runBlockScenario rnm txpConfig (BlockScenario evs)
                 else return BlockScenarioUnexpectedSuccess
         BlockEventFailure (IsExpected isExp) e ->
             return $ if isExp

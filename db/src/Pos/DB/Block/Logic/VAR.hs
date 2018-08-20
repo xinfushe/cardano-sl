@@ -31,6 +31,7 @@ import           Pos.Chain.Update (PollModifier)
 import           Pos.Core (epochIndexL)
 import           Pos.Core.Chrono (NE, NewestFirst (..), OldestFirst (..),
                      toNewestFirst, toOldestFirst)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Core.Reporting (HasMisbehaviorMetrics)
 import           Pos.Crypto (ProtocolMagic)
 import           Pos.DB.Block.Logic.Internal (BypassSecurityCheck (..),
@@ -134,18 +135,19 @@ verifyAndApplyBlocks
        , HasMisbehaviorMetrics ctx
        )
     => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> VerifyBlocksContext
     -> Bool
     -> OldestFirst NE Block
     -> m (Either ApplyBlocksException (HeaderHash, NewestFirst [] Blund))
-verifyAndApplyBlocks pm txpConfig ctx rollback blocks = runExceptT $ do
+verifyAndApplyBlocks pm nm txpConfig ctx rollback blocks = runExceptT $ do
     tip <- lift GS.getTip
     let assumedTip = blocks ^. _Wrapped . _neHead . prevBlockL
     when (tip /= assumedTip) $
         throwError $ ApplyBlocksTipMismatch "verify and apply" tip assumedTip
     hh <- rollingVerifyAndApply [] (spanEpoch blocks)
-    lift $ normalizeMempool pm txpConfig
+    lift $ normalizeMempool pm nm txpConfig
     pure hh
   where
     -- Spans input into @(a, b)@ where @a@ is either a single genesis
@@ -300,11 +302,12 @@ applyWithRollback
        , HasMisbehaviorMetrics ctx
        )
     => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> NewestFirst NE Blund        -- ^ Blocks to rollbck
     -> OldestFirst NE Block        -- ^ Blocks to apply
     -> m (Either ApplyBlocksException HeaderHash)
-applyWithRollback pm txpConfig toRollback toApply = runExceptT $ do
+applyWithRollback pm nm txpConfig toRollback toApply = runExceptT $ do
     tip <- lift GS.getTip
     when (tip /= newestToRollback) $
         throwError $ ApplyBlocksTipMismatch "applyWithRollback/rollback" tip newestToRollback
@@ -333,6 +336,6 @@ applyWithRollback pm txpConfig toRollback toApply = runExceptT $ do
 
     onGoodRollback = do
         ctx <- getVerifyBlocksContext
-        verifyAndApplyBlocks pm txpConfig ctx True toApply >>= \case
+        verifyAndApplyBlocks pm nm txpConfig ctx True toApply >>= \case
             Left err           -> applyBack $> Left err
             Right (tipHash, _) -> pure (Right tipHash)

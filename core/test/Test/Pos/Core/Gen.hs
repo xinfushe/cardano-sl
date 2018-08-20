@@ -171,7 +171,8 @@ import           Pos.Core.Genesis (FakeAvvmOptions (..),
 import           Pos.Core.JsonLog.LogEvents (InvReqDataFlowLog (..))
 import           Pos.Core.Merkle (MerkleRoot (..), MerkleTree (..),
                      mkMerkleTree, mtRoot)
-import           Pos.Core.NetworkMagic (RequiresNetworkMagic (..))
+import           Pos.Core.NetworkMagic (NetworkMagic (..),
+                     RequiresNetworkMagic (..))
 import           Pos.Core.ProtocolConstants (ProtocolConstants (..),
                      VssMaxTTL (..), VssMinTTL (..))
 import           Pos.Core.Slotting (EpochIndex (..), EpochOrSlot (..),
@@ -196,8 +197,8 @@ import           Pos.Core.Update (ApplicationName (..), BlockVersion (..),
                      UpdateProof, UpdateProposal (..),
                      UpdateProposalToSign (..), UpdateProposals,
                      UpdateVote (..), VoteId, mkUpdateVote)
-import           Pos.Crypto (Hash, ProtocolMagic, decodeHash, deterministic,
-                     hash, safeCreatePsk, sign)
+import           Pos.Crypto (Hash, ProtocolMagic (..), decodeHash,
+                     deterministic, hash, safeCreatePsk, sign)
 import           Pos.Util.Util (leftToPanic)
 import           Serokell.Data.Memory.Units (Byte)
 
@@ -216,9 +217,12 @@ genGenesisHash = do
 ----------------------------------------------------------------------------
 
 genAddrAttributes :: Gen AddrAttributes
-genAddrAttributes = AddrAttributes <$> hap <*> genAddrStakeDistribution
+genAddrAttributes = AddrAttributes <$> hap <*> genAddrStakeDistribution <*> nm
   where
     hap = Gen.maybe genHDAddressPayload
+    nm  = Gen.choice [ pure NMNothing
+                     , NMJust <$> genWord8
+                     ]
 
 genAddress :: Gen Address
 genAddress = makeAddress <$> genAddrSpendingData <*> genAddrAttributes

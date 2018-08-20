@@ -30,6 +30,7 @@ import           Pos.Core (BlockCount, HasGenesisData, HasProtocolConstants,
                      SlotId (..), epochIndexL, genesisData)
 import           Pos.Core.Chrono (NE, OldestFirst (..))
 import           Pos.Core.Genesis (GenesisData (..))
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Crypto (ProtocolMagic)
 import           Pos.DB.Txp (MempoolExt, MonadTxpLocal, TxpGlobalSettings,
                      txpGlobalSettings)
@@ -55,11 +56,12 @@ genBlockGenParams
        , MonadReader ctx m
        )
     => ProtocolMagic
+    -> NetworkMagic
     -> Maybe BlockCount
     -> EnableTxPayload
     -> InplaceDB
     -> PropertyM m BlockGenParams
-genBlockGenParams pm blkCnt (EnableTxPayload enableTxPayload) (InplaceDB inplaceDB) = do
+genBlockGenParams pm nm blkCnt (EnableTxPayload enableTxPayload) (InplaceDB inplaceDB) = do
     allSecrets_ <- lift $ getAllSecrets
     let genStakeholders = gdBootStakeholders genesisData
     let genBlockGenParamsF s =
@@ -72,7 +74,7 @@ genBlockGenParams pm blkCnt (EnableTxPayload enableTxPayload) (InplaceDB inplace
                 , _bgpInplaceDB = inplaceDB
                 , _bgpGenStakeholders = genStakeholders
                 , _bgpSkipNoKey = False
-                , _bgpTxpGlobalSettings = txpGlobalSettings pm (TxpConfiguration 200 Set.empty)
+                , _bgpTxpGlobalSettings = txpGlobalSettings pm nm (TxpConfiguration 200 Set.empty)
                 }
     pick $ sized genBlockGenParamsF
 
@@ -88,15 +90,17 @@ bpGenBlocks
        , HasAllSecrets ctx
        )
     => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> Maybe BlockCount
     -> EnableTxPayload
     -> InplaceDB
     -> PropertyM m (OldestFirst [] Blund)
-bpGenBlocks pm txpConfig blkCnt enableTxPayload inplaceDB = do
-    params <- genBlockGenParams pm blkCnt enableTxPayload inplaceDB
+bpGenBlocks pm nm txpConfig blkCnt enableTxPayload inplaceDB = do
+    params <- genBlockGenParams pm nm blkCnt enableTxPayload inplaceDB
     g <- pick $ MkGen $ \qc _ -> qc
-    lift $ OldestFirst <$> evalRandT (genBlocks pm txpConfig params maybeToList) g
+    lift $ OldestFirst <$>
+        evalRandT (genBlocks pm nm txpConfig params maybeToList) g
 
 -- | A version of 'bpGenBlocks' which generates exactly one
 -- block. Allows one to avoid unsafe functions sometimes.
@@ -108,12 +112,14 @@ bpGenBlock
        , Default (MempoolExt m)
        )
     => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> EnableTxPayload
     -> InplaceDB
     -> PropertyM m Blund
 -- 'unsafeHead' is safe because we create exactly 1 block
-bpGenBlock pm txpConfig = fmap (List.head . toList) ... bpGenBlocks pm txpConfig (Just 1)
+bpGenBlock pm nm txpConfig =
+    fmap (List.head . toList) ... bpGenBlocks pm nm txpConfig (Just 1)
 
 getAllSecrets :: (MonadReader ctx m, HasAllSecrets ctx) => m AllSecrets
 getAllSecrets = view allSecrets

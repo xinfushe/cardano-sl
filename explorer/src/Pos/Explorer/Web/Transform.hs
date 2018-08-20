@@ -60,8 +60,8 @@ instance HasConfiguration =>
 
 instance HasConfiguration =>
          MonadTxpLocal ExplorerProd where
-    txpNormalize pm = lift . lift . txpNormalize pm
-    txpProcessTx pm txpConfig = lift . lift . txpProcessTx pm txpConfig
+    txpNormalize pm nm = lift . lift . txpNormalize pm nm
+    txpProcessTx pm nm txpConfig = lift . lift . txpProcessTx pm nm txpConfig
 
 -- | Use the 'RealMode' instance.
 -- FIXME instance on a type synonym.

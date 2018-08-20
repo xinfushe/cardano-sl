@@ -42,8 +42,8 @@ runNodeReal
     -> SscParams
     -> [Diffusion (RealMode EmptyMempoolExt) -> RealMode EmptyMempoolExt ()]
     -> IO ()
-runNodeReal pm _nm txpConfig np sscnp plugins =
-    bracketNodeResources np sscnp (txpGlobalSettings pm txpConfig) (initNodeDBs pm epochSlots) action
+runNodeReal pm nm txpConfig np sscnp plugins =
+    bracketNodeResources np sscnp (txpGlobalSettings pm nm txpConfig) (initNodeDBs pm epochSlots) action
   where
     action :: NodeResources EmptyMempoolExt -> IO ()
-    action nr@NodeResources {..} = runRealMode pm txpConfig nr (runNode pm txpConfig nr plugins)
+    action nr@NodeResources {..} = runRealMode pm nm txpConfig nr (runNode pm nm txpConfig nr plugins)

@@ -175,7 +175,9 @@ data TxOutVerFailure
     | TxOutUnknownAddressType Address
     -- | Can't send to a redeem address
     | TxOutRedeemAddressProhibited Address
-    deriving (Show, Eq, Generic, NFData)
+    -- | NetworkMagic's must match
+    | TxOutAddressBadNetworkMagic Address
+     deriving (Show, Eq, Generic, NFData)
 
 instance Buildable TxOutVerFailure where
     build (TxOutUnknownAttributes addr) =
@@ -186,3 +188,7 @@ instance Buildable TxOutVerFailure where
     build (TxOutRedeemAddressProhibited addr) =
         bprint ("sends money to a redeem address ("
                 %addressF%"), this is prohibited") addr
+    build (TxOutAddressBadNetworkMagic addr) =
+        bprint ("sends money to an address with mismatched \
+                \NetworkMagic ("%addressF%"), this is prohibited")
+               addr

@@ -25,6 +25,7 @@ import           Pos.Core (ChainDifficulty (..), SlotId (..), difficultyL)
 import           Pos.Core.Chrono (getOldestFirst)
 import           Pos.Core.Conc (delay, forConcurrently)
 import           Pos.Core.Configuration (HasConfiguration)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Core.Txp (TxAux)
 import           Pos.Crypto (ProtocolMagic)
 import qualified Pos.DB.BlockIndex as DB
@@ -75,16 +76,17 @@ processPtxInNewestBlocks db PendingTx{..} = do
 
 resubmitTx :: MonadPendings ctx m
            => ProtocolMagic
+           -> NetworkMagic
            -> TxpConfiguration
            -> WalletDB
            -> (TxAux -> m Bool)
            -> PendingTx
            -> m ()
-resubmitTx pm txpConfig db submitTx ptx =
+resubmitTx pm nm txpConfig db submitTx ptx =
     handleAny (\_ -> pass) $ do
         logInfoSP $ \sl -> sformat ("Resubmitting tx "%secretOnlyF sl build) (_ptxTxId ptx)
         let submissionH = ptxResubmissionHandler db ptx
-        submitAndSavePtx pm txpConfig db submitTx submissionH ptx
+        submitAndSavePtx pm nm txpConfig db submitTx submissionH ptx
         updateTiming
   where
     reportNextCheckTime time =
@@ -102,16 +104,17 @@ resubmitTx pm txpConfig db submitTx ptx =
 resubmitPtxsDuringSlot
     :: MonadPendings ctx m
     => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> WalletDB
     -> (TxAux -> m Bool)
     -> [PendingTx]
     -> m ()
-resubmitPtxsDuringSlot pm txpConfig db submitTx ptxs = do
+resubmitPtxsDuringSlot pm nm txpConfig db submitTx ptxs = do
     interval <- evalSubmitDelay (length ptxs)
     void . forConcurrently (enumerate ptxs) $ \(i, ptx) -> do
         delay (interval * i)
-        resubmitTx pm txpConfig db submitTx ptx
+        resubmitTx pm nm txpConfig db submitTx ptx
   where
     submitionEta = 5 :: Second
     evalSubmitDelay toResubmitNum = do
@@ -123,13 +126,14 @@ resubmitPtxsDuringSlot pm txpConfig db submitTx ptxs = do
 processPtxsToResubmit
     :: MonadPendings ctx m
     => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> WalletDB
     -> (TxAux -> m Bool)
     -> SlotId
     -> [PendingTx]
     -> m ()
-processPtxsToResubmit pm txpConfig db submitTx _curSlot ptxs = do
+processPtxsToResubmit pm nm txpConfig db submitTx _curSlot ptxs = do
     ptxsPerSlotLimit <- evalPtxsPerSlotLimit
     let toResubmit =
             take (min 1 ptxsPerSlotLimit) $  -- for now the limit will be 1,
@@ -142,7 +146,7 @@ processPtxsToResubmit pm txpConfig db submitTx _curSlot ptxs = do
         logInfoSP $ \sl -> sformat (fmt sl) (map _ptxTxId toResubmit)
     when (null toResubmit) $
         logDebug "There are no transactions to resubmit"
-    resubmitPtxsDuringSlot pm txpConfig db submitTx toResubmit
+    resubmitPtxsDuringSlot pm nm txpConfig db submitTx toResubmit
   where
     fmt sl = "Transactions to resubmit on current slot: "%secureListF sl listJson
     evalPtxsPerSlotLimit = do
@@ -159,43 +163,46 @@ processPtxsToResubmit pm txpConfig db submitTx _curSlot ptxs = do
 processPtxs
     :: MonadPendings ctx m
     => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> WalletDB
     -> (TxAux -> m Bool)
     -> SlotId
     -> [PendingTx]
     -> m ()
-processPtxs pm txpConfig db submitTx curSlot ptxs = do
+processPtxs pm nm txpConfig db submitTx curSlot ptxs = do
     mapM_ (processPtxInNewestBlocks db) ptxs
     if walletTxCreationDisabled
     then logDebug "Transaction resubmission is disabled"
-    else processPtxsToResubmit pm txpConfig db submitTx curSlot ptxs
+    else processPtxsToResubmit pm nm txpConfig db submitTx curSlot ptxs
 
 processPtxsOnSlot
     :: MonadPendings ctx m
     => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> WalletDB
     -> (TxAux -> m Bool)
     -> SlotId
     -> m ()
-processPtxsOnSlot pm txpConfig db submitTx curSlot = do
+processPtxsOnSlot pm nm txpConfig db submitTx curSlot = do
     ws <- getWalletSnapshot db
     let ptxs = getPendingTxs ws
     let sortedPtxs = getOldestFirst $ sortPtxsChrono ptxs
-    processPtxs pm txpConfig db submitTx curSlot sortedPtxs
+    processPtxs pm nm txpConfig db submitTx curSlot sortedPtxs
 
 -- | On each slot this takes several pending transactions and resubmits them if
 -- needed and possible.
 startPendingTxsResubmitter
     :: MonadPendings ctx m
     => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> WalletDB
     -> (TxAux -> m Bool)
     -> m ()
-startPendingTxsResubmitter pm txpConfig db submitTx =
-    setLogger $ onNewSlot onsp (processPtxsOnSlot pm txpConfig db submitTx)
+startPendingTxsResubmitter pm nm txpConfig db submitTx =
+    setLogger $ onNewSlot onsp (processPtxsOnSlot pm nm txpConfig db submitTx)
   where
     setLogger = modifyLoggerName (<> "tx" <> "resubmitter")
     onsp :: OnNewSlotParams
