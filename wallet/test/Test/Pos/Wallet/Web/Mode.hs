@@ -39,7 +39,7 @@ import           System.Wlog (HasLoggerName (..), LoggerName)
 import           Test.Hspec (Spec)
 import           Test.Hspec.QuickCheck (prop)
 import           Test.QuickCheck (Arbitrary (..), Property, Testable (..),
-                     forAll, ioProperty)
+                     forAll, generate, ioProperty)
 import           Test.QuickCheck.Gen (Gen)
 import           Test.QuickCheck.Monadic (PropertyM (..), monadic)
 
@@ -60,8 +60,10 @@ import           Pos.Context (ConnectedPeers (..))
 import           Pos.Core (HasConfiguration, Timestamp (..),
                      largestHDAddressBoot)
 import           Pos.Core.JsonLog (CanJsonLog (..))
+import           Pos.Core.NetworkMagic (NetworkMagic, makeNetworkMagic)
 import           Pos.Core.Txp (TxAux)
 import           Pos.Crypto (PassPhrase)
+import           Pos.Crypto.Configuration (ProtocolMagic (..))
 import           Pos.DB (MonadDB (..), MonadDBRead (..), MonadGState (..))
 import qualified Pos.DB as DB
 import           Pos.DB.Block (MonadBListener (..))
@@ -194,11 +196,13 @@ initWalletTestContext ::
        ( HasConfiguration
        , HasDlgConfiguration
        )
-    => WalletTestParams
+    => ProtocolMagic
+    -> NetworkMagic
+    -> WalletTestParams
     -> (WalletTestContext -> Emulation a)
     -> Emulation a
-initWalletTestContext WalletTestParams {..} callback =
-    initBlockTestContext _wtpBlockTestParams $ \wtcBlockTestContext -> do
+initWalletTestContext pm nm WalletTestParams {..} callback =
+    initBlockTestContext pm nm _wtpBlockTestParams $ \wtcBlockTestContext -> do
         wtc <- liftIO $ do
             wtcWalletState <- openMemState
             wtcUserPublic <- STM.newTVarIO def
@@ -225,10 +229,12 @@ runWalletTestMode ::
     => WalletTestParams
     -> WalletTestMode a
     -> IO a
-runWalletTestMode wtp action =
+runWalletTestMode wtp action = do
+    pm <- generate arbitrary
+    rnm <- generate arbitrary
+    let nm = makeNetworkMagic rnm pm
     runEmulation (getTimestamp $ wtp ^. wtpBlockTestParams . tpStartTime) $
-    initWalletTestContext wtp $
-    runReaderT action
+        initWalletTestContext pm nm wtp (runReaderT action)
 
 ----------------------------------------------------------------------------
 -- Property

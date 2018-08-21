@@ -24,6 +24,7 @@ import           Test.QuickCheck (Arbitrary (..), oneof)
 import qualified Pos.Client.Txp.Util as TxError
 import qualified Pos.Core as Core
 import qualified Pos.Core.Attributes as Core
+import           Pos.Core.NetworkMagic (NetworkMagic (..))
 import qualified Pos.Crypto.Hashing as Crypto
 import           Pos.Util.Util (aesonError)
 
@@ -303,7 +304,8 @@ sampleAddress = V1 $ Core.Address
     { Core.addrRoot =
         Crypto.unsafeAbstractHash ("asdfasdf" :: String)
     , Core.addrAttributes =
-        Core.mkAttributes $ Core.AddrAttributes Nothing Core.BootstrapEraDistr
+        Core.mkAttributes $
+            Core.AddrAttributes Nothing Core.BootstrapEraDistr NMNothing
     , Core.addrType =
         Core.ATPubKey
     }

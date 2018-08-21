@@ -11,6 +11,7 @@ import           Universum
 
 import           Ntp.Client (NtpStatus)
 import           Pos.Chain.Txp (TxpConfiguration)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Crypto (ProtocolMagic)
 import           Pos.Infra.Diffusion.Types (Diffusion (sendTx))
 
@@ -42,15 +43,16 @@ handlers :: ( HasConfigurations
             )
             => (forall a. MonadV1 a -> Handler a)
             -> ProtocolMagic
+            -> NetworkMagic
             -> TxpConfiguration
             -> Diffusion MonadV1
             -> TVar NtpStatus
             -> Server V1.API
-handlers naturalTransformation pm txpConfig diffusion ntpStatus =
+handlers naturalTransformation pm nm txpConfig diffusion ntpStatus =
          hoist' (Proxy @Addresses.API) Addresses.handlers
     :<|> hoist' (Proxy @Wallets.API) Wallets.handlers
     :<|> hoist' (Proxy @Accounts.API) Accounts.handlers
-    :<|> hoist' (Proxy @Transactions.API) (Transactions.handlers pm txpConfig sendTx')
+    :<|> hoist' (Proxy @Transactions.API) (Transactions.handlers pm nm txpConfig sendTx')
     :<|> hoist' (Proxy @Settings.API) Settings.handlers
     :<|> hoist' (Proxy @Info.API) (Info.handlers diffusion ntpStatus)
   where

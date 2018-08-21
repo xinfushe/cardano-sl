@@ -32,6 +32,7 @@ import           Pos.Core (HasConfiguration, addressHash, checkPubKeyAddress,
                      defaultCoreConfiguration, makePubKeyAddressBoot,
                      makeScriptAddress, mkCoin, sumCoins, withGenesisSpec)
 import           Pos.Core.Attributes (mkAttributes)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Core.Txp (Tx (..), TxAux (..), TxIn (..), TxInWitness (..),
                      TxOut (..), TxOutAux (..), TxSigData (..), TxWitness,
                      isTxInUnknown)
@@ -52,7 +53,7 @@ import           Test.Pos.Util.QuickCheck.Property (qcIsLeft, qcIsRight)
 spec :: Spec
 spec =
     withGenesisSpec 0 defaultCoreConfiguration identity
-        $ \pm _nm -> describe "Txp.Toil.Utxo" $ do
+        $ \pm nm -> describe "Txp.Toil.Utxo" $ do
               describe "utxoGet (no modifier)" $ do
                   it "returns Nothing when given empty Utxo"
                       $ isNothing (utxoGetSimple mempty myTxIn)
@@ -64,7 +65,7 @@ spec =
                   prop description_doubleInputTx  doubleInputTx
               describe "applyTxToUtxo" $ do
                   prop description_applyTxToUtxoGood applyTxToUtxoGood
-              scriptTxSpec pm
+              scriptTxSpec pm nm
   where
     myTxIn = TxInUtxo myHash 0
     myHash = unsafeHash @Int32 0
@@ -95,8 +96,8 @@ findTxInUtxo key txO utxo =
      in (isJust $ utxoGetSimple newUtxo key) &&
         (isNothing $ utxoGetSimple utxo' key)
 
-verifyTxInUtxo :: ProtocolMagic -> SmallGenerator GoodTx -> Property
-verifyTxInUtxo pm (SmallGenerator (GoodTx ls)) =
+verifyTxInUtxo :: ProtocolMagic -> NetworkMagic -> SmallGenerator GoodTx -> Property
+verifyTxInUtxo pm nm (SmallGenerator (GoodTx ls)) =
     let txs = fmap (view _1) ls
         witness = V.fromList $ toList $ fmap (view _4) ls
         (ins, outs) = NE.unzip $ map (\(_, tIs, tOs, _) -> (tIs, tOs)) ls
@@ -106,17 +107,17 @@ verifyTxInUtxo pm (SmallGenerator (GoodTx ls)) =
             let id = hash tx
             (idx, out) <- zip [0..] (toList _txOutputs)
             pure ((TxInUtxo id idx), TxOutAux out)
-        vtxContext = VTxContext False
+        vtxContext = VTxContext False nm
         txAux = TxAux newTx witness
     in counterexample ("\n"+|nameF "txs" (blockListF' "-" genericF txs)|+""
                            +|nameF "transaction" (B.build txAux)|+"") $
        qcIsRight $ verifyTxUtxoSimple pm vtxContext utxo txAux
 
-badSigsTx :: ProtocolMagic -> SmallGenerator BadSigsTx -> Property
-badSigsTx pm (SmallGenerator (getBadSigsTx -> ls)) =
+badSigsTx :: ProtocolMagic -> NetworkMagic -> SmallGenerator BadSigsTx -> Property
+badSigsTx pm nm (SmallGenerator (getBadSigsTx -> ls)) =
     let (tx@UnsafeTx {..}, utxo, extendedInputs, txWits) =
             getTxFromGoodTx ls
-        ctx = VTxContext False
+        ctx = VTxContext False nm
         transactionVerRes =
             verifyTxUtxoSimple pm ctx utxo $ TxAux tx txWits
         notAllSignaturesAreValid =
@@ -125,21 +126,21 @@ badSigsTx pm (SmallGenerator (getBadSigsTx -> ls)) =
                         (map (fmap snd) extendedInputs))
     in notAllSignaturesAreValid ==> qcIsLeft transactionVerRes
 
-doubleInputTx :: ProtocolMagic -> SmallGenerator DoubleInputTx -> Property
-doubleInputTx pm (SmallGenerator (getDoubleInputTx -> ls)) =
+doubleInputTx :: ProtocolMagic -> NetworkMagic -> SmallGenerator DoubleInputTx -> Property
+doubleInputTx pm nm (SmallGenerator (getDoubleInputTx -> ls)) =
     let ((tx@UnsafeTx {..}), utxo, _extendedInputs, txWits) =
             getTxFromGoodTx ls
-        ctx = VTxContext False
+        ctx = VTxContext False nm
         transactionVerRes =
             verifyTxUtxoSimple pm ctx utxo $ TxAux tx txWits
         someInputsAreDuplicated =
             not $ allDistinct (toList _txInputs)
     in someInputsAreDuplicated ==> qcIsLeft transactionVerRes
 
-validateGoodTx :: ProtocolMagic -> SmallGenerator GoodTx -> Property
-validateGoodTx pm (SmallGenerator (getGoodTx -> ls)) =
+validateGoodTx :: ProtocolMagic -> NetworkMagic -> SmallGenerator GoodTx -> Property
+validateGoodTx pm nm (SmallGenerator (getGoodTx -> ls)) =
     let quadruple@(tx, utxo, _, txWits) = getTxFromGoodTx ls
-        ctx = VTxContext False
+        ctx = VTxContext False nm
         transactionVerRes =
             verifyTxUtxoSimple pm ctx utxo $ TxAux tx txWits
         transactionReallyIsGood = individualTxPropertyVerifier pm quadruple
@@ -261,8 +262,8 @@ applyTxToUtxoGood (txIn0, txOut0) txMap txOuts =
 -- Script Txs spec
 ----------------------------------------------------------------------------
 
-scriptTxSpec :: ProtocolMagic -> Spec
-scriptTxSpec pm = describe "script transactions" $ do
+scriptTxSpec :: ProtocolMagic -> NetworkMagic -> Spec
+scriptTxSpec pm nm = describe "script transactions" $ do
     describe "good cases" $ do
         it "goodIntRedeemer + intValidator" $ do
             txShouldSucceed $ checkScriptTx
@@ -428,7 +429,7 @@ scriptTxSpec pm = describe "script transactions" $ do
         in  (TxInUtxo txid 0, outp, one ((TxInUtxo txid 0), (TxOutAux outp)))
 
     -- Do not verify versions
-    vtxContext = VTxContext False
+    vtxContext = VTxContext False nm
 
     -- Try to apply a transaction (with given utxo as context) and say
     -- whether it applied successfully

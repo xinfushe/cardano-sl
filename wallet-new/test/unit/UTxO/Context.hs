@@ -54,6 +54,7 @@ import           Pos.Core
 import           Pos.Core.Delegation (ProxySKHeavy)
 import           Pos.Core.Genesis (GeneratedSecrets (..), GenesisData (..),
                      GenesisDelegation (..), PoorSecret (..), RichSecrets (..))
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Crypto
 
 import           UTxO.Crypto
@@ -64,32 +65,33 @@ import           UTxO.Crypto
 
 -- | The information returned by core
 data CardanoContext = CardanoContext {
-      ccStakes      :: StakesMap
-    , ccBlock0      :: GenesisBlock
-    , ccData        :: GenesisData
-    , ccUtxo        :: Utxo
-    , ccSecrets     :: GeneratedSecrets
-    , ccMagic       :: ProtocolMagic
+      ccStakes       :: StakesMap
+    , ccBlock0       :: GenesisBlock
+    , ccData         :: GenesisData
+    , ccUtxo         :: Utxo
+    , ccSecrets      :: GeneratedSecrets
+    , ccMagic        :: ProtocolMagic
+    , ccNetworkMagic :: NetworkMagic
 
       -- | Initial stake distribution
-    , ccInitLeaders :: SlotLeaders
+    , ccInitLeaders  :: SlotLeaders
 
       -- | Initial balances
       --
       -- Derived from 'ccUtxo'.
-    , ccBalances    :: [(Address, Coin)]
+    , ccBalances     :: [(Address, Coin)]
 
       -- | Hash of block0
       --
       -- NOTE: Derived from 'ccBlock0', /not/ the same as 'genesisHash'.
-    , ccHash0       :: HeaderHash
+    , ccHash0        :: HeaderHash
 
       -- | Number of slots in an epoch
-    , ccEpochSlots  :: SlotCount
+    , ccEpochSlots   :: SlotCount
     }
 
-initCardanoContext :: HasConfiguration => ProtocolMagic -> CardanoContext
-initCardanoContext ccMagic = CardanoContext{..}
+initCardanoContext :: HasConfiguration => ProtocolMagic -> NetworkMagic -> CardanoContext
+initCardanoContext ccMagic ccNetworkMagic = CardanoContext{..}
   where
     ccLeaders     = genesisLeaders epochSlots
     ccStakes      = genesisStakes

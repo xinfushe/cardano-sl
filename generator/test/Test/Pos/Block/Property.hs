@@ -10,6 +10,7 @@ import           Universum
 
 import           Test.Hspec (Spec)
 import           Test.Hspec.QuickCheck (prop)
+import           Test.QuickCheck (Arbitrary (..), forAll)
 
 import           Pos.Chain.Delegation (HasDlgConfiguration)
 import           Pos.Core (HasConfiguration)
@@ -24,4 +25,5 @@ blockPropertySpec ::
     => String
     -> (HasConfiguration => BlockProperty a)
     -> Spec
-blockPropertySpec description bp = prop description (blockPropertyTestable bp)
+blockPropertySpec description bp = prop description $
+    forAll arbitrary $ \(pm, rnm) -> blockPropertyTestable pm rnm bp

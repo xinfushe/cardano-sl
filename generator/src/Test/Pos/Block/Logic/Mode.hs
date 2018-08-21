@@ -71,7 +71,7 @@ import           Pos.Core.Conc (currentTime)
 import           Pos.Core.Configuration (HasGenesisBlockVersionData,
                      withGenesisBlockVersionData)
 import           Pos.Core.Genesis (GenesisInitializer (..), GenesisSpec (..))
-import           Pos.Core.NetworkMagic (NetworkMagic, makeNetworkMagic)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Core.Reporting (HasMisbehaviorMetrics (..),
                      MonadReporting (..))
 import           Pos.Core.Slotting (MonadSlotsData)
@@ -120,7 +120,6 @@ import           Test.Pos.Block.Logic.Emulation (Emulation (..), runEmulation,
 import           Test.Pos.Configuration (defaultTestBlockVersionData,
                      defaultTestConf, defaultTestGenesisSpec)
 import           Test.Pos.Core.Arbitrary ()
-import           Test.Pos.Crypto.Dummy (dummyProtocolMagic)
 
 ----------------------------------------------------------------------------
 -- Parameters
@@ -273,7 +272,7 @@ initBlockTestContext pm nm tp@TestParams {..} callback = do
                 systemStart
                 futureLrcCtx
         initBlockTestContextDo = do
-            initNodeDBs dummyProtocolMagic epochSlots
+            initNodeDBs pm epochSlots
             _gscSlottingVar <- newTVarIO =<< GS.getSlottingData
             putSlottingVar _gscSlottingVar
             let btcLoggerName = "testing"
@@ -358,10 +357,11 @@ blockPropertyToProperty pm nm tpGen blockProperty =
 --     property = blockPropertyToProperty arbitrary
 blockPropertyTestable ::
        (HasDlgConfiguration, Testable a)
-    => (HasConfiguration => BlockProperty a)
+    => ProtocolMagic
+    -> NetworkMagic
+    -> (HasConfiguration => BlockProperty a)
     -> Property
-blockPropertyTestable bp = forAll arbitrary $ \(pm, rnm) -> do
-    let nm = makeNetworkMagic rnm pm
+blockPropertyTestable pm nm bp =
     blockPropertyToProperty pm nm arbitrary bp
 
 ----------------------------------------------------------------------------

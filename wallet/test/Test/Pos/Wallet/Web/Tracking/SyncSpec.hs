@@ -22,7 +22,9 @@ import           Test.QuickCheck.Monadic (pick)
 import           Pos.Chain.Txp (TxpConfiguration (..))
 import           Pos.Core (Address, BlockCount (..), blkSecurityParam)
 import           Pos.Core.Chrono (nonEmptyOldestFirst, toNewestFirst)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Crypto (emptyPassphrase)
+import           Pos.Crypto.Configuration (ProtocolMagic (..))
 import           Pos.DB.Block (rollbackBlocks)
 import           Pos.Launcher (HasConfigurations)
 import qualified Pos.Wallet.Web.State as WS
@@ -41,17 +43,16 @@ import           Pos.Wallet.Web.Tracking.Types (newSyncRequest)
 import           Test.Pos.Block.Logic.Util (EnableTxPayload (..),
                      InplaceDB (..))
 import           Test.Pos.Configuration (withDefConfigurations)
-import           Test.Pos.Crypto.Dummy (dummyProtocolMagic)
 import           Test.Pos.Util.QuickCheck.Property (assertProperty)
 import           Test.Pos.Wallet.Arbitrary.Web.ClientTypes ()
 import           Test.Pos.Wallet.Web.Mode (walletPropertySpec)
 import           Test.Pos.Wallet.Web.Util (importSomeWallets, wpGenBlocks)
 
 spec :: Spec
-spec = withDefConfigurations $ \_ nm _ _ -> do
+spec = withDefConfigurations $ \pm nm _ _ -> do
     describe "Pos.Wallet.Web.Tracking.BListener" $ modifyMaxSuccess (const 10) $ do
-        describe "Two applications and rollbacks" (twoApplyTwoRollbacksSpec nm)
-        -- TODO mhueschen : should this spec get run twice with 2 different networkmagics?
+        describe "Two applications and rollbacks" (twoApplyTwoRollbacksSpec pm nm)
+        -- TODO mhueschen : should this spec get run twice with NMNothing & NMJust?
     xdescribe "Pos.Wallet.Web.Tracking.evalChange (pending, CSL-2473)" $ do
         prop evalChangeDiffAccountsDesc evalChangeDiffAccounts
         prop evalChangeSameAccountsDesc evalChangeSameAccounts
@@ -61,8 +62,8 @@ spec = withDefConfigurations $ \_ nm _ _ -> do
     evalChangeSameAccountsDesc =
       "Outgoing transaction from account to the same account."
 
-twoApplyTwoRollbacksSpec :: HasConfigurations => NetworkMagic -> Spec
-twoApplyTwoRollbacksSpec nm = walletPropertySpec twoApplyTwoRollbacksDesc $ do
+twoApplyTwoRollbacksSpec :: HasConfigurations => ProtocolMagic -> NetworkMagic -> Spec
+twoApplyTwoRollbacksSpec pm nm = walletPropertySpec twoApplyTwoRollbacksDesc $ do
     let k = fromIntegral blkSecurityParam :: Word64
     -- During these tests we need to manually switch back to the old synchronous
     -- way of restoring.
@@ -75,14 +76,15 @@ twoApplyTwoRollbacksSpec nm = walletPropertySpec twoApplyTwoRollbacksDesc $ do
     applyBlocksCnt1 <- pick $ choose (1, k `div` 2)
     applyBlocksCnt2 <- pick $ choose (1, k `div` 2)
     let txpConfig = TxpConfiguration 200 Set.empty
-    blunds1 <- wpGenBlocks dummyProtocolMagic
+    blunds1 <- wpGenBlocks pm
                            nm
                            txpConfig
                            (Just $ BlockCount applyBlocksCnt1)
                            (EnableTxPayload True)
                            (InplaceDB True)
     after1ApplyDB <- lift WS.askWalletSnapshot
-    blunds2 <- wpGenBlocks dummyProtocolMagic
+    blunds2 <- wpGenBlocks pm
+                           nm
                            txpConfig
                            (Just $ BlockCount applyBlocksCnt2)
                            (EnableTxPayload True)
@@ -91,9 +93,9 @@ twoApplyTwoRollbacksSpec nm = walletPropertySpec twoApplyTwoRollbacksDesc $ do
     let toNE = fromMaybe (error "sequence of blocks are empty") . nonEmptyOldestFirst
     let to1Rollback = toNewestFirst $ toNE blunds2
     let to2Rollback = toNewestFirst $ toNE blunds1
-    lift $ rollbackBlocks dummyProtocolMagic to1Rollback
+    lift $ rollbackBlocks pm to1Rollback
     after1RollbackDB <- lift WS.askWalletSnapshot
-    lift $ rollbackBlocks dummyProtocolMagic to2Rollback
+    lift $ rollbackBlocks pm to2Rollback
     after2RollbackDB <- lift WS.askWalletSnapshot
     assertProperty (after1RollbackDB == after1ApplyDB)
         "wallet-db after first apply doesn't equal to wallet-db after first rollback"

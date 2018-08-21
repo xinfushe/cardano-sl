@@ -17,6 +17,7 @@ import           Pos.Context
 import           Pos.Core
 import           Pos.Core.Chrono
 import           Pos.Core.JsonLog (CanJsonLog (..))
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Core.Reporting (HasMisbehaviorMetrics (..))
 import           Pos.DB
 import           Pos.DB.Block hiding (applyBlocks, rollbackBlocks)
@@ -90,13 +91,14 @@ instance MonadBListener WalletMode where
 
 runWalletMode :: forall a. (HasConfigurations, HasCompileInfo)
               => ProtocolMagic
+              -> NetworkMagic
               -> TxpConfiguration
               -> NodeResources ()
               -> PassiveWalletLayer IO
               -> (Diffusion WalletMode -> WalletMode a)
               -> IO a
-runWalletMode pm txpConfig nr wallet action =
-    runRealMode pm txpConfig nr $ \diffusion ->
+runWalletMode pm nm txpConfig nr wallet action =
+    runRealMode pm nm txpConfig nr $ \diffusion ->
         walletModeToRealMode wallet (action (hoistDiffusion realModeToWalletMode (walletModeToRealMode wallet) diffusion))
 
 walletModeToRealMode :: forall a. PassiveWalletLayer IO -> WalletMode a -> RealMode () a

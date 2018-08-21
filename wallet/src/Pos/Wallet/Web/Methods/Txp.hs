@@ -25,6 +25,7 @@ import           Pos.Client.Txp.Util (InputSelectionPolicy (..),
                      PendingAddresses (..), isCheckedTxError)
 import           Pos.Core.Chrono (getNewestFirst, toNewestFirst)
 import           Pos.Core.Common (Coin)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Core.Txp (Tx (..), TxAux (..), TxOut (..), TxOutAux (..))
 import           Pos.Crypto (PassPhrase, ProtocolMagic, hash)
 import           Pos.Util.Servant (encodeCType)

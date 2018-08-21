@@ -14,6 +14,7 @@ import qualified Hedgehog as H
 import           Pos.Core.Common (AddrAttributes (..), AddrSpendingData (..),
                      AddrStakeDistribution (..), Address (..), BlockCount (..),
                      Script (..), makeAddress)
+import           Pos.Core.NetworkMagic (NetworkMagic (..))
 import           Pos.Crypto.HD (HDAddressPayload (..))
 import           WalletNewGen (genWalletError)
 
@@ -129,6 +130,7 @@ exampleAddress = V1 $ makeAddress (ScriptASD (Script 0 "bytes")) addrAttrib
         AddrAttributes
             (Just $ HDAddressPayload "jpzgcjlmlcetfhrrcgwxqzpfveupoyie")
             BootstrapEraDistr
+            NMNothing
 
 exampleSyncProgress :: SyncProgress
 exampleSyncProgress =

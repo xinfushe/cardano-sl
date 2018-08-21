@@ -22,6 +22,7 @@ import           Pos.Chain.Txp (TxpConfiguration)
 import           Pos.Client.CLI (CommonArgs (..), CommonNodeArgs (..),
                      NodeArgs (..), getNodeParams, gtSscParams)
 import           Pos.Core (ProtocolMagic, Timestamp (..), epochSlots)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.DB.DB (initNodeDBs)
 import           Pos.DB.Rocks.Functions (openNodeDBs)
 import           Pos.DB.Rocks.Types (NodeDBs)
@@ -63,13 +64,14 @@ defaultNetworkConfig ncTopology = NetworkConfig {
 newRealModeContext
     :: HasConfigurations
     => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> NodeDBs
     -> ConfigurationOptions
     -> FilePath
     -> FilePath
     -> IO (RealModeContext ())
-newRealModeContext pm txpConfig dbs confOpts publicKeyPath secretKeyPath = do
+newRealModeContext pm nm txpConfig dbs confOpts publicKeyPath secretKeyPath = do
     let nodeArgs = NodeArgs {
       behaviorConfigPath = Nothing
     }
@@ -111,7 +113,7 @@ newRealModeContext pm txpConfig dbs confOpts publicKeyPath secretKeyPath = do
     nodeParams <- getNodeParams loggerName cArgs nodeArgs
     let vssSK = fromJust $ npUserSecret nodeParams ^. usVss
     let gtParams = gtSscParams cArgs vssSK (npBehaviorConfig nodeParams)
-    bracketNodeResources @() nodeParams gtParams (txpGlobalSettings pm txpConfig) (initNodeDBs pm epochSlots) $ \NodeResources{..} ->
+    bracketNodeResources @() nodeParams gtParams (txpGlobalSettings pm nm txpConfig) (initNodeDBs pm epochSlots) $ \NodeResources{..} ->
         RealModeContext <$> pure dbs
                         <*> pure nrSscState
                         <*> pure nrTxpState
@@ -126,6 +128,7 @@ newRealModeContext pm txpConfig dbs confOpts publicKeyPath secretKeyPath = do
 walletRunner
     :: HasConfigurations
     => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> ConfigurationOptions
     -> NodeDBs
@@ -134,11 +137,11 @@ walletRunner
     -> WalletDB
     -> UberMonad a
     -> IO a
-walletRunner pm txpConfig confOpts dbs publicKeyPath secretKeyPath ws act = do
+walletRunner pm nm txpConfig confOpts dbs publicKeyPath secretKeyPath ws act = do
     wwmc <- WalletWebModeContext <$> pure ws
                                  <*> newTVarIO def
                                  <*> liftIO newTQueueIO
-                                 <*> newRealModeContext pm txpConfig dbs confOpts publicKeyPath secretKeyPath
+                                 <*> newRealModeContext pm nm txpConfig dbs confOpts publicKeyPath secretKeyPath
     runReaderT act wwmc
 
 newWalletState :: MonadIO m => Bool -> FilePath -> m WalletDB
@@ -162,7 +165,7 @@ main = do
     cli@CLI{..} <- getRecord "DBGen"
     let cfg = newConfig cli
 
-    withConfigurations Nothing cfg $ \pm _nm txpConfig _ -> do
+    withConfigurations Nothing cfg $ \pm nm txpConfig _ -> do
         when showStats (showStatsAndExit walletPath)
 
         say $ bold "Starting the modification of the wallet..."
@@ -174,7 +177,7 @@ main = do
         ws   <- newWalletState (isJust addTo) walletPath -- Recreate or not
 
         let generatedWallet = generateWalletDB cli spec
-        walletRunner pm txpConfig cfg dbs publicKeyPath secretKeyPath ws generatedWallet
+        walletRunner pm nm txpConfig cfg dbs publicKeyPath secretKeyPath ws generatedWallet
         closeState ws
 
         showStatsData "after" walletPath

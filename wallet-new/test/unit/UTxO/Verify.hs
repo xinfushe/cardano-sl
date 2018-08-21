@@ -27,6 +27,7 @@ import           Pos.Chain.Txp
 import           Pos.Chain.Update
 import           Pos.Core
 import           Pos.Core.Chrono
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Core.Update (BlockVersionData)
 import           Pos.DB.Block (toTxpBlock)
 import           Pos.DB.Class (MonadGState (..))
@@ -224,13 +225,14 @@ mapVerifyErrors f (Verify ma) = Verify $ mapStateT (withExceptT f) ma
 verifyBlocksPrefix
     :: HasConfiguration
     => ProtocolMagic
+    -> NetworkMagic
     -> HeaderHash    -- ^ Expected tip
     -> Maybe SlotId  -- ^ Current slot
     -> SlotLeaders   -- ^ Slot leaders for this epoch
     -> LastBlkSlots  -- ^ Last block slots
     -> OldestFirst NE Block
     -> Verify VerifyBlocksException (OldestFirst NE Undo)
-verifyBlocksPrefix pm tip curSlot leaders lastSlots blocks = do
+verifyBlocksPrefix pm nm tip curSlot leaders lastSlots blocks = do
     when (tip /= blocks ^. _Wrapped . _neHead . prevBlockL) $
         throwError $ VerifyBlocksError "the first block isn't based on the tip"
 
@@ -248,7 +250,7 @@ verifyBlocksPrefix pm tip curSlot leaders lastSlots blocks = do
 
     -- Verify transactions
     txUndo <- mapVerifyErrors (VerifyBlocksError . pretty) $
-        tgsVerifyBlocks pm $ map toTxpBlock blocks
+        tgsVerifyBlocks pm nm $ map toTxpBlock blocks
 
     -- Skip delegation verification
     {-
@@ -354,13 +356,14 @@ slogVerifyBlocks pm curSlot leaders lastSlots blocks = do
 --   I don't fully grasp the consequences of this.
 tgsVerifyBlocks
     :: ProtocolMagic
+    -> NetworkMagic
     -> OldestFirst NE TxpBlock
     -> Verify ToilVerFailure (OldestFirst NE TxpUndo)
-tgsVerifyBlocks pm newChain = do
+tgsVerifyBlocks pm nm newChain = do
     bvd <- gsAdoptedBVData
     let epoch = NE.last (getOldestFirst newChain) ^. epochIndexL
     let verifyPure :: [TxAux] -> Verify ToilVerFailure TxpUndo
-        verifyPure = nat . verifyToil pm bvd mempty epoch dataMustBeKnown
+        verifyPure = nat . verifyToil pm nm bvd mempty epoch dataMustBeKnown
     mapM (verifyPure . convertPayload) newChain
   where
     convertPayload :: TxpBlock -> [TxAux]

@@ -27,6 +27,8 @@ import           Pos.Client.Txp.Balances (getBalance)
 import           Pos.Client.Txp.Util (InputSelectionPolicy (..), txToLinearFee)
 import           Pos.Core (Address, Coin, TxFeePolicy (..), mkCoin, sumCoins,
                      unsafeGetCoin, unsafeSubCoin)
+import           Pos.Core.NetworkMagic (RequiresNetworkMagic (..),
+                     makeNetworkMagic)
 import           Pos.Core.Txp (Tx (..), TxAux (..), _TxOut)
 import           Pos.Core.Update (bvdTxFeePolicy)
 import           Pos.Crypto (PassPhrase)
@@ -62,12 +64,17 @@ deriving instance Eq CTx
 
 -- TODO remove HasCompileInfo when MonadWalletWebMode will be splitted.
 spec :: Spec
-spec = withCompileInfo $
-       withDefConfigurations $ \_ _nm txpConfig _ ->
-       describe "Wallet.Web.Methods.Payment" $ modifyMaxSuccess (const 10) $ do
-    describe "newPaymentBatch" $ do
-        describe "Submitting a payment when restoring" (rejectPaymentIfRestoringSpec txpConfig)
-        describe "One payment" (oneNewPaymentBatchSpec txpConfig)
+spec = do
+    go NMMustBeNothing
+    go NMMustBeJust
+  where
+    go rnm = do
+        withCompileInfo $
+           withDefConfigurations $ \_ _nm txpConfig _ ->
+           describe "Wallet.Web.Methods.Payment" $ modifyMaxSuccess (const 10) $ do
+               describe "newPaymentBatch" $ do
+                   describe "Submitting a payment when restoring" (rejectPaymentIfRestoringSpec rnm txpConfig)
+                   describe "One payment" (oneNewPaymentBatchSpec rnm txpConfig)
 
 data PaymentFixture = PaymentFixture {
       pswd        :: PassPhrase
@@ -121,15 +128,16 @@ newPaymentFixture = do
 
 -- | Assess that if we try to submit a payment when the wallet is restoring,
 -- the backend prevents us from doing that.
-rejectPaymentIfRestoringSpec :: HasConfigurations => TxpConfiguration -> Spec
-rejectPaymentIfRestoringSpec txpConfig = walletPropertySpec "should fail with 403" $ do
+rejectPaymentIfRestoringSpec :: HasConfigurations => RequiresNetworkMagic -> TxpConfiguration -> Spec
+rejectPaymentIfRestoringSpec rnm txpConfig = walletPropertySpec "should fail with 403" $ do
     PaymentFixture{..} <- newPaymentFixture
-    res <- lift $ try (newPaymentBatch dummyProtocolMagic txpConfig submitTxTestMode pswd batch)
+    let nm = makeNetworkMagic rnm dummyProtocolMagic
+    res <- lift $ try (newPaymentBatch dummyProtocolMagic nm txpConfig submitTxTestMode pswd batch)
     liftIO $ shouldBe res (Left (err403 { errReasonPhrase = "Transaction creation is disabled when the wallet is restoring." }))
 
 -- | Test one single, successful payment.
-oneNewPaymentBatchSpec :: HasConfigurations => TxpConfiguration -> Spec
-oneNewPaymentBatchSpec txpConfig = walletPropertySpec oneNewPaymentBatchDesc $ do
+oneNewPaymentBatchSpec :: HasConfigurations => RequiresNetworkMagic -> TxpConfiguration -> Spec
+oneNewPaymentBatchSpec rnm txpConfig = walletPropertySpec oneNewPaymentBatchDesc $ do
     PaymentFixture{..} <- newPaymentFixture
 
     -- Force the wallet to be in a (fake) synced state
@@ -137,7 +145,8 @@ oneNewPaymentBatchSpec txpConfig = walletPropertySpec oneNewPaymentBatchDesc $ d
     randomSyncTip <- liftIO $ generate arbitrary
     WS.setWalletSyncTip db walId randomSyncTip
 
-    void $ lift $ newPaymentBatch dummyProtocolMagic txpConfig submitTxTestMode pswd batch
+    let nm = makeNetworkMagic rnm dummyProtocolMagic
+    void $ lift $ newPaymentBatch dummyProtocolMagic nm txpConfig submitTxTestMode pswd batch
     dstAddrs <- lift $ mapM decodeCTypeOrFail dstCAddrs
     txLinearPolicy <- lift $ (bvdTxFeePolicy <$> gsAdoptedBVData) <&> \case
         TxFeePolicyTxSizeLinear linear -> linear

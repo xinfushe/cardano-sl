@@ -23,6 +23,7 @@ import           Pos.Client.CLI (CommonNodeArgs (..), NodeArgs (..),
 import qualified Pos.Client.CLI as CLI
 import           Pos.Context (NodeContext (..))
 import           Pos.Core (epochSlots)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Crypto (ProtocolMagic)
 import           Pos.Explorer.DB (explorerInitDB)
 import           Pos.Explorer.ExtraContext (makeExtraCtx)
@@ -76,7 +77,7 @@ action (ExplorerNodeArgs (cArgs@CommonNodeArgs{..}) ExplorerArgs{..}) =
         bracketNodeResources currentParams sscParams
             (explorerTxpGlobalSettings pm nm txpConfig)
             (explorerInitDB pm epochSlots) $ \nr@NodeResources {..} ->
-                runExplorerRealMode pm nm txpConfig nr (runNode pm txpConfig nr plugins)
+                runExplorerRealMode pm nm txpConfig nr (runNode pm nm txpConfig nr plugins)
   where
 
     blPath :: Maybe AssetLockPath

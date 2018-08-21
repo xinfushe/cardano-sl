@@ -46,6 +46,7 @@ import           Network.Wai.Middleware.Cors (cors, corsMethods,
                      simpleMethods)
 import           Ntp.Client (NtpStatus)
 import           Pos.Chain.Txp (TxpConfiguration)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Infra.Diffusion.Types (Diffusion (..))
 import           Pos.Wallet.Web (cleanupAcidStatePeriodically)
 import           Pos.Wallet.Web.Pending.Worker (startPendingTxsResubmitter)
@@ -118,11 +119,12 @@ walletDocumentation WalletBackendParams {..} = pure $ \_ ->
 -- | A @Plugin@ to start the wallet backend API.
 legacyWalletBackend :: (HasConfigurations, HasCompileInfo)
                     => ProtocolMagic
+                    -> NetworkMagic
                     -> TxpConfiguration
                     -> WalletBackendParams
                     -> TVar NtpStatus
                     -> Plugin WalletWebMode
-legacyWalletBackend pm txpConfig WalletBackendParams {..} ntpStatus = pure $ \diffusion -> do
+legacyWalletBackend pm nm txpConfig WalletBackendParams {..} ntpStatus = pure $ \diffusion -> do
     modifyLoggerName (const "legacyServantBackend") $ do
       logInfo $ sformat ("Production mode for API: "%build)
         walletProductionApi
@@ -154,6 +156,7 @@ legacyWalletBackend pm txpConfig WalletBackendParams {..} ntpStatus = pure $ \di
             $ LegacyServer.walletServer
                 (V0.convertHandler ctx)
                 pm
+                nm
                 txpConfig
                 diffusion
                 ntpStatus
@@ -229,10 +232,11 @@ walletBackend protocolMagic (NewWalletBackendParams WalletBackendParams{..}) (pa
 -- | A @Plugin@ to resubmit pending transactions.
 resubmitterPlugin :: HasConfigurations
                   => ProtocolMagic
+                  -> NetworkMagic
                   -> TxpConfiguration
                   -> Plugin WalletWebMode
-resubmitterPlugin pm txpConfig = [\diffusion -> askWalletDB >>= \db ->
-                        startPendingTxsResubmitter pm txpConfig db (sendTx diffusion)]
+resubmitterPlugin pm nm txpConfig = [\diffusion -> askWalletDB >>= \db ->
+                        startPendingTxsResubmitter pm nm txpConfig db (sendTx diffusion)]
 
 -- | A @Plugin@ to notify frontend via websockets.
 notifierPlugin :: HasConfigurations => Plugin WalletWebMode

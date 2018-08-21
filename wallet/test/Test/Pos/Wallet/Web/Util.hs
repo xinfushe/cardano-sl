@@ -42,10 +42,11 @@ import           Pos.Chain.Txp (TxpConfiguration, Utxo)
 import           Pos.Client.KeyStorage (getSecretKeysPlain)
 import           Pos.Client.Txp.Balances (getBalance)
 import           Pos.Core (Address, BlockCount, Coin, HasConfiguration,
-                     NetworkMagic, genesisSecretsPoor)
+                     genesisSecretsPoor)
 import           Pos.Core.Chrono (OldestFirst (..))
 import           Pos.Core.Common (IsBootstrapEraAddr (..), deriveLvl2KeyPair)
 import           Pos.Core.Genesis (poorSecretToEncKey)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Core.Txp (TxIn, TxOut (..), TxOutAux (..))
 import           Pos.Crypto (EncryptedSecretKey, PassPhrase, ProtocolMagic,
                      ShouldCheckPassphrase (..), emptyPassphrase,
@@ -87,7 +88,7 @@ wpGenBlocks pm nm txpConfig blkCnt enTxPayload inplaceDB = do
     params <- genBlockGenParams pm nm blkCnt enTxPayload inplaceDB
     g <- pick $ MkGen $ \qc _ -> qc
     lift $ modifyStateLock HighPriority ApplyBlock $ \prevTip -> do -- FIXME is ApplyBlock the right one?
-        blunds <- OldestFirst <$> evalRandT (genBlocks pm txpConfig params maybeToList) g
+        blunds <- OldestFirst <$> evalRandT (genBlocks pm nm txpConfig params maybeToList) g
         case nonEmpty $ getOldestFirst blunds of
             Just nonEmptyBlunds -> do
                 let tipBlockHeader = nonEmptyBlunds ^. _neLast . _1 . blockHeader

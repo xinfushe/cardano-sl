@@ -33,6 +33,7 @@ import           Pos.Chain.Txp
 import           Pos.Chain.Update
 import           Pos.Core
 import           Pos.Core.Chrono
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Crypto (ProtocolMagic)
 import           Pos.DB.Class (MonadGState (..))
 
@@ -102,11 +103,11 @@ instance Monad m => MonadGState (TranslateT e m) where
 -- pure exceptions.
 runTranslateT :: Monad m => Exception e => TranslateT e m a -> m a
 runTranslateT (TranslateT ta) =
-    withDefConfiguration $ \pm _nm ->
+    withDefConfiguration $ \pm nm ->
     withDefUpdateConfiguration $
       let env :: TranslateEnv
           env = TranslateEnv {
-                    teContext       = initContext (initCardanoContext pm)
+                    teContext       = initContext (initCardanoContext pm nm)
                   , teConfig        = Dict
                   , teUpdate        = Dict
                   }
@@ -216,32 +217,36 @@ verifyBlocksPrefix blocks =
         validatedFromExceptT . throwError $ VerifyBlocksError "No genesis epoch!"
       ESRValid genEpoch (OldestFirst succEpochs) -> do
         CardanoContext{..} <- asks tcCardano
-        verify $ validateGenEpoch ccMagic ccHash0 ccInitLeaders genEpoch >>= \genUndos -> do
-          epochUndos <- sequence $ validateSuccEpoch ccMagic <$> succEpochs
+        verify $ validateGenEpoch ccMagic ccNetworkMagic ccHash0 ccInitLeaders genEpoch >>= \genUndos -> do
+          epochUndos <- sequence $ validateSuccEpoch ccMagic ccNetworkMagic <$> succEpochs
           return $ foldl' (\a b -> a <> b) genUndos epochUndos
 
   where
     validateGenEpoch :: ProtocolMagic
+                     -> NetworkMagic
                      -> HeaderHash
                      -> SlotLeaders
                      -> OldestFirst NE MainBlock
                      -> ( HasConfiguration
                           => Verify VerifyBlocksException (OldestFirst NE Undo))
-    validateGenEpoch pm ccHash0 ccInitLeaders geb = do
+    validateGenEpoch pm nm ccHash0 ccInitLeaders geb = do
       Verify.verifyBlocksPrefix
         pm
+        nm
         ccHash0
         Nothing
         ccInitLeaders
         (OldestFirst [])
         (Right <$> geb ::  OldestFirst NE Block)
     validateSuccEpoch :: ProtocolMagic
+                      -> NetworkMagic
                       -> EpochBlocks NE
                       -> ( HasConfiguration
                            => Verify VerifyBlocksException (OldestFirst NE Undo))
-    validateSuccEpoch pm (SuccEpochBlocks ebb emb) = do
+    validateSuccEpoch pm nm (SuccEpochBlocks ebb emb) = do
       Verify.verifyBlocksPrefix
         pm
+        nm
         (ebb ^. headerHashG)
         Nothing
         (ebb ^. gbBody . gbLeaders)
