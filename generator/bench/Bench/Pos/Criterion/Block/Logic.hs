@@ -24,6 +24,7 @@ import           Pos.Core.Configuration (genesisBlockVersionData, genesisData,
                      genesisSecretKeys, slotSecurityParam)
 import           Pos.Core.Genesis (FakeAvvmOptions (..), GenesisData (..),
                      GenesisInitializer (..), TestnetBalanceOptions (..))
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Core.Slotting (EpochOrSlot (..), SlotId, Timestamp (..),
                      epochIndexL, getEpochOrSlot)
 import           Pos.Core.Update (BlockVersionData (..))
@@ -85,14 +86,15 @@ runBTM tp ctx btm = runEmulation (getTimestamp (_tpStartTime tp)) $ runReaderT b
 verifyBlocksBenchmark
     :: HasConfigurations
     => ProtocolMagic
+    -> NetworkMagic
     -> TestParams
     -> BlockTestContext
     -> Benchmark
-verifyBlocksBenchmark !pm !tp !ctx =
+verifyBlocksBenchmark !pm !nm !tp !ctx =
     bgroup "block verification"
-        [ env (runBlockTestMode tp (genEnv (BlockCount 100)))
+        [ env (runBlockTestMode pm nm tp (genEnv (BlockCount 100)))
             $ \ ~(vctx, blocks) -> bench "verifyAndApplyBlocks" (verifyAndApplyBlocksB vctx blocks)
-        , env (runBlockTestMode tp (genEnv (BlockCount 1)))
+        , env (runBlockTestMode pm nm tp (genEnv (BlockCount 1)))
             $ \ ~(vctx, blocks) -> bench "verifyBlocksPrefix" (verifyBlocksPrefixB vctx blocks)
         ]
     where
@@ -103,7 +105,7 @@ verifyBlocksBenchmark !pm !tp !ctx =
         let secretKeys = case genesisSecretKeys of
                 Nothing -> error "verifyAndApplyBlocksBenchmark: no genesisSecretKeys"
                 Just ks -> ks
-        bs <- flip evalRandT g $ genBlocks pm (_tpTxpConfiguration tp)
+        bs <- flip evalRandT g $ genBlocks pm nm (_tpTxpConfiguration tp)
                 (BlockGenParams
                     { _bgpSecrets = mkAllSecretsSimple secretKeys
                     , _bgpBlockCount = bCount
@@ -114,7 +116,7 @@ verifyBlocksBenchmark !pm !tp !ctx =
                     , _bgpInplaceDB = False
                     , _bgpSkipNoKey = True -- TODO: should be False?
                     , _bgpGenStakeholders = gdBootStakeholders genesisData
-                    , _bgpTxpGlobalSettings = txpGlobalSettings pm (_tpTxpConfiguration tp)
+                    , _bgpTxpGlobalSettings = txpGlobalSettings pm nm (_tpTxpConfiguration tp)
                     })
                 (maybeToList . fmap fst)
         let curSlot :: Maybe SlotId
@@ -132,7 +134,7 @@ verifyBlocksBenchmark !pm !tp !ctx =
         nfIO
             $ runBTM tp ctx
             $ satisfySlotCheck blocks
-            $ verifyAndApplyBlocks pm (_tpTxpConfiguration tp) verifyBlocksCtx False blocks >>= \case
+            $ verifyAndApplyBlocks pm nm (_tpTxpConfiguration tp) verifyBlocksCtx False blocks >>= \case
                     Left err -> return (Just err)
                     Right (_, blunds) -> do
                         whenJust (nonEmptyNewestFirst blunds) (rollbackBlocks pm)
@@ -152,9 +154,10 @@ verifyBlocksBenchmark !pm !tp !ctx =
 verifyHeaderBenchmark
     :: HasConfigurations
     => ProtocolMagic
+    -> NetworkMagic
     -> TestParams
     -> Benchmark
-verifyHeaderBenchmark !pm !tp = env (runBlockTestMode tp genEnv)
+verifyHeaderBenchmark !pm !nm !tp = env (runBlockTestMode pm nm tp genEnv)
         $ \ ~(block, params) -> bgroup "block verification"
             [ bench "verifyHeader" $ benchHeaderVerification
                 (getBlockHeader block, vbpVerifyHeader params)
@@ -182,14 +185,14 @@ verifyHeaderBenchmark !pm !tp = env (runBlockTestMode tp genEnv)
                 , _bgpInplaceDB = False
                 , _bgpSkipNoKey = True -- TODO: should be False?
                 , _bgpGenStakeholders = gdBootStakeholders genesisData
-                , _bgpTxpGlobalSettings = txpGlobalSettings pm (_tpTxpConfiguration tp)
+                , _bgpTxpGlobalSettings = txpGlobalSettings pm nm (_tpTxpConfiguration tp)
                 }
         leaders <- LrcDB.lrcActionOnEpochReason epoch "genBlock" LrcDB.getLeadersForEpoch
         mblock <- flip evalRandT g $ do
             blockGenCtx <- lift $ mkBlockGenContext blockGenParams
             tipHeader <- lift $ getTipHeader
             mapRandT (flip runReaderT blockGenCtx)
-                $ genBlockNoApply pm (_tpTxpConfiguration tp) eos tipHeader
+                $ genBlockNoApply pm nm (_tpTxpConfiguration tp) eos tipHeader
         let !block = fromMaybe (error "verifyHeaderBench: failed to generate a header") mblock
 
         let !verifyHeaderParams = VerifyHeaderParams
@@ -223,7 +226,7 @@ runBenchmark = do
             , cfoSystemStart = Just (Timestamp startTime)
             }
     withCompileInfo $
-        withConfigurationsM (LoggerName "verifyBenchmark") Nothing cfo id $ \pm txpConfig _ -> do
+        withConfigurationsM (LoggerName "verifyBenchmark") Nothing cfo id $ \pm nm txpConfig _ -> do
                 let tp = TestParams
                         { _tpStartTime = Timestamp (convertUnit startTime)
                         , _tpBlockVersionData = genesisBlockVersionData
@@ -231,8 +234,8 @@ runBenchmark = do
                         , _tpTxpConfiguration = txpConfig
                         }
                 runEmulation startTime
-                    $ initBlockTestContext tp $ \ctx ->
+                    $ initBlockTestContext pm nm tp $ \ctx ->
                         sudoLiftIO $ defaultMainWith config
-                            [ verifyBlocksBenchmark pm tp ctx
-                            , verifyHeaderBenchmark pm tp
+                            [ verifyBlocksBenchmark pm nm tp ctx
+                            , verifyHeaderBenchmark pm nm tp
                             ]
