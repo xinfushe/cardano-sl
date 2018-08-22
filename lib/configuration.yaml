@@ -52,6 +52,7 @@ dev: &dev
         protocolConstants: &dev_core_genesis_spec_protocolConstants
           k: 2
           protocolMagic: 55550001
+          requiresNetworkMagic: NMMustBeJust
           vssMinTTL: 2
           vssMaxTTL: 6
         ftsSeed: "c2tvdm9yb2RhIEdndXJkYSBib3JvZGEgcHJvdm9kYSA="
@@ -178,6 +179,7 @@ bench: &bench
           <<: *dev_core_genesis_spec_protocolConstants
           k: 6
           protocolMagic: 55550007
+          requiresNetworkMagic: NMMustBeJust
 
 
 # Default configuration is development.
@@ -251,6 +253,7 @@ mainnet_base: &mainnet_base
         protocolConstants: &mainnet_base_protocolConstants
           k: 2160
           protocolMagic: 10000000 # arbitrary protocolMagic, to be overridden in actual configs
+          requiresNetworkMagic: NMMustBeNothing
           vssMinTTL: 2
           vssMaxTTL: 6
         ftsSeed: "dmFzYSBvcGFzYSBza292b3JvZGEgR2d1cmRhIGJvcm9kYSBwcm92b2Rh"
@@ -14871,6 +14874,7 @@ testnet_launch: &testnet_launch
         protocolConstants:
           <<: *mainnet_base_protocolConstants
           protocolMagic: 1097911063
+          requiresNetworkMagic: NMMustBeJust
         avvmDistr: {}
         initializer:
           testBalance:
@@ -15013,6 +15017,7 @@ devnet: &devnet
         protocolConstants:
           <<: *mainnet_base_protocolConstants
           protocolMagic: 170987650
+          requiresNetworkMagic: NMMustBeJust
           k: 6 # set to desired value
         avvmDistr: *mainnet_avvmDistr
         initializer:
@@ -15100,6 +15105,7 @@ internal_staging_gen: &internal_staging_gen
         protocolConstants:
           <<: *mainnet_base_protocolConstants
           protocolMagic: 60926700
+          requiresNetworkMagic: NMMustBeNothing
         avvmDistr: *mainnet_avvmDistr
         initializer:
           testBalance:

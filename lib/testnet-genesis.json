@@ -371,6 +371,7 @@
 , "protocolConsts":
     { "k": 2160
     , "protocolMagic": 1097911063
+    , "requiresNetworkMagic": "NMMustBeJust"
     , "vssMaxTTL": 6
     , "vssMinTTL": 2
     }
