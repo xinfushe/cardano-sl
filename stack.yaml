@@ -133,14 +133,14 @@ packages:
 # Required for explorer.
 # We forked it because it has some unacceptable version bounds. We didn't
 # add any features nor fix any bugs.
-# - location:
-#     git: https://github.com/input-output-hk/engine.io.git
-#     commit: d3c55f51bb81cee7d0d551de930ce65fe7d76756
-#   extra-dep: true
-#   subdirs:
-#     - socket-io
-#     - engine-io
-#     - engine-io-wai
+- location:
+    git: https://github.com/angerman/engine.io.git
+    commit: cdefb7f1a01b9dd98a9cb9b41610372d151fea0f
+  extra-dep: true
+  subdirs:
+    - socket-io
+    - engine-io
+    - engine-io-wai
 
 # Library has never been released on Hackage yet
 - location:
@@ -247,10 +247,8 @@ extra-deps:
 - ether-0.5.1.0
 - servant-quickcheck-0.0.7.2
 - o-clock-0.1.1
-- socket-io-1.3.10
-- engine-io-1.2.21
-- engine-io-wai-1.0.8
 - beam-sqlite-0.3.2.2
+- katip-0.6.0.0
 
 # This is for CI to pass --fast to all dependencies
 apply-ghc-options: everything
