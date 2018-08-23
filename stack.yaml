@@ -134,8 +134,8 @@ packages:
 # We forked it because it has some unacceptable version bounds. We didn't
 # add any features nor fix any bugs.
 - location:
-    git: https://github.com/angerman/engine.io.git
-    commit: cdefb7f1a01b9dd98a9cb9b41610372d151fea0f
+    git: https://github.com/input-output-hk/engine.io.git
+    commit: 8f9216b8f9c7bd96cb1feeb82db5271744d67fcd
   extra-dep: true
   subdirs:
     - socket-io

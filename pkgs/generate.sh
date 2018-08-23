@@ -6,7 +6,7 @@
 
 # Update this if you need a package version recently uploaded to hackage.
 # Any timestamp works.
-hackageSnapshot="2018-07-17T09:58:14Z"
+hackageSnapshot="2018-08-23T08:57:11Z"
 
 function runInShell {
   local inputs="$1"
