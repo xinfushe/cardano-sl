@@ -49,9 +49,9 @@ handlers :: ( HasConfigurations
             -> TVar NtpStatus
             -> Server V1.API
 handlers naturalTransformation pm nm txpConfig diffusion ntpStatus =
-         hoist' (Proxy @Addresses.API) Addresses.handlers
-    :<|> hoist' (Proxy @Wallets.API) Wallets.handlers
-    :<|> hoist' (Proxy @Accounts.API) Accounts.handlers
+         hoist' (Proxy @Addresses.API) (Addresses.handlers nm)
+    :<|> hoist' (Proxy @Wallets.API) (Wallets.handlers nm)
+    :<|> hoist' (Proxy @Accounts.API) (Accounts.handlers nm)
     :<|> hoist' (Proxy @Transactions.API) (Transactions.handlers pm nm txpConfig sendTx')
     :<|> hoist' (Proxy @Settings.API) Settings.handlers
     :<|> hoist' (Proxy @Info.API) (Info.handlers diffusion ntpStatus)

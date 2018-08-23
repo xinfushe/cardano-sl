@@ -12,6 +12,7 @@ import           Universum
 import           Data.Coerce (coerce)
 
 import           Pos.Core (mkCoin)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Core.Slotting (Timestamp)
 import           Pos.Crypto.Signing
 
@@ -34,10 +35,12 @@ import           Cardano.Wallet.WalletLayer (CreateWalletError (..),
 import           Cardano.Wallet.WalletLayer.Kernel.Conv
 
 createWallet :: MonadIO m
-             => Kernel.PassiveWallet
+             => NetworkMagic
+             -> Kernel.PassiveWallet
              -> V1.NewWallet
              -> m (Either CreateWalletError V1.Wallet)
-createWallet wallet
+createWallet nm
+             wallet
              (V1.NewWallet
                (V1.BackupPhrase mnemonic)
                mbSpendingPassword
@@ -52,7 +55,8 @@ createWallet wallet
     create = runExceptT $ do
       now  <- liftIO getCurrentTimestamp
       root <- withExceptT CreateWalletError $ ExceptT $
-                Kernel.createHdWallet wallet
+                Kernel.createHdWallet nm
+                                      wallet
                                       mnemonic
                                       spendingPassword
                                       hdAssuranceLevel
@@ -60,7 +64,8 @@ createWallet wallet
       let rootId = root ^. HD.hdRootId
       fmap (mkRoot now root) $
         withExceptT CreateWalletFirstAccountCreationFailed $ ExceptT $
-           Kernel.createAccount spendingPassword
+           Kernel.createAccount nm
+                                spendingPassword
                                 (HD.AccountName "Default account")
                                 (WalletIdHdRnd rootId)
                                 wallet
@@ -105,11 +110,13 @@ updateWallet wallet wId (V1.WalletUpdate v1Level v1Name) = runExceptT $ do
 
 -- | Updates the 'SpendingPassword' for this wallet.
 updateWalletPassword :: MonadIO m
-                     => Kernel.PassiveWallet
+                     => NetworkMagic
+                     -> Kernel.PassiveWallet
                      -> V1.WalletId
                      -> V1.PasswordUpdate
                      -> m (Either UpdateWalletPasswordError V1.Wallet)
-updateWalletPassword wallet
+updateWalletPassword nm
+                     wallet
                      wId
                      (V1.PasswordUpdate
                        (V1 oldPwd)
@@ -118,17 +125,18 @@ updateWalletPassword wallet
                 fromRootId wId
     fmap (uncurry toWallet) $
       withExceptT UpdateWalletPasswordError $ ExceptT $ liftIO $
-        Kernel.updatePassword wallet rootId oldPwd newPwd
+        Kernel.updatePassword nm wallet rootId oldPwd newPwd
 
 -- | Updates the 'SpendingPassword' for this wallet.
 deleteWallet :: MonadIO m
-             => Kernel.PassiveWallet
+             => NetworkMagic
+             -> Kernel.PassiveWallet
              -> V1.WalletId
              -> m (Either DeleteWalletError ())
-deleteWallet wallet wId = runExceptT $ do
+deleteWallet nm wallet wId = runExceptT $ do
     rootId <- withExceptT DeleteWalletWalletIdDecodingFailed $ fromRootId wId
     withExceptT (DeleteWalletError . V1) $ ExceptT $ liftIO $
-      Kernel.deleteHdWallet wallet rootId
+      Kernel.deleteHdWallet nm wallet rootId
 
 -- | Gets a specific wallet.
 getWallet :: V1.WalletId

@@ -161,7 +161,7 @@ txpProcessTxWebWallet pm nm txpConfig tx@(txId, txAux) = do
 
     toThee :: (WithHash Tx, TxUndo) -> Timestamp -> CId Wal -> m (CId Wal, THEntryExtra)
     toThee txWithUndo ts wId = do
-        wdc <- eskToWalletDecrCredentials <$> getSKById wId
+        wdc <- eskToWalletDecrCredentials nm <$> getSKById nm wId
         pure (wId, buildTHEntryExtra wdc txWithUndo (Nothing, Just ts))
 
 txpNormalizeWebWallet

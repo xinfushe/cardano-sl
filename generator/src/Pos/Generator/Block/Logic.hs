@@ -115,7 +115,7 @@ genBlockNoApply
     -> BlockGenRandMode (MempoolExt m) g m (Maybe Block)
 genBlockNoApply pm nm txpConfig eos header = do
     let epoch = eos ^. epochIndexL
-    lift $ unlessM ((epoch ==) <$> LrcDB.getEpoch) (lrcSingleShot pm epoch)
+    lift $ unlessM ((epoch ==) <$> LrcDB.getEpoch) (lrcSingleShot pm nm epoch)
     -- We need to know leaders to create any block.
     leaders <- lift $ lrcActionOnEpochReason epoch "genBlock" LrcDB.getLeadersForEpoch
     case eos of
@@ -195,6 +195,7 @@ genBlock pm nm txpConfig eos = do
                 let undo = undos ^. _Wrapped . _neHead
                     blund = (block, undo)
                 applyBlocksUnsafe pm
+                    nm
                     (vbcBlockVersion ctx)
                     (vbcBlockVersionData ctx)
                     (ShouldCallBListener True)

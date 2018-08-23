@@ -221,11 +221,12 @@ instance Exception AuxxException
 send
     :: forall m. MonadAuxxMode m
     => ProtocolMagic
+    -> NetworkMagic
     -> Diffusion m
     -> Int
     -> NonEmpty TxOut
     -> m ()
-send pm diffusion idx outputs = do
+send pm nm diffusion idx outputs = do
     skey <- takeSecret
     let curPk = encToPublic skey
     let plainAddresses = map (flip makePubKeyAddress curPk . IsBootstrapEraAddr) [False, True]
@@ -238,7 +239,7 @@ send pm diffusion idx outputs = do
         let addrSig = HM.fromList $ zip allAddresses signers
         let getSigner addr = HM.lookup addr addrSig
         -- BE CAREFUL: We create remain address using our pk, wallet doesn't show such addresses
-        (txAux,_) <- lift $ prepareMTx pm getSigner mempty def (NE.fromList allAddresses) (map TxOutAux outputs) curPk
+        (txAux,_) <- lift $ prepareMTx pm nm getSigner mempty def (NE.fromList allAddresses) (map TxOutAux outputs) curPk
         txAux <$ (ExceptT $ try $ submitTxRaw diffusion txAux)
     case etx of
         Left err -> logError $ sformat ("Error: "%stext) (toText $ displayException err)

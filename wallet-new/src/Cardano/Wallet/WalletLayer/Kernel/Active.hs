@@ -9,6 +9,7 @@ import           Universum
 import           Data.Time.Units (Second)
 
 import           Pos.Core (Address, Coin)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Core.Txp (Tx)
 import           Pos.Crypto (PassPhrase)
 
@@ -29,35 +30,37 @@ import           Cardano.Wallet.WalletLayer.Kernel.Conv
 
 -- | Generates a new transaction @and submit it as pending@.
 pay :: MonadIO m
-    => Kernel.ActiveWallet
+    => NetworkMagic
+    -> Kernel.ActiveWallet
     -> PassPhrase
     -> InputGrouping
     -> ExpenseRegulation
     -> V1.Payment
     -> m (Either NewPaymentError (Tx, TxMeta))
-pay activeWallet pw grouping regulation payment = liftIO $
+pay nm activeWallet pw grouping regulation payment = liftIO $
     limitExecutionTimeTo (60 :: Second) NewPaymentTimeLimitReached $
       runExceptT $ do
         (opts, accId, payees) <- withExceptT NewPaymentWalletIdDecodingFailed $
                                    setupPayment grouping regulation payment
         withExceptT NewPaymentError $ ExceptT $
-          Kernel.pay activeWallet pw opts accId payees
+          Kernel.pay nm activeWallet pw opts accId payees
 
 -- | Estimates the fees for a payment.
 estimateFees :: MonadIO m
-             => Kernel.ActiveWallet
+             => NetworkMagic
+             -> Kernel.ActiveWallet
              -> PassPhrase
              -> InputGrouping
              -> ExpenseRegulation
              -> V1.Payment
              -> m (Either EstimateFeesError Coin)
-estimateFees activeWallet pw grouping regulation payment = liftIO $
+estimateFees nm activeWallet pw grouping regulation payment = liftIO $
     limitExecutionTimeTo (60 :: Second) EstimateFeesTimeLimitReached $ do
       runExceptT $ do
         (opts, accId, payees) <- withExceptT EstimateFeesWalletIdDecodingFailed $
                                    setupPayment  grouping regulation payment
         withExceptT EstimateFeesError $ ExceptT $
-          Kernel.estimateFees activeWallet pw opts accId payees
+          Kernel.estimateFees nm activeWallet pw opts accId payees
 
 -- | Redeem an Ada voucher
 --

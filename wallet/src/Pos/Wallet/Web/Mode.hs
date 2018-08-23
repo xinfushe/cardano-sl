@@ -47,6 +47,7 @@ import           Pos.Context (HasNodeContext (..))
 import           Pos.Core (Address, Coin, HasConfiguration, HasPrimaryKey (..),
                      isRedeemAddress, largestHDAddressBoot, mkCoin)
 import           Pos.Core.JsonLog (CanJsonLog (..))
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Core.Reporting (HasMisbehaviorMetrics (..),
                      MonadReporting (..), Reporter (..))
 import           Pos.Core.Slotting (HasSlottingVar (..), MonadSlotsData)
@@ -350,10 +351,12 @@ instance MonadKeys WalletWebMode where
 
 getNewAddressWebWallet
     :: MonadWalletLogic ctx m
-    => (AccountId, PassPhrase) -> m Address
-getNewAddressWebWallet (accId, passphrase) = do
+    => NetworkMagic
+    -> (AccountId, PassPhrase)
+    -> m Address
+getNewAddressWebWallet nm (accId, passphrase) = do
     ws <- askWalletSnapshot
-    cAddrMeta <- newAddress_ ws RandomSeed passphrase accId
+    cAddrMeta <- newAddress_ nm ws RandomSeed passphrase accId
     return $ cAddrMeta ^. wamAddress
 
 instance (HasConfigurations)
@@ -361,5 +364,5 @@ instance (HasConfigurations)
     type AddrData Pos.Wallet.Web.Mode.WalletWebMode = (AccountId, PassPhrase)
     -- We rely on the fact that Daedalus always uses HD addresses with
     -- BootstrapEra distribution.
-    getFakeChangeAddress = pure largestHDAddressBoot
+    getFakeChangeAddress = pure . largestHDAddressBoot
     getNewAddress = getNewAddressWebWallet

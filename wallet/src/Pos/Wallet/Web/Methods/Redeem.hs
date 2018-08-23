@@ -98,13 +98,13 @@ redeemAdaInternal pm nm txpConfig submitTx passphrase cAccId seedBs = do
     db <- askWalletDB
 
     -- new redemption wallet
-    _ <- L.getAccount accId
+    _ <- L.getAccount nm accId
 
-    dstAddr <- decodeCTypeOrFail . cadId =<< L.newAddress RandomSeed passphrase accId
+    dstAddr <- decodeCTypeOrFail . cadId =<< L.newAddress nm RandomSeed passphrase accId
     ws <- getWalletSnapshot db
     th <- rewrapTxError "Cannot send redemption transaction" $ do
         (txAux, redeemAddress, redeemBalance) <-
-                prepareRedemptionTx pm redeemSK dstAddr
+                prepareRedemptionTx pm nm redeemSK dstAddr
 
         ts <- Just <$> getCurrentTimestamp
         let tx = taTx txAux

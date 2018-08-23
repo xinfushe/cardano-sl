@@ -17,6 +17,7 @@ import           Formatting (sformat, (%))
 import           Serokell.Util (listJson)
 import           System.Wlog (Severity (..))
 
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Crypto (EncryptedSecretKey)
 
 import           Cardano.Wallet.Kernel.DB.AcidState (DB, Snapshot (..))
@@ -34,13 +35,14 @@ getWalletSnapshot pw = query' (pw ^. wallets) Snapshot
 -- For wallets without a corresponding secret key we log an error. This
 -- indicates a bug somewhere, but there is not much we can do about it here,
 -- since this runs in the context of applying a block.
-getWalletCredentials :: PassiveWallet
+getWalletCredentials :: NetworkMagic
+                     -> PassiveWallet
                      -> IO [(WalletId, EncryptedSecretKey)]
-getWalletCredentials pw = do
+getWalletCredentials nm pw = do
     snapshot         <- getWalletSnapshot pw
     (creds, missing) <- fmap partitionEithers $
       forM (walletIds snapshot) $ \walletId ->
-        aux walletId <$> Keystore.lookup walletId (pw ^. walletKeystore)
+        aux walletId <$> Keystore.lookup nm walletId (pw ^. walletKeystore)
     unless (null missing) $ (pw ^. walletLogMessage) Error (errMissing missing)
     return creds
   where

@@ -25,6 +25,7 @@ module Test.Pos.Core.ExampleHelpers
         , exampleLightDlgIndices
         , exampleOpening
         , exampleOpeningsMap
+        , exampleNetworkMagic
         , exampleProtocolConstants
         , exampleProxySKBlockInfo
         , examplePublicKey
@@ -116,7 +117,7 @@ import           Pos.Core.Genesis (FakeAvvmOptions (..),
                      GenesisSpec (..), TestnetBalanceOptions (..))
 import           Pos.Core.Merkle (mkMerkleTree, mtRoot)
 import           Pos.Core.NetworkMagic (NetworkMagic (..),
-                     RequiresNetworkMagic (..))
+                     RequiresNetworkMagic (..), makeNetworkMagic)
 import           Pos.Core.ProtocolConstants (ProtocolConstants, VssMaxTTL (..),
                      VssMinTTL (..))
 import           Pos.Core.Slotting (EpochIndex (..), FlatSlotId,
@@ -414,7 +415,10 @@ exampleTxInUtxo :: TxIn
 exampleTxInUtxo = TxInUtxo exampleHashTx 47 -- TODO: loop here
 
 exampleTxOut :: TxOut
-exampleTxOut = TxOut (makePubKeyAddress (IsBootstrapEraAddr True) pkey) (Coin 47)
+exampleTxOut = TxOut (makePubKeyAddress exampleNetworkMagic
+                                        (IsBootstrapEraAddr True)
+                                        pkey)
+                     (Coin 47)
     where
         Right pkey = PublicKey <$> CC.xpub (getBytes 0 64)
 
@@ -676,6 +680,13 @@ exampleGenesisDelegation = UnsafeGenesisDelegation (HM.fromList
                            \8e4b174b303f43e"
     pskDelChainCode = CC.ChainCode (hexToBS "55163b178e999b9fd50637b2edab8c85\
                                             \8a879ac3c4bd3e610095419a19696573")
+
+exampleRequiresNetworkMagic :: RequiresNetworkMagic
+exampleRequiresNetworkMagic = NMMustBeNothing
+
+exampleNetworkMagic :: NetworkMagic
+exampleNetworkMagic = makeNetworkMagic exampleRequiresNetworkMagic
+                                       (ProtocolMagic 1783847074)
 
 exampleProtocolConstants :: GenesisProtocolConstants
 exampleProtocolConstants = GenesisProtocolConstants

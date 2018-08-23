@@ -26,6 +26,7 @@ import           Data.SafeCopy (base, deriveSafeCopy)
 
 import           Pos.Chain.Txp (Utxo)
 import           Pos.Core (Address (..), SlotId)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Core.Txp (TxId, TxIn (..), TxOut (..), TxOutAux (..))
 import           Pos.Crypto (EncryptedSecretKey)
 import           Pos.Wallet.Web.State.Storage (WAddressMeta (..))
@@ -155,11 +156,16 @@ prefilterUtxo' wKey utxo
                                     Map.singleton txIn (txOut, addrId))
 
 -- | Prefilter utxo using walletId and esk
-prefilterUtxo :: HdRootId -> EncryptedSecretKey -> Utxo -> Map HdAccountId (Utxo,[AddrWithId])
-prefilterUtxo rootId esk utxo = map toPrefilteredUtxo prefUtxo
+prefilterUtxo
+    :: NetworkMagic
+    -> HdRootId
+    -> EncryptedSecretKey
+    -> Utxo
+    -> Map HdAccountId (Utxo,[AddrWithId])
+prefilterUtxo nm rootId esk utxo = map toPrefilteredUtxo prefUtxo
     where
         (_,prefUtxo) = prefilterUtxo' wKey utxo
-        wKey         = (WalletIdHdRnd rootId, eskToWalletDecrCredentials esk)
+        wKey         = (WalletIdHdRnd rootId, eskToWalletDecrCredentials nm esk)
 
 -- | Produce Utxo along with all (extended) addresses occurring in the Utxo
 toPrefilteredUtxo :: UtxoWithAddrId -> (Utxo,[AddrWithId])
@@ -241,17 +247,18 @@ extendWithSummary (onlyOurInps,onlyOurOuts) utxoWithAddrId
 -- | Prefilter the transactions of a resolved block for the given wallet.
 --
 --   Returns prefiltered blocks indexed by HdAccountId.
-prefilterBlock :: ResolvedBlock
+prefilterBlock :: NetworkMagic
+               -> ResolvedBlock
                -> WalletId
                -> EncryptedSecretKey
                -> Map HdAccountId PrefilteredBlock
-prefilterBlock block wid esk =
+prefilterBlock nm block wid esk =
       Map.fromList
     $ map (mkPrefBlock (block ^. rbSlotId) inpAll outAll)
     $ Set.toList accountIds
   where
     wdc :: WalletDecrCredentials
-    wdc  = eskToWalletDecrCredentials esk
+    wdc  = eskToWalletDecrCredentials nm esk
     wKey = (wid, wdc)
 
     inps :: [Map HdAccountId (Set TxIn)]

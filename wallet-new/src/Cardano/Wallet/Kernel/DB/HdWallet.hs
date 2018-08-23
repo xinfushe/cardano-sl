@@ -107,6 +107,7 @@ import qualified Formatting.Buildable
 
 import qualified Pos.Core as Core
 import           Pos.Core.Chrono (NewestFirst (..))
+import           Pos.Core.NetworkMagic (NetworkMagic (..))
 import qualified Pos.Crypto as Core
 
 import           Cardano.Wallet.Kernel.DB.InDb
@@ -193,8 +194,8 @@ deriveSafeCopy 1 'base ''HasSpendingPassword
 -- acceptable.
 --
 -- TODO: This may well disappear as part of [CBR-325].
-eskToHdRootId :: Core.EncryptedSecretKey -> HdRootId
-eskToHdRootId = HdRootId . InDb . Core.makePubKeyAddressBoot . Core.encToPublic
+eskToHdRootId :: NetworkMagic -> Core.EncryptedSecretKey -> HdRootId
+eskToHdRootId nm = HdRootId . InDb . (Core.makePubKeyAddressBoot nm) . Core.encToPublic
 
 
 {-------------------------------------------------------------------------------
@@ -219,7 +220,9 @@ instance Arbitrary HdRootId where
   arbitrary = do
       (_, esk) <- Core.safeDeterministicKeyGen <$> (BS.pack <$> vectorOf 12 arbitrary)
                                                <*> pure mempty
-      pure (eskToHdRootId esk)
+      -- TODO @intricate @mhuesch: Perhaps we need
+      -- an Arbitrary instance for NetworkMagic?
+      pure (eskToHdRootId NMNothing esk)
 
 -- | HD wallet account ID
 data HdAccountId = HdAccountId {

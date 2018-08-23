@@ -11,6 +11,7 @@ import           Universum
 import           Data.Coerce (coerce)
 
 import qualified Pos.Core as Core
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Crypto.Signing
 
 import           Cardano.Wallet.API.V1.Types (V1 (..))
@@ -29,15 +30,17 @@ import           Cardano.Wallet.WalletLayer (CreateAccountError (..),
 import           Cardano.Wallet.WalletLayer.Kernel.Conv
 
 createAccount :: MonadIO m
-              => Kernel.PassiveWallet
+              => NetworkMagic
+              -> Kernel.PassiveWallet
               -> V1.WalletId
               -> V1.NewAccount
               -> m (Either CreateAccountError V1.Account)
-createAccount wallet wId (V1.NewAccount mbSpendingPassword accountName) = liftIO $ runExceptT $  do
+createAccount nm wallet wId (V1.NewAccount mbSpendingPassword accountName) = liftIO $ runExceptT $  do
     rootId <- withExceptT CreateAccountWalletIdDecodingFailed $
                 fromRootId wId
     acc    <- withExceptT CreateAccountError $ ExceptT $ liftIO $
-                Kernel.createAccount passPhrase
+                Kernel.createAccount nm
+                                     passPhrase
                                      (HD.AccountName accountName)
                                      (WalletIdHdRnd rootId)
                                      wallet
@@ -45,7 +48,7 @@ createAccount wallet wId (V1.NewAccount mbSpendingPassword accountName) = liftIO
     -- Create a new address to go in tandem with this brand-new 'Account'.
     fmap (mkAccount accId) $
       withExceptT CreateAccountFirstAddressGenerationFailed $ ExceptT $ liftIO $
-        Kernel.createAddress passPhrase (AccountIdHdRnd accId) wallet
+        Kernel.createAddress nm passPhrase (AccountIdHdRnd accId) wallet
   where
     passPhrase = maybe mempty coerce mbSpendingPassword
 

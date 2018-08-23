@@ -28,6 +28,8 @@ import           Pos.Core.Update (BlockVersionData)
 import           Pos.Crypto (deterministicKeyGen)
 import           Pos.DB (MonadGState (..))
 
+import           Test.Pos.Core.Dummy (dummyNetworkMagic)
+
 ----------------------------------------------------------------------------
 -- Configuration propagation
 ----------------------------------------------------------------------------
@@ -64,7 +66,7 @@ fakeAddressForMonadAddresses = address
     -- seed for address generation is a ByteString with 32 255's
     seedSize = 32
     seed = BS.replicate seedSize (255 :: Word8)
-    address = makePubKeyAddressBoot $ fst $ deterministicKeyGen seed
+    address = makePubKeyAddressBoot dummyNetworkMagic $ fst $ deterministicKeyGen seed
 
 withBVData
   :: MonadReader BlockVersionData m

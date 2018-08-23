@@ -123,18 +123,19 @@ type MonadFees ctx m =
 getTxFee
      :: MonadFees ctx m
      => ProtocolMagic
+     -> NetworkMagic
      -> AccountId
      -> CId Addr
      -> Coin
      -> InputSelectionPolicy
      -> m CCoin
-getTxFee pm srcAccount dstAccount coin policy = do
+getTxFee pm nm srcAccount dstAccount coin policy = do
     ws <- askWalletSnapshot
     let pendingAddrs = getPendingAddresses ws policy
     utxo <- getMoneySourceUtxo ws (AccountMoneySource srcAccount)
     outputs <- coinDistrToOutputs $ one (dstAccount, coin)
     TxFee fee <- rewrapTxError "Cannot compute transaction fee" $
-        eitherToThrow =<< runTxCreator policy (computeTxFee pm pendingAddrs utxo outputs)
+        eitherToThrow =<< runTxCreator policy (computeTxFee pm nm pendingAddrs utxo outputs)
     pure $ encodeCType fee
 
 data MoneySource
@@ -202,7 +203,7 @@ sendMoney pm nm txpConfig submitTx passphrase moneySource dstDistr policy = do
         throwM err403
         { errReasonPhrase = "Transaction creation is disabled when the wallet is restoring."
         }
-    rootSk <- getSKById srcWallet
+    rootSk <- getSKById nm srcWallet
     checkPassMatches passphrase rootSk `whenNothing`
         throwM (RequestError "Passphrase doesn't match")
 
@@ -222,7 +223,7 @@ sendMoney pm nm txpConfig submitTx passphrase moneySource dstDistr policy = do
         getSigner addr = do
           addrMeta <- M.lookup addr metasAndAddresses
           sk <- rightToMaybe . runExcept $
-              getSKByAddressPure allSecrets (ShouldCheckPassphrase False) passphrase addrMeta
+              getSKByAddressPure nm allSecrets (ShouldCheckPassphrase False) passphrase addrMeta
           withSafeSignerUnsafe sk (pure passphrase) pure
 
     relatedAccount <- getSomeMoneySourceAccount ws moneySource
@@ -230,7 +231,7 @@ sendMoney pm nm txpConfig submitTx passphrase moneySource dstDistr policy = do
     let pendingAddrs = getPendingAddresses ws policy
     th <- rewrapTxError "Cannot send transaction" $ do
         (txAux, inpTxOuts') <-
-            prepareMTx pm getSigner pendingAddrs policy srcAddrs outputs (relatedAccount, passphrase)
+            prepareMTx pm nm getSigner pendingAddrs policy srcAddrs outputs (relatedAccount, passphrase)
 
         ts <- Just <$> getCurrentTimestamp
         let tx = taTx txAux

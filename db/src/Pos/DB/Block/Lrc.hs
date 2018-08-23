@@ -34,6 +34,7 @@ import           Pos.Core (Coin, EpochIndex, EpochOrSlot (..), SharedSeed,
                      epochSlots, getEpochOrSlot)
 import           Pos.Core.Chrono (NE, NewestFirst (..), toOldestFirst)
 import           Pos.Core.Conc (forConcurrently)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Core.Reporting (HasMisbehaviorMetrics (..),
                      MisbehaviorMetrics (..))
 import           Pos.Core.Slotting (MonadSlots)
@@ -78,9 +79,10 @@ lrcSingleShot
     :: forall ctx m
      . (LrcModeFull ctx m, HasMisbehaviorMetrics ctx)
     => ProtocolMagic
+    -> NetworkMagic
     -> EpochIndex
     -> m ()
-lrcSingleShot pm epoch = do
+lrcSingleShot pm nm epoch = do
     lock <- views (lensOf @LrcContext) lcLrcSync
     logDebug $ sformat
         ("lrcSingleShot is trying to acquire LRC lock, the epoch is "
@@ -106,7 +108,7 @@ lrcSingleShot pm epoch = do
                     , expectedRichmenComp)
         when need $ do
             logInfo "LRC is starting actual computation"
-            lrcDo pm epoch filteredConsumers
+            lrcDo pm nm epoch filteredConsumers
             logInfo "LRC has finished actual computation"
         putEpoch epoch
         logInfo ("LRC has updated LRC DB" <> for_thEpochMsg)
@@ -135,10 +137,11 @@ lrcDo
        , HasMisbehaviorMetrics ctx
        )
     => ProtocolMagic
+    -> NetworkMagic
     -> EpochIndex
     -> [LrcConsumer m]
     -> m ()
-lrcDo pm epoch consumers = do
+lrcDo pm nm epoch consumers = do
     blundsUpToGenesis <- DB.loadBlundsFromTipWhile upToGenesis
     -- If there are blocks from 'epoch' it means that we somehow accepted them
     -- before running LRC for 'epoch'. It's very bad.
@@ -182,7 +185,7 @@ lrcDo pm epoch consumers = do
 
     applyBack blunds = do
         (bv, bvd) <- getAdoptedBVFull
-        applyBlocksUnsafe pm bv bvd scb blunds Nothing
+        applyBlocksUnsafe pm nm bv bvd scb blunds Nothing
     upToGenesis b = b ^. epochIndexL >= epoch
     whileAfterCrucial b = getEpochOrSlot b > crucial
     crucial = EpochOrSlot $ Right $ crucialSlot epoch
@@ -197,7 +200,7 @@ lrcDo pm epoch consumers = do
         -- and outer viewers mustn't know about it.
         ShouldCallBListener False
     withBlocksRolledBack blunds =
-        bracket_ (rollbackBlocksUnsafe pm bsc scb blunds)
+        bracket_ (rollbackBlocksUnsafe pm nm bsc scb blunds)
                  (applyBack (toOldestFirst blunds))
 
 issuersComputationDo :: forall ctx m . LrcMode ctx m => EpochIndex -> m ()

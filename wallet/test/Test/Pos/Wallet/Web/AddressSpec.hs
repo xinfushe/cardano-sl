@@ -18,6 +18,7 @@ import           Test.QuickCheck.Monadic (pick, stop)
 import           Pos.Binary (biSize)
 import           Pos.Client.Txp.Addresses (getFakeChangeAddress, getNewAddress)
 import           Pos.Core.Common (Address)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Crypto (PassPhrase)
 import           Pos.Launcher (HasConfigurations)
 
@@ -39,24 +40,27 @@ spec = withDefConfigurations $ \_ _nm _ _ ->
     describe "Fake address has maximal possible size" $
     modifyMaxSuccess (const 10) $ do
         prop "getNewAddress" $
-            fakeAddressHasMaxSizeTest changeAddressGenerator
+            fakeAddressHasMaxSizeTest _nm changeAddressGenerator
         prop "genUniqueAddress" $
-            fakeAddressHasMaxSizeTest commonAddressGenerator
+            fakeAddressHasMaxSizeTest _nm commonAddressGenerator
 
-type AddressGenerator = AccountId -> PassPhrase -> WalletProperty Address
+type AddressGenerator = NetworkMagic -> AccountId -> PassPhrase -> WalletProperty Address
 
 fakeAddressHasMaxSizeTest
     :: HasConfigurations
-    => AddressGenerator -> Word32 -> WalletProperty ()
-fakeAddressHasMaxSizeTest generator accSeed = do
-    passphrase <- importSingleWallet mostlyEmptyPassphrases
+    => NetworkMagic
+    -> AddressGenerator
+    -> Word32
+    -> WalletProperty ()
+fakeAddressHasMaxSizeTest nm generator accSeed = do
+    passphrase <- importSingleWallet nm mostlyEmptyPassphrases
     ws <- askWalletSnapshot
     wid <- expectedOne "wallet addresses" $ getWalletAddresses ws
     accId <- lift $ decodeCTypeOrFail . caId
-         =<< newAccount (DeterminedSeed accSeed) passphrase (CAccountInit def wid)
-    address <- generator accId passphrase
+         =<< newAccount nm (DeterminedSeed accSeed) passphrase (CAccountInit def wid)
+    address <- generator nm accId passphrase
 
-    largeAddress <- lift getFakeChangeAddress
+    largeAddress <- lift $ getFakeChangeAddress nm
 
     assertProperty
         (biSize largeAddress >= biSize address)
@@ -66,14 +70,14 @@ fakeAddressHasMaxSizeTest generator accSeed = do
 -- Unfortunatelly, its randomness doesn't depend on QuickCheck seed,
 -- so another proper generator is helpful.
 changeAddressGenerator :: HasConfigurations => AddressGenerator
-changeAddressGenerator accId passphrase = lift $ getNewAddress (accId, passphrase)
+changeAddressGenerator nm accId passphrase = lift $ getNewAddress nm (accId, passphrase)
 
 -- | Generator which is directly used in endpoints.
 commonAddressGenerator :: AddressGenerator
-commonAddressGenerator accId passphrase = do
+commonAddressGenerator nm accId passphrase = do
     ws <- askWalletSnapshot
     addrSeed <- pick arbitrary
-    let genAddress = genUniqueAddress ws (DeterminedSeed addrSeed) passphrase accId
+    let genAddress = genUniqueAddress nm ws (DeterminedSeed addrSeed) passphrase accId
     -- can't catch under 'PropertyM', workarounding
     maddr <- lift $ (Just <$> genAddress) `catch` seedBusyHandler
     addr <- maybe (stop Discard) pure maddr

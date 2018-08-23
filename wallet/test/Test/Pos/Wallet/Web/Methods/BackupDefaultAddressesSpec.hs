@@ -7,10 +7,11 @@ module Test.Pos.Wallet.Web.Methods.BackupDefaultAddressesSpec
 
 import           Universum
 
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Launcher (HasConfigurations)
-
 import           Pos.Wallet.Web.ClientTypes (CWallet (..))
 import           Pos.Wallet.Web.Methods.Restore (restoreWalletFromBackup)
+
 import           Test.Hspec (Spec, describe)
 import           Test.Hspec.QuickCheck (modifyMaxSuccess)
 import           Test.Pos.Configuration (withDefConfigurations)
@@ -22,13 +23,16 @@ import           Test.QuickCheck.Monadic (pick)
 spec :: Spec
 spec = withDefConfigurations $ \_ _nm _ _ ->
        describe "restoreAddressFromWalletBackup" $ modifyMaxSuccess (const 10) $ do
-           restoreWalletAddressFromBackupSpec
+           restoreWalletAddressFromBackupSpec _nm
 
-restoreWalletAddressFromBackupSpec :: HasConfigurations => Spec
-restoreWalletAddressFromBackupSpec =
+restoreWalletAddressFromBackupSpec
+    :: HasConfigurations
+    => NetworkMagic
+    -> Spec
+restoreWalletAddressFromBackupSpec nm =
     walletPropertySpec restoreWalletAddressFromBackupDesc $ do
         walletBackup   <- pick arbitrary
-        restoredWallet <- lift $ restoreWalletFromBackup walletBackup
+        restoredWallet <- lift $ restoreWalletFromBackup nm walletBackup
         let noOfAccounts = cwAccountsNumber restoredWallet
         assertProperty (noOfAccounts > 0) $ "Exported wallet has no accounts!"
   where

@@ -59,9 +59,9 @@ spec =
                       $ isNothing (utxoGetSimple mempty myTxIn)
                   prop description_findTxInUtxo findTxInUtxo
               describe "verifyTxUtxo" $ do
-                  prop description_verifyTxInUtxo (verifyTxInUtxo pm)
-                  prop description_validateGoodTx (validateGoodTx pm)
-                  prop description_badSigsTx      (badSigsTx pm)
+                  prop description_verifyTxInUtxo (verifyTxInUtxo pm _nm)
+                  prop description_validateGoodTx (validateGoodTx pm _nm)
+                  prop description_badSigsTx      (badSigsTx pm _nm)
                   prop description_doubleInputTx  doubleInputTx
               describe "applyTxToUtxo" $ do
                   prop description_applyTxToUtxoGood applyTxToUtxoGood
@@ -420,7 +420,7 @@ scriptTxSpec pm nm = describe "script transactions" $ do
     -- Some random stuff we're going to use when building transactions
     randomPkOutput = runGen $ do
         key <- arbitrary
-        return (TxOut (makePubKeyAddressBoot key) (mkCoin 1))
+        return (TxOut (makePubKeyAddressBoot nm key) (mkCoin 1))
     -- Make utxo with a single output; return utxo, the output, and an
     -- input that can be used to spend that output
     mkUtxo :: TxOut -> (TxIn, TxOut, Utxo)
@@ -446,7 +446,7 @@ scriptTxSpec pm nm = describe "script transactions" $ do
                   -> Either ToilVerFailure ()
     checkScriptTx val mkWit =
         let (inp, _, utxo) = mkUtxo $
-                TxOut (makeScriptAddress Nothing val) (mkCoin 1)
+                TxOut (makeScriptAddress nm Nothing val) (mkCoin 1)
             tx = UnsafeTx (one inp) (one randomPkOutput) $ mkAttributes ()
             txSigData = TxSigData { txSigTxHash = hash tx }
             txAux = TxAux tx (one (mkWit txSigData))

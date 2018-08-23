@@ -171,7 +171,7 @@ genTxPayload pm nm txpConfig = do
         -- Currently payload generator only uses addresses with
         -- bootstrap era distribution. This is fine, because we don't
         -- have usecases where we switch to reward era.
-        let utxoAddresses = map (makePubKeyAddressBoot . toPublic) $ HM.elems secrets
+        let utxoAddresses = map ((makePubKeyAddressBoot nm) . toPublic) $ HM.elems secrets
             utxoAddrsN = HM.size secrets
         let adder hm TxOutAux { toaOut = TxOut {..} } =
                 HM.insertWith (+) txOutAddress (coinToInteger txOutValue) hm
@@ -200,7 +200,7 @@ genTxPayload pm nm txpConfig = do
         totalTxAmount <- getRandomR (fromIntegral outputsN, totalOwnMoney `div` 2)
 
         changeAddrIdx <- getRandomR (0, utxoAddrsN - 1)
-        let changeAddrData = makePubKeyAddressBoot $ secretsPks !! changeAddrIdx
+        let changeAddrData = makePubKeyAddressBoot nm $ secretsPks !! changeAddrIdx
 
         -- Prepare tx outputs
         coins <- splitCoins outputsN (unsafeIntegerToCoin totalTxAmount)
@@ -218,7 +218,7 @@ genTxPayload pm nm txpConfig = do
             groupedInputs = OptimizeForSecurity
 
         eTx <- lift . lift $
-            createGenericTx pm mempty makeTestTx groupedInputs ownUtxo txOutAuxs changeAddrData
+            createGenericTx pm nm mempty makeTestTx groupedInputs ownUtxo txOutAuxs changeAddrData
         (txAux, _) <- either (throwM . BGFailedToCreate . pretty) pure eTx
 
         let tx = taTx txAux

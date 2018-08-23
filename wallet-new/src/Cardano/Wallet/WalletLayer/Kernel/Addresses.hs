@@ -11,6 +11,7 @@ import           Control.Monad.Trans.Except
 import           Data.Coerce (coerce)
 
 import           Pos.Core (Address, decodeTextAddress)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 
 import           Cardano.Wallet.API.Request (RequestParams (..))
 import           Cardano.Wallet.API.Request.Pagination (Page (..),
@@ -32,10 +33,12 @@ import           Cardano.Wallet.WalletLayer (CreateAddressError (..),
 import           Cardano.Wallet.WalletLayer.Kernel.Conv
 
 createAddress :: MonadIO m
-              => Kernel.PassiveWallet
+              => NetworkMagic
+              -> Kernel.PassiveWallet
               -> V1.NewAddress
               -> m (Either CreateAddressError WalletAddress)
-createAddress wallet
+createAddress nm
+              wallet
               (V1.NewAddress
                 mbSpendingPassword
                 accIx
@@ -44,7 +47,7 @@ createAddress wallet
                fromAccountId wId accIx
     fmap mkAddress $
         withExceptT CreateAddressError $ ExceptT $ liftIO $
-            Kernel.createAddress passPhrase (AccountIdHdRnd accId) wallet
+            Kernel.createAddress nm passPhrase (AccountIdHdRnd accId) wallet
   where
     passPhrase = maybe mempty coerce mbSpendingPassword
 

@@ -27,7 +27,7 @@ import           Pos.Client.Txp.Balances (getBalance)
 import           Pos.Client.Txp.Util (InputSelectionPolicy (..), txToLinearFee)
 import           Pos.Core (Address, Coin, TxFeePolicy (..), mkCoin, sumCoins,
                      unsafeGetCoin, unsafeSubCoin)
-import           Pos.Core.NetworkMagic (RequiresNetworkMagic (..),
+import           Pos.Core.NetworkMagic (NetworkMagic, RequiresNetworkMagic (..),
                      makeNetworkMagic)
 import           Pos.Core.Txp (Tx (..), TxAux (..), _TxOut)
 import           Pos.Core.Update (bvdTxFeePolicy)
@@ -89,21 +89,24 @@ data PaymentFixture = PaymentFixture {
 }
 
 -- | Generic block of code to be reused across all the different payment specs.
-newPaymentFixture :: HasConfigurations => WalletProperty PaymentFixture
-newPaymentFixture = do
-    passphrases <- importSomeWallets mostlyEmptyPassphrases
+newPaymentFixture
+    :: HasConfigurations
+    => NetworkMagic
+    -> WalletProperty PaymentFixture
+newPaymentFixture nm = do
+    passphrases <- importSomeWallets nm mostlyEmptyPassphrases
     let l = length passphrases
     destLen <- pick $ choose (1, l)
     -- FIXME: we are sending to at most dstLen (which is small) because
     -- deriveRandomAddress is an expensive operation so it might
     -- take a longer time for test to complete for a longer lists
-    (dstCAddrs, dstWalIds) <- fmap unzip $ replicateM destLen $ deriveRandomAddress passphrases
-    rootsWIds <- lift myRootAddresses
+    (dstCAddrs, dstWalIds) <- fmap unzip $ replicateM destLen $ deriveRandomAddress nm passphrases
+    rootsWIds <- lift $ myRootAddresses nm
     idx <- pick $ choose (0, l - 1)
     let walId = rootsWIds !! idx
     let pswd = passphrases !! idx
     let noOneAccount = sformat ("There is no one account for wallet: "%build) walId
-    srcAccount <- maybeStopProperty noOneAccount =<< (lift $ (fmap fst . uncons) <$> getAccounts (Just walId))
+    srcAccount <- maybeStopProperty noOneAccount =<< (lift $ (fmap fst . uncons) <$> getAccounts nm (Just walId))
     srcAccId <- lift $ decodeCTypeOrFail (caId srcAccount)
 
     ws <- WS.askWalletSnapshot
@@ -130,22 +133,22 @@ newPaymentFixture = do
 -- the backend prevents us from doing that.
 rejectPaymentIfRestoringSpec :: HasConfigurations => RequiresNetworkMagic -> TxpConfiguration -> Spec
 rejectPaymentIfRestoringSpec rnm txpConfig = walletPropertySpec "should fail with 403" $ do
-    PaymentFixture{..} <- newPaymentFixture
     let nm = makeNetworkMagic rnm dummyProtocolMagic
+    PaymentFixture{..} <- newPaymentFixture nm
     res <- lift $ try (newPaymentBatch dummyProtocolMagic nm txpConfig submitTxTestMode pswd batch)
     liftIO $ shouldBe res (Left (err403 { errReasonPhrase = "Transaction creation is disabled when the wallet is restoring." }))
 
 -- | Test one single, successful payment.
 oneNewPaymentBatchSpec :: HasConfigurations => RequiresNetworkMagic -> TxpConfiguration -> Spec
 oneNewPaymentBatchSpec rnm txpConfig = walletPropertySpec oneNewPaymentBatchDesc $ do
-    PaymentFixture{..} <- newPaymentFixture
+    let nm = makeNetworkMagic rnm dummyProtocolMagic
+    PaymentFixture{..} <- newPaymentFixture nm
 
     -- Force the wallet to be in a (fake) synced state
     db <- WS.askWalletDB
     randomSyncTip <- liftIO $ generate arbitrary
     WS.setWalletSyncTip db walId randomSyncTip
 
-    let nm = makeNetworkMagic rnm dummyProtocolMagic
     void $ lift $ newPaymentBatch dummyProtocolMagic nm txpConfig submitTxTestMode pswd batch
     dstAddrs <- lift $ mapM decodeCTypeOrFail dstCAddrs
     txLinearPolicy <- lift $ (bvdTxFeePolicy <$> gsAdoptedBVData) <&> \case

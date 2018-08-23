@@ -34,6 +34,7 @@ import qualified Formatting.Buildable
 import           Pos.Chain.Txp (Utxo)
 import           Pos.Core (Address, Coin, unsafeSubCoin)
 import qualified Pos.Core as Core
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Core.Txp (Tx (..), TxAux (..), TxId, TxIn (..), TxOut (..),
                      TxOutAux (..))
 import           Pos.Crypto (EncryptedSecretKey, PassPhrase, SafeSigner (..),
@@ -116,7 +117,8 @@ instance Buildable PaymentError where
 -- stop trying to perform a payment if the payment would take more than 30
 -- seconds, as well as internally retrying up to 5 times to propagate the
 -- transaction via 'newPending'.
-pay :: ActiveWallet
+pay :: NetworkMagic
+    -> ActiveWallet
     -> PassPhrase
     -> CoinSelectionOptions
     -> HdAccountId
@@ -124,13 +126,13 @@ pay :: ActiveWallet
     -> NonEmpty (Address, Coin)
     -- ^ The payees
     -> IO (Either PaymentError (Tx, TxMeta))
-pay activeWallet spendingPassword opts accountId payees = do
+pay nm activeWallet spendingPassword opts accountId payees = do
         retrying retryPolicy shouldRetry $ \rs -> do
-            res <- newTransaction activeWallet spendingPassword opts accountId payees
+            res <- newTransaction nm activeWallet spendingPassword opts accountId payees
             case res of
                  Left e      -> return (Left $ PaymentNewTransactionError e)
                  Right (txAux, meta, _utxo) -> do
-                     succeeded <- newPending activeWallet accountId txAux (Just meta)
+                     succeeded <- newPending nm activeWallet accountId txAux (Just meta)
                      case succeeded of
                           Left e   -> do
                               -- If the next retry would bring us to the
@@ -160,7 +162,8 @@ pay activeWallet spendingPassword opts accountId payees = do
 --
 -- For testing purposes, if successful this additionally returns the utxo
 -- that coin selection was run against.
-newTransaction :: ActiveWallet
+newTransaction :: NetworkMagic
+               -> ActiveWallet
                -> PassPhrase
                -- ^ The spending password.
                -> CoinSelectionOptions
@@ -170,7 +173,7 @@ newTransaction :: ActiveWallet
                -> NonEmpty (Address, Coin)
                -- ^ The payees
                -> IO (Either NewTransactionError (TxAux, TxMeta, Utxo))
-newTransaction ActiveWallet{..} spendingPassword options accountId payees = runExceptT $ do
+newTransaction nm ActiveWallet{..} spendingPassword options accountId payees = runExceptT $ do
     initialEnv <- liftIO $ newEnvironment
     maxTxSize  <- liftIO $ getMaxTxSize (walletPassive ^. walletNode)
     let maxInputs = estimateMaxTxInputs dummyAddrAttrSize dummyTxAttrSize maxTxSize
@@ -195,9 +198,10 @@ newTransaction ActiveWallet{..} spendingPassword options accountId payees = runE
 
     -- STEP 3: Perform the signing and forge the final TxAux.
     mbEsk <- liftIO $ Keystore.lookup
+               nm
                (WalletIdHdRnd $ accountId ^. hdAccountIdParent)
                (walletPassive ^. walletKeystore)
-    let signAddress = mkSigner spendingPassword mbEsk snapshot
+    let signAddress = mkSigner nm spendingPassword mbEsk snapshot
         mkTx        = mkStdTx walletProtocolMagic signAddress
 
     txAux <- withExceptT NewTransactionErrorSignTxFailed $ ExceptT $
@@ -242,7 +246,8 @@ newTransaction ActiveWallet{..} spendingPassword options accountId payees = runE
         genChangeAddr :: MonadIO m
                       => ExceptT Kernel.CreateAddressError m Address
         genChangeAddr = ExceptT $ liftIO $
-            Kernel.createAddress spendingPassword
+            Kernel.createAddress nm
+                                 spendingPassword
                                  (AccountIdHdRnd accountId)
                                  walletPassive
 
@@ -315,7 +320,8 @@ instance Buildable EstimateFeesError where
 instance Arbitrary EstimateFeesError where
     arbitrary = EstFeesTxCreationFailed <$> arbitrary
 
-estimateFees :: ActiveWallet
+estimateFees :: NetworkMagic
+             -> ActiveWallet
              -> PassPhrase
              -- ^ The spending password.
              -> CoinSelectionOptions
@@ -325,8 +331,8 @@ estimateFees :: ActiveWallet
              -> NonEmpty (Address, Coin)
              -- ^ The payees
              -> IO (Either EstimateFeesError Coin)
-estimateFees activeWallet@ActiveWallet{..} spendingPassword options accountId payees = do
-    res <- newTransaction activeWallet spendingPassword options accountId payees
+estimateFees nm activeWallet@ActiveWallet{..} spendingPassword options accountId payees = do
+    res <- newTransaction nm activeWallet spendingPassword options accountId payees
     case res of
          Left e  -> return . Left . EstFeesTxCreationFailed $ e
          Right (tx, _txMeta, originalUtxo) ->
@@ -370,13 +376,14 @@ instance Buildable SignTransactionError where
 instance Arbitrary SignTransactionError where
     arbitrary = oneof []
 
-mkSigner :: PassPhrase
+mkSigner :: NetworkMagic
+         -> PassPhrase
          -> Maybe EncryptedSecretKey
          -> DB
          -> Address
          -> Either SignTransactionError SafeSigner
-mkSigner _ Nothing _ addr = Left (SignTransactionMissingKey addr)
-mkSigner spendingPassword (Just esk) snapshot addr =
+mkSigner _ _ Nothing _ addr = Left (SignTransactionMissingKey addr)
+mkSigner nm spendingPassword (Just esk) snapshot addr =
     case Getters.lookupCardanoAddress snapshot addr of
         Left _ -> Left (SignTransactionErrorUnknownAddress addr)
         Right hdAddr ->
@@ -387,7 +394,8 @@ mkSigner spendingPassword (Just esk) snapshot addr =
                                        . HD.hdAddressIdParent
                                        . HD.hdAccountIdIx
                                        . to HD.getHdAccountIx
-                res = Core.deriveLvl2KeyPair (Core.IsBootstrapEraAddr True)
+                res = Core.deriveLvl2KeyPair nm
+                                             (Core.IsBootstrapEraAddr True)
                                              (ShouldCheckPassphrase False)
                                              spendingPassword
                                              esk

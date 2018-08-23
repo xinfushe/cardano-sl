@@ -15,6 +15,7 @@ import           System.Wlog (Severity (Debug))
 import           Pos.Chain.Block (Blund, Undo (..))
 import qualified Pos.Core as Core
 import           Pos.Core.Chrono (OldestFirst (..))
+import           Pos.Core.NetworkMagic (NetworkMagic)
 
 import qualified Cardano.Wallet.Kernel as Kernel
 import qualified Cardano.Wallet.Kernel.Actions as Actions
@@ -38,15 +39,16 @@ import qualified Cardano.Wallet.WalletLayer.Kernel.Wallets as Wallets
 -- The passive wallet cannot send new transactions.
 bracketPassiveWallet
     :: forall m n a. (MonadIO n, MonadIO m, MonadMask m)
-    => (Severity -> Text -> IO ())
+    => NetworkMagic
+    -> (Severity -> Text -> IO ())
     -> Keystore
     -> NodeStateAdaptor IO
     -> (PassiveWalletLayer n -> Kernel.PassiveWallet -> m a) -> m a
-bracketPassiveWallet logFunction keystore rocksDB f =
+bracketPassiveWallet nm logFunction keystore rocksDB f =
     Kernel.bracketPassiveWallet logFunction keystore rocksDB $ \w -> do
       let wai = Actions.WalletActionInterp
                  { Actions.applyBlocks = \blunds ->
-                     Kernel.applyBlocks w
+                     Kernel.applyBlocks nm w
                         (OldestFirst (mapMaybe blundToResolvedBlock
                            (toList (getOldestFirst blunds))))
                  , Actions.switchToFork = \_ _ ->
@@ -60,14 +62,14 @@ bracketPassiveWallet logFunction keystore rocksDB f =
                        -> PassiveWalletLayer n
     passiveWalletLayer w invoke = PassiveWalletLayer
         { -- Operations that modify the wallet
-          _pwlCreateWallet         = Wallets.createWallet         w
+          _pwlCreateWallet         = Wallets.createWallet         nm w
         , _pwlUpdateWallet         = Wallets.updateWallet         w
-        , _pwlUpdateWalletPassword = Wallets.updateWalletPassword w
-        , _pwlDeleteWallet         = Wallets.deleteWallet         w
-        , _pwlCreateAccount        = Accounts.createAccount       w
+        , _pwlUpdateWalletPassword = Wallets.updateWalletPassword nm w
+        , _pwlDeleteWallet         = Wallets.deleteWallet         nm w
+        , _pwlCreateAccount        = Accounts.createAccount       nm w
         , _pwlUpdateAccount        = Accounts.updateAccount       w
         , _pwlDeleteAccount        = Accounts.deleteAccount       w
-        , _pwlCreateAddress        = Addresses.createAddress      w
+        , _pwlCreateAddress        = Addresses.createAddress      nm w
         , _pwlApplyBlocks          = invokeIO . Actions.ApplyBlocks
         , _pwlRollbackBlocks       = invokeIO . Actions.RollbackBlocks
           -- Read-only operations
@@ -105,11 +107,12 @@ bracketPassiveWallet logFunction keystore rocksDB f =
 bracketActiveWallet
     :: forall m n a. (MonadIO m, MonadMask m, MonadIO n)
     => Core.ProtocolMagic
+    -> NetworkMagic
     -> PassiveWalletLayer n
     -> Kernel.PassiveWallet
     -> WalletDiffusion
     -> (ActiveWalletLayer n -> Kernel.ActiveWallet -> m a) -> m a
-bracketActiveWallet pm walletPassiveLayer passiveWallet walletDiffusion runActiveLayer =
+bracketActiveWallet pm nm walletPassiveLayer passiveWallet walletDiffusion runActiveLayer =
     Kernel.bracketActiveWallet pm passiveWallet walletDiffusion $ \w -> do
         bracket
           (return (activeWalletLayer w))
@@ -119,7 +122,7 @@ bracketActiveWallet pm walletPassiveLayer passiveWallet walletDiffusion runActiv
     activeWalletLayer :: Kernel.ActiveWallet -> ActiveWalletLayer n
     activeWalletLayer w = ActiveWalletLayer {
           walletPassiveLayer = walletPassiveLayer
-        , pay                = Active.pay          w
-        , estimateFees       = Active.estimateFees w
+        , pay                = Active.pay          nm w
+        , estimateFees       = Active.estimateFees nm w
         , redeemAda          = Active.redeemAda    w
         }

@@ -15,8 +15,10 @@ import qualified Data.Map.Strict as Map
 import           Pos.Chain.Txp.Toil (GenesisUtxo (..), utxoToStakes)
 import           Pos.Core (Address, Coin, HasGenesisData, StakesMap,
                      genesisData, makeRedeemAddress)
-import           Pos.Core.Genesis (GenesisData (..), getGenesisAvvmBalances,
+import           Pos.Core.Genesis (GenesisData (..),
+                     GenesisProtocolConstants (..), getGenesisAvvmBalances,
                      getGenesisNonAvvmBalances)
+import           Pos.Core.NetworkMagic (NetworkMagic (..), makeNetworkMagic)
 import           Pos.Core.Txp (TxIn (..), TxOut (..), TxOutAux (..))
 import           Pos.Crypto (unsafeHash)
 
@@ -28,10 +30,15 @@ genesisUtxo :: HasGenesisData => GenesisUtxo
 genesisUtxo =
     let GenesisData{ gdNonAvvmBalances
                    , gdAvvmDistr
+                   , gdProtocolConsts
                    } = genesisData
 
+        networkMagic :: NetworkMagic
+        networkMagic = makeNetworkMagic (gpcRequiresNetworkMagic gdProtocolConsts)
+                                        (gpcProtocolMagic gdProtocolConsts)
+
         preUtxo :: [(Address, Coin)]
-        preUtxo = (first makeRedeemAddress <$> HM.toList (getGenesisAvvmBalances gdAvvmDistr))
+        preUtxo = (first (makeRedeemAddress networkMagic) <$> HM.toList (getGenesisAvvmBalances gdAvvmDistr))
                                   <> (HM.toList $ getGenesisNonAvvmBalances gdNonAvvmBalances)
 
         utxoEntry :: (Address, Coin) -> (TxIn, TxOutAux)

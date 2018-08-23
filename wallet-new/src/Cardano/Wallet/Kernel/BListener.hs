@@ -16,6 +16,7 @@ import qualified Data.Map.Strict as Map
 
 import           Pos.Core (SlotId)
 import           Pos.Core.Chrono (OldestFirst)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Crypto (EncryptedSecretKey)
 
 import           Cardano.Wallet.Kernel.DB.AcidState (ApplyBlock (..),
@@ -38,25 +39,27 @@ import           Cardano.Wallet.Kernel.Types (WalletId (..))
 -- | Prefilter the block for each account.
 --
 -- TODO: Improve performance (CBR-379)
-prefilterBlock' :: PassiveWallet
+prefilterBlock' :: NetworkMagic
+                -> PassiveWallet
                 -> ResolvedBlock
                 -> IO (SlotId, Map HdAccountId PrefilteredBlock)
-prefilterBlock' pw b = do
-    aux <$> getWalletCredentials pw
+prefilterBlock' nm pw b = do
+    aux <$> getWalletCredentials nm pw
   where
     aux :: [(WalletId, EncryptedSecretKey)]
         -> (SlotId, Map HdAccountId PrefilteredBlock)
     aux ws = (
         b ^. rbSlotId
-      , Map.unions $ map (uncurry (prefilterBlock b)) ws
+      , Map.unions $ map (uncurry (prefilterBlock nm b)) ws
       )
 
 -- | Notify all the wallets in the PassiveWallet of a new block
-applyBlock :: PassiveWallet
+applyBlock :: NetworkMagic
+           -> PassiveWallet
            -> ResolvedBlock
            -> IO ()
-applyBlock pw@PassiveWallet{..} b = do
-    (slotId, blocksByAccount) <- prefilterBlock' pw b
+applyBlock nm pw@PassiveWallet{..} b = do
+    (slotId, blocksByAccount) <- prefilterBlock' nm pw b
     -- apply block to all Accounts in all Wallets
     confirmed <- update' _wallets $ ApplyBlock (InDb slotId) blocksByAccount
     modifyMVar_ _walletSubmission $ return . Submission.remPending confirmed
@@ -64,21 +67,23 @@ applyBlock pw@PassiveWallet{..} b = do
 -- | Apply multiple blocks, one at a time, to all wallets in the PassiveWallet
 --
 --   TODO(@matt-noonan) this will be the responsibility of the worker thread (as part of CBR-243: Wallet restoration)
-applyBlocks :: PassiveWallet
+applyBlocks :: NetworkMagic
+            -> PassiveWallet
             -> OldestFirst [] ResolvedBlock
             -> IO ()
-applyBlocks = mapM_ . applyBlock
+applyBlocks nm = mapM_ . (applyBlock nm)
 
 -- | Switch to a new fork
 --
 -- NOTE: The Ouroboros protocol says that this is only valid if the number of
 -- resolved blocks exceeds the length of blocks to roll back.
-switchToFork :: PassiveWallet
+switchToFork :: NetworkMagic
+             -> PassiveWallet
              -> Int             -- ^ Number of blocks to roll back
              -> [ResolvedBlock] -- ^ Blocks in the new fork
              -> IO (Either RollbackDuringRestoration ())
-switchToFork pw@PassiveWallet{..} n bs = do
-    blockssByAccount <- mapM (prefilterBlock' pw) bs
+switchToFork nm pw@PassiveWallet{..} n bs = do
+    blockssByAccount <- mapM (prefilterBlock' nm pw) bs
     res <- update' _wallets $ SwitchToFork n blockssByAccount
     case res of
       Left  err     -> return $ Left err

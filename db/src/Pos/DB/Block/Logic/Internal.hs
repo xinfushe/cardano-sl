@@ -146,13 +146,14 @@ applyBlocksUnsafe
     :: ( MonadBlockApply ctx m
        )
     => ProtocolMagic
+    -> NetworkMagic
     -> BlockVersion
     -> BlockVersionData
     -> ShouldCallBListener
     -> OldestFirst NE Blund
     -> Maybe PollModifier
     -> m ()
-applyBlocksUnsafe pm bv bvd scb blunds pModifier = do
+applyBlocksUnsafe pm nm bv bvd scb blunds pModifier = do
     -- Check that all blunds have the same epoch.
     unless (null nextEpoch) $ assertionFailed $
         sformat ("applyBlocksUnsafe: tried to apply more than we should"%
@@ -172,7 +173,7 @@ applyBlocksUnsafe pm bv bvd scb blunds pModifier = do
         (b@(Left _,_):|(x:xs)) -> app' (b:|[]) >> app' (x:|xs)
         _                      -> app blunds
   where
-    app x = applyBlocksDbUnsafeDo pm bv bvd scb x pModifier
+    app x = applyBlocksDbUnsafeDo pm nm bv bvd scb x pModifier
     app' = app . OldestFirst
     (thisEpoch, nextEpoch) =
         spanSafe ((==) `on` view (_1 . epochIndexL)) $ getOldestFirst blunds
@@ -181,17 +182,18 @@ applyBlocksDbUnsafeDo
     :: ( MonadBlockApply ctx m
        )
     => ProtocolMagic
+    -> NetworkMagic
     -> BlockVersion
     -> BlockVersionData
     -> ShouldCallBListener
     -> OldestFirst NE Blund
     -> Maybe PollModifier
     -> m ()
-applyBlocksDbUnsafeDo pm bv bvd scb blunds pModifier = do
+applyBlocksDbUnsafeDo pm nm bv bvd scb blunds pModifier = do
     let blocks = fmap fst blunds
     -- Note: it's important to do 'slogApplyBlocks' first, because it
     -- puts blocks in DB.
-    slogBatch <- slogApplyBlocks scb blunds
+    slogBatch <- slogApplyBlocks nm scb blunds
     TxpGlobalSettings {..} <- view (lensOf @TxpGlobalSettings)
     usBatch <- SomeBatchOp <$> usApplyBlocks pm bv (map toUpdateBlock blocks) pModifier
     delegateBatch <- SomeBatchOp <$> dlgApplyBlocks (map toDlgBlund blunds)
@@ -213,12 +215,13 @@ applyBlocksDbUnsafeDo pm bv bvd scb blunds pModifier = do
 rollbackBlocksUnsafe
     :: MonadBlockApply ctx m
     => ProtocolMagic
+    -> NetworkMagic
     -> BypassSecurityCheck -- ^ is rollback for more than k blocks allowed?
     -> ShouldCallBListener
     -> NewestFirst NE Blund
     -> m ()
-rollbackBlocksUnsafe pm bsc scb toRollback = do
-    slogRoll <- slogRollbackBlocks bsc scb toRollback
+rollbackBlocksUnsafe pm nm bsc scb toRollback = do
+    slogRoll <- slogRollbackBlocks nm bsc scb toRollback
     dlgRoll <- SomeBatchOp <$> dlgRollbackBlocks (map toDlgBlund toRollback)
     usRoll <- SomeBatchOp <$> usRollbackBlocks
                   (toRollback & each._2 %~ undoUS

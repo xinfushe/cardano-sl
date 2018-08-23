@@ -92,7 +92,7 @@ walletServeWebFull pm nm txpConfig diffusion ntpStatus debug address mTlsParams 
     action :: WalletWebMode Application
     action = do
         logInfo "Wallet Web API has STARTED!"
-        when debug $ addInitialRichAccount 0
+        when debug $ addInitialRichAccount nm 0
 
         wwmc <- walletWebModeContext
         walletApplication $

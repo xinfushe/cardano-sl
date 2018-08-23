@@ -42,7 +42,7 @@ handlers
 handlers pm nm txpConfig submitTx =
              newTransaction pm nm txpConfig submitTx
         :<|> allTransactions
-        :<|> estimateFees pm
+        :<|> estimateFees pm nm
         :<|> redeemAda pm nm txpConfig submitTx
 
 newTransaction
@@ -123,16 +123,17 @@ allTransactions mwalletId mAccIdx mAddr requestParams fops sops  =
 estimateFees
     :: (MonadThrow m, V0.MonadFees ctx m)
     => ProtocolMagic
+    -> NetworkMagic
     -> Payment
     -> m (WalletResponse EstimatedFees)
-estimateFees pm Payment{..} = do
+estimateFees pm nm Payment{..} = do
     ws <- V0.askWalletSnapshot
     let (V1 policy) = fromMaybe (V1 defaultInputSelectionPolicy) pmtGroupingPolicy
         pendingAddrs = V0.getPendingAddresses ws policy
     cAccountId <- migrate pmtSource
     utxo <- V0.getMoneySourceUtxo ws (V0.AccountMoneySource cAccountId)
     outputs <- V0.coinDistrToOutputs =<< mapM migrate pmtDestinations
-    efee <- V0.runTxCreator policy (V0.computeTxFee pm pendingAddrs utxo outputs)
+    efee <- V0.runTxCreator policy (V0.computeTxFee pm nm pendingAddrs utxo outputs)
     case efee of
         Right fee ->
             single <$> migrate fee

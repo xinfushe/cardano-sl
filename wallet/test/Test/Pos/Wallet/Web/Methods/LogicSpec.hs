@@ -10,6 +10,7 @@ import           Universum
 import           Test.Hspec (Spec, describe)
 import           Test.Hspec.QuickCheck (prop)
 
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Launcher (HasConfigurations)
 import           Pos.Wallet.Web.Methods.Logic (getAccounts, getWallets)
 
@@ -21,15 +22,18 @@ import           Test.Pos.Wallet.Web.Mode (WalletProperty)
 spec :: Spec
 spec = withDefConfigurations $ \_ _nm _ _ ->
        describe "Pos.Wallet.Web.Methods" $ do
-    prop emptyWalletOnStarts emptyWallet
+    prop emptyWalletOnStarts $ emptyWallet _nm
   where
     emptyWalletOnStarts = "wallet must be empty on start"
 
-emptyWallet :: HasConfigurations => WalletProperty ()
-emptyWallet = do
-    wallets <- lift getWallets
+emptyWallet
+    :: HasConfigurations
+    => NetworkMagic
+    -> WalletProperty ()
+emptyWallet nm = do
+    wallets <- lift $ getWallets nm
     unless (null wallets) $
         stopProperty "Wallets aren't empty"
-    accounts <- lift $ getAccounts Nothing
+    accounts <- lift $ getAccounts nm Nothing
     unless (null accounts) $
         stopProperty "Accounts aren't empty"

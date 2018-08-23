@@ -21,6 +21,7 @@ import           Data.Acid.Advanced (update')
 
 import           Pos.Chain.Txp (Utxo)
 import           Pos.Core (Timestamp)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Crypto (EncryptedSecretKey, PassPhrase,
                      changeEncPassphrase, checkPassMatches, emptyPassphrase,
                      safeDeterministicKeyGen)
@@ -106,7 +107,8 @@ instance Exception UpdateWalletPasswordError
 -- to do so would cause an invariant violation as we system would treat this
 -- wallet as a new one rather than dealing with a proper restoration.
 --
-createHdWallet :: PassiveWallet
+createHdWallet :: NetworkMagic
+             -> PassiveWallet
              -> Mnemonic nat
              -- ^ The set of words (i.e the mnemonic) to generate the initial seed.
              -- See <https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki#From_mnemonic_to_seed>
@@ -125,14 +127,15 @@ createHdWallet :: PassiveWallet
              -> WalletName
              -- ^ The name for this wallet.
              -> IO (Either CreateWalletError HdRoot)
-createHdWallet pw mnemonic spendingPassword assuranceLevel walletName = do
+createHdWallet nm pw mnemonic spendingPassword assuranceLevel walletName = do
     -- STEP 1: Generate the 'EncryptedSecretKey' outside any acid-state
     -- transaction, to not leak it into acid-state's transaction logs.
     let (_, esk) = safeDeterministicKeyGen (BIP39.mnemonicToSeed mnemonic) spendingPassword
     -- STEP 2: Atomically generate the wallet and the initial internal structure in
     -- an acid-state transaction.
-    let newRootId = eskToHdRootId esk
-    res <- createWalletHdRnd pw
+    let newRootId = eskToHdRootId nm esk
+    res <- createWalletHdRnd nm
+                             pw
                              (spendingPassword /= emptyPassphrase)
                              walletName
                              assuranceLevel
@@ -155,7 +158,8 @@ createHdWallet pw mnemonic spendingPassword assuranceLevel walletName = do
 -- Adds an HdRoot and HdAccounts (which are discovered during prefiltering of utxo).
 -- In the case of empty utxo, no HdAccounts are created.
 -- Fails with CreateHdWalletError if the HdRootId already exists.
-createWalletHdRnd :: PassiveWallet
+createWalletHdRnd :: NetworkMagic
+                  -> PassiveWallet
                   -> Bool
                   -- ^ Whether or not this wallet has a spending password set.
                   -> HD.WalletName
@@ -163,15 +167,15 @@ createWalletHdRnd :: PassiveWallet
                   -> EncryptedSecretKey
                   -> Utxo
                   -> IO (Either HD.CreateHdRootError HdRoot)
-createWalletHdRnd pw hasSpendingPassword name assuranceLevel esk utxo = do
+createWalletHdRnd nm pw hasSpendingPassword name assuranceLevel esk utxo = do
     created <- InDb <$> getCurrentTimestamp
-    let rootId  = eskToHdRootId esk
+    let rootId  = eskToHdRootId nm esk
         newRoot = HD.initHdRoot rootId
                                 name
                                 (hdSpendingPassword created)
                                 assuranceLevel
                                 created
-        utxoByAccount = prefilterUtxo rootId esk utxo
+        utxoByAccount = prefilterUtxo nm rootId esk utxo
 
     res <- update' (pw ^. wallets) $ CreateHdWallet newRoot utxoByAccount
     return $ case res of
@@ -184,10 +188,11 @@ createWalletHdRnd pw hasSpendingPassword name assuranceLevel esk utxo = do
             if hasSpendingPassword then HD.HasSpendingPassword created
                                    else HD.NoSpendingPassword
 
-deleteHdWallet :: PassiveWallet
+deleteHdWallet :: NetworkMagic
+               -> PassiveWallet
                -> HD.HdRootId
                -> IO (Either HD.UnknownHdRoot ())
-deleteHdWallet wallet rootId = do
+deleteHdWallet nm wallet rootId = do
     -- STEP 1: Remove the HdRoot via an acid-state transaction which will
     --         also delete any associated accounts and addresses.
     res <- update' (wallet ^. wallets) $ DeleteHdRoot rootId
@@ -195,7 +200,7 @@ deleteHdWallet wallet rootId = do
         Left err -> return (Left err)
         Right () -> do
             -- STEP 2: Purge the key from the keystore.
-            Keystore.delete (WalletIdHdRnd rootId) (wallet ^. walletKeystore)
+            Keystore.delete nm (WalletIdHdRnd rootId) (wallet ^. walletKeystore)
             return $ Right ()
 
 {-------------------------------------------------------------------------------
@@ -213,18 +218,19 @@ updateHdWallet pw hdRootId assuranceLevel walletName = do
          Left e              -> return (Left e)
          Right (db, newRoot) -> return (Right (db, newRoot))
 
-updatePassword :: PassiveWallet
+updatePassword :: NetworkMagic
+               -> PassiveWallet
                -> HD.HdRootId
                -> PassPhrase
                -- ^ The old 'PassPhrase' for this Wallet.
                -> PassPhrase
                -- ^ The new 'PassPhrase' for this Wallet.
                -> IO (Either UpdateWalletPasswordError (Kernel.DB, HdRoot))
-updatePassword pw hdRootId oldPassword newPassword = do
+updatePassword nm pw hdRootId oldPassword newPassword = do
     let keystore = pw ^. walletKeystore
         wId = WalletIdHdRnd hdRootId
     -- STEP 1: Lookup the key from the keystore
-    mbKey <- Keystore.lookup wId keystore
+    mbKey <- Keystore.lookup nm wId keystore
     case mbKey of
          Nothing -> return $ Left $ UpdateWalletPasswordKeyNotFound hdRootId
          Just esk -> do
@@ -246,7 +252,7 @@ updatePassword pw hdRootId oldPassword newPassword = do
                   Left e -> return (Left e)
                   Right newKey -> do
                       -- STEP 4: Update the keystore, atomically.
-                      Keystore.replace wId newKey keystore
+                      Keystore.replace nm wId newKey keystore
                       -- STEP 5: Update the timestamp in the wallet data storage.
                       lastUpdateNow <- InDb <$> getCurrentTimestamp
                       let hasSpendingPassword = HD.HasSpendingPassword lastUpdateNow

@@ -102,8 +102,8 @@ actionWithWallet pm nm txpConfig sscParams nodeParams ntpConfig wArgs@WalletBack
     syncWallets :: WalletWebMode ()
     syncWallets = do
         addrs <- getWalletAddresses <$> askWalletSnapshot
-        sks <- mapM getSKById addrs
-        forM_ sks (syncWallet . eskToWalletDecrCredentials)
+        sks <- mapM (getSKById nm) addrs
+        forM_ sks (syncWallet . (eskToWalletDecrCredentials nm))
 
     plugins :: TVar NtpStatus -> Plugins.Plugin WalletWebMode
     plugins ntpStatus =
@@ -133,7 +133,7 @@ actionWithNewWallet pm nm txpConfig sscParams nodeParams params =
       userSecret <- readTVarIO (ncUserSecret $ nrContext nr)
       let nodeState = NodeStateAdaptor.newNodeStateAdaptor nr
       liftIO $ Keystore.bracketLegacyKeystore userSecret $ \keystore -> do
-          WalletLayer.Kernel.bracketPassiveWallet logMessage' keystore nodeState $ \walletLayer passiveWallet -> do
+          WalletLayer.Kernel.bracketPassiveWallet nm logMessage' keystore nodeState $ \walletLayer passiveWallet -> do
             Kernel.init passiveWallet
             Kernel.Mode.runWalletMode pm
                                       nm
@@ -158,7 +158,7 @@ actionWithNewWallet pm nm txpConfig sscParams nodeParams params =
     -- in the legacy wallet (see 'actionWithWallet').
     plugins :: (PassiveWalletLayer IO, PassiveWallet)
             -> Plugins.Plugin Kernel.Mode.WalletMode
-    plugins w = mconcat [ Plugins.walletBackend pm params w ]
+    plugins w = mconcat [ Plugins.walletBackend pm nm params w ]
 
     -- Extract the logger name from node parameters
     --

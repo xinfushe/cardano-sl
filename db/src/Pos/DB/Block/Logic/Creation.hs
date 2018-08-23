@@ -160,7 +160,7 @@ createGenesisBlockDo pm nm txpConfig epoch = do
     -- Note that it shouldn't fail, because 'shouldCreate' guarantees that we
     -- have enough blocks for LRC.
     actuallyCreate tipHeader = do
-        lrcSingleShot pm epoch
+        lrcSingleShot pm nm epoch
         leaders <- lrcActionOnEpochReason epoch "createGenesisBlockDo "
             LrcDB.getLeadersForEpoch
         let blk = mkGenesisBlock pm (Right tipHeader) epoch leaders
@@ -171,6 +171,7 @@ createGenesisBlockDo pm nm txpConfig epoch = do
             Right (undos, pollModifier) -> do
                 let undo = undos ^. _Wrapped . _neHead
                 applyBlocksUnsafe pm
+                    nm
                     (vbcBlockVersion ctx)
                     (vbcBlockVersionData ctx)
                     (ShouldCallBListener True)
@@ -382,6 +383,7 @@ applyCreatedBlock pm nm txpConfig pske createdBlock = applyCreatedBlockDo False 
                 let undo = undos ^. _Wrapped . _neHead
                 applyBlocksUnsafe
                     pm
+                    nm
                     (vbcBlockVersion ctx)
                     (vbcBlockVersionData ctx)
                     (ShouldCallBListener True)

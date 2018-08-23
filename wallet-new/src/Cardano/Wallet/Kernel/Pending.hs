@@ -14,6 +14,7 @@ import           Control.Concurrent.MVar (modifyMVar_)
 
 import           Data.Acid.Advanced (update')
 
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Core.Txp (Tx (..), TxAux (..), TxOut (..))
 import           Pos.Crypto (EncryptedSecretKey)
 
@@ -43,26 +44,28 @@ import           Pos.Wallet.Web.Tracking.Decrypt (eskToWalletDecrCredentials)
 -- submission layer is notified accordingly.
 --
 -- NOTE: we select "our" output addresses from the transaction and pass it along to the data layer
-newPending :: ActiveWallet
+newPending :: NetworkMagic
+           -> ActiveWallet
            -> HdAccountId
            -> TxAux
            -> Maybe TxMeta
            -> IO (Either NewPendingError ())
-newPending w accountId tx mbMeta = do
-    newTx w accountId tx mbMeta $ \ourAddrs ->
+newPending nm w accountId tx mbMeta = do
+    newTx nm w accountId tx mbMeta $ \ourAddrs ->
         update' ((walletPassive w) ^. wallets) $ NewPending accountId (InDb tx) ourAddrs
 
 -- | Submit new foreign transaction
 --
 -- A foreign transaction is a transaction that transfers funds from /another/
 -- wallet to this one.
-newForeign :: ActiveWallet
+newForeign :: NetworkMagic
+           -> ActiveWallet
            -> HdAccountId
            -> TxAux
            -> TxMeta
            -> IO (Either NewForeignError ())
-newForeign w accountId tx meta = do
-    newTx w accountId tx (Just meta) $ \ourAddrs ->
+newForeign nm w accountId tx meta = do
+    newTx nm w accountId tx (Just meta) $ \ourAddrs ->
         update' ((walletPassive w) ^. wallets) $ NewForeign accountId (InDb tx) ourAddrs
 
 -- | Submit a new transaction
@@ -74,15 +77,16 @@ newForeign w accountId tx meta = do
 -- is persisted and the submission layer is notified accordingly.
 --
 -- NOTE: we select "our" output addresses from the transaction and pass it along to the data layer
-newTx :: forall e. ActiveWallet
+newTx :: forall e. NetworkMagic
+      -> ActiveWallet
       -> HdAccountId
       -> TxAux
       -> Maybe TxMeta
       -> ([HdAddress] -> IO (Either e ())) -- ^ the update to run, takes ourAddrs as arg
       -> IO (Either e ())
-newTx ActiveWallet{..} accountId tx mbMeta upd = do
+newTx nm ActiveWallet{..} accountId tx mbMeta upd = do
     -- run the update
-    allOurs' <- allOurs <$> getWalletCredentials walletPassive
+    allOurs' <- allOurs <$> getWalletCredentials nm walletPassive
     res <- upd allOurs'
     case res of
         Left e   -> return (Left e)
@@ -105,7 +109,7 @@ newTx ActiveWallet{..} accountId tx mbMeta upd = do
             map f $ filterOurs wKey identity addrs
             where
                 f (address,addressId) = initHdAddress addressId (InDb address)
-                wKey = (wid, eskToWalletDecrCredentials esk)
+                wKey = (wid, eskToWalletDecrCredentials nm esk)
 
         putTxMeta' :: Maybe TxMeta -> IO ()
         putTxMeta' (Just meta) = putTxMeta (walletPassive ^. walletMeta) meta

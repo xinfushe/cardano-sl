@@ -62,14 +62,18 @@ spec = withDefConfigurations $ \pm nm _ _ -> do
     evalChangeSameAccountsDesc =
       "Outgoing transaction from account to the same account."
 
-twoApplyTwoRollbacksSpec :: HasConfigurations => ProtocolMagic -> NetworkMagic -> Spec
+twoApplyTwoRollbacksSpec
+    :: HasConfigurations
+    => ProtocolMagic
+    -> NetworkMagic
+    -> Spec
 twoApplyTwoRollbacksSpec pm nm = walletPropertySpec twoApplyTwoRollbacksDesc $ do
     let k = fromIntegral blkSecurityParam :: Word64
     -- During these tests we need to manually switch back to the old synchronous
     -- way of restoring.
-    void $ importSomeWallets (pure emptyPassphrase)
+    void $ importSomeWallets nm (pure emptyPassphrase)
     sks <- lift getSecretKeysPlain
-    lift $ forM_ sks $ \s -> syncWalletWithBlockchain (newSyncRequest (eskToWalletDecrCredentials s))
+    lift $ forM_ sks $ \s -> syncWalletWithBlockchain (newSyncRequest (eskToWalletDecrCredentials nm s))
 
     -- Testing starts here
     genesisWalletDB <- lift WS.askWalletSnapshot
@@ -93,9 +97,9 @@ twoApplyTwoRollbacksSpec pm nm = walletPropertySpec twoApplyTwoRollbacksDesc $ d
     let toNE = fromMaybe (error "sequence of blocks are empty") . nonEmptyOldestFirst
     let to1Rollback = toNewestFirst $ toNE blunds2
     let to2Rollback = toNewestFirst $ toNE blunds1
-    lift $ rollbackBlocks pm to1Rollback
+    lift $ rollbackBlocks pm nm to1Rollback
     after1RollbackDB <- lift WS.askWalletSnapshot
-    lift $ rollbackBlocks pm to2Rollback
+    lift $ rollbackBlocks pm nm to2Rollback
     after2RollbackDB <- lift WS.askWalletSnapshot
     assertProperty (after1RollbackDB == after1ApplyDB)
         "wallet-db after first apply doesn't equal to wallet-db after first rollback"

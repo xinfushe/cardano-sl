@@ -26,6 +26,7 @@ import           Pos.Crypto (EncryptedSecretKey, PassPhrase, PublicKey,
 import           Pos.Crypto.HD (HDAddressPayload (..))
 
 import           Test.Pos.Core.Arbitrary ()
+import           Test.Pos.Core.Dummy (dummyNetworkMagic)
 
 spec :: Spec
 spec = describe "Address" $ do
@@ -34,14 +35,14 @@ spec = describe "Address" $ do
             pkAndHdwAreShownDifferently
 
     describe "Largest addresses" $ do
-        let genPubKeyAddrBoot = pure . makePubKeyAddressBoot . toPublic
+        let genPubKeyAddrBoot = pure . (makePubKeyAddressBoot dummyNetworkMagic) . toPublic
         largestAddressProp "PubKey address with BootstrapEra distribution"
-            genPubKeyAddrBoot largestPubKeyAddressBoot 43
+            genPubKeyAddrBoot (largestPubKeyAddressBoot dummyNetworkMagic) 43
 
         let genPubKeyAddrSingleKey = pure . makePubKeyAddress
-                (IsBootstrapEraAddr False) . toPublic
+                dummyNetworkMagic (IsBootstrapEraAddr False) . toPublic
         largestAddressProp "PubKey address with SingleKey distribution"
-            genPubKeyAddrSingleKey largestPubKeyAddressSingleKey 78
+            genPubKeyAddrSingleKey (largestPubKeyAddressSingleKey dummyNetworkMagic) 78
 
         let genHDAddrBoot :: SecretKey -> Gen Address
             genHDAddrBoot sk = frequency
@@ -52,6 +53,7 @@ spec = describe "Address" $ do
             genHDAddrBoot' :: PassPhrase -> EncryptedSecretKey -> Word32 -> Word32 -> Address
             genHDAddrBoot' passphrase esk accIdx addrIdx =
                 case deriveLvl2KeyPair
+                            dummyNetworkMagic
                             (IsBootstrapEraAddr True)
                             (ShouldCheckPassphrase False)
                             passphrase
@@ -71,13 +73,15 @@ spec = describe "Address" $ do
                 genHDAddrBoot' passphrase esk <$> arbitrary <*> arbitrary
 
         largestAddressProp "HD address with BootstrapEra distribution"
-            genHDAddrBoot largestHDAddressBoot 76
+            genHDAddrBoot (largestHDAddressBoot dummyNetworkMagic) 76
 
 pkAndHdwAreShownDifferently :: Bool -> PublicKey -> Bool
 pkAndHdwAreShownDifferently isBootstrap pk =
-    show (makePubKeyAddress (IsBootstrapEraAddr isBootstrap) pk) /=
-    (show @Text (makePubKeyHdwAddress (IsBootstrapEraAddr isBootstrap)
-                (HDAddressPayload "pataq") pk))
+    show (makePubKeyAddress dummyNetworkMagic (IsBootstrapEraAddr isBootstrap) pk) /=
+    (show @Text (makePubKeyHdwAddress dummyNetworkMagic
+                                      (IsBootstrapEraAddr isBootstrap)
+                                      (HDAddressPayload "pataq")
+                                      pk))
 
 largestAddressProp :: Text -> (SecretKey -> Gen Address) -> Address -> Byte -> Spec
 largestAddressProp addressDescription genAddress largestAddress expectedLargestSize = do

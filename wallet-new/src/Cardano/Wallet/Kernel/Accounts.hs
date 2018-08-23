@@ -16,6 +16,7 @@ import           System.Random.MWC (GenIO, createSystemRandom, uniformR)
 
 import           Data.Acid (update)
 
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Crypto (EncryptedSecretKey, PassPhrase)
 
 import           Cardano.Wallet.Kernel.DB.AcidState (CreateHdAccount (..), DB,
@@ -66,7 +67,8 @@ instance Exception CreateAccountError
 -- | Creates a new 'Account' for the input wallet.
 -- Note: @it does not@ generate a new 'Address' to go in tandem with this
 -- 'Account'. This will be responsibility of the wallet layer.
-createAccount :: PassPhrase
+createAccount :: NetworkMagic
+              -> PassPhrase
               -- ^ The 'Passphrase' (a.k.a the \"Spending Password\").
               -> AccountName
               -- ^ The name for this account.
@@ -74,11 +76,11 @@ createAccount :: PassPhrase
               -- ^ An abstract notion of a 'Wallet identifier
               -> PassiveWallet
               -> IO (Either CreateAccountError HdAccount)
-createAccount spendingPassword accountName walletId pw = do
+createAccount nm spendingPassword accountName walletId pw = do
     let keystore = pw ^. walletKeystore
     case walletId of
          WalletIdHdRnd hdRootId -> do
-             mbEsk <- Keystore.lookup (WalletIdHdRnd hdRootId) keystore
+             mbEsk <- Keystore.lookup nm (WalletIdHdRnd hdRootId) keystore
              case mbEsk of
                   Nothing  -> return (Left $ CreateAccountKeystoreNotFound walletId)
                   Just esk ->

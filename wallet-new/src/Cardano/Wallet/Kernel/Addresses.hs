@@ -16,6 +16,7 @@ import           System.Random.MWC (GenIO, createSystemRandom, uniformR)
 import           Data.Acid (update)
 
 import           Pos.Core (Address, IsBootstrapEraAddr (..), deriveLvl2KeyPair)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Crypto (EncryptedSecretKey, PassPhrase,
                      ShouldCheckPassphrase (..))
 
@@ -71,13 +72,14 @@ instance Show CreateAddressError where
 instance Exception CreateAddressError
 
 -- | Creates a new 'Address' for the input account.
-createAddress :: PassPhrase
+createAddress :: NetworkMagic
+              -> PassPhrase
               -- ^ The 'Passphrase' (a.k.a the \"Spending Password\").
               -> AccountId
               -- ^ An abstract notion of an 'Account' identifier
               -> PassiveWallet
               -> IO (Either CreateAddressError Address)
-createAddress spendingPassword accId pw = do
+createAddress nm spendingPassword accId pw = do
     let keystore = pw ^. walletKeystore
     case accId of
          -- \"Standard\" HD random derivation. The strategy is as follows:
@@ -97,11 +99,12 @@ createAddress spendingPassword accId pw = do
          -- 'EncryptedSecretKey' and the 'PassPhrase', and we do not want
          -- these exposed in the acid-state transaction log.
          (AccountIdHdRnd hdAccId) -> do
-             mbEsk <- Keystore.lookup (WalletIdHdRnd (hdAccId ^. hdAccountIdParent))
+             mbEsk <- Keystore.lookup nm
+                                      (WalletIdHdRnd (hdAccId ^. hdAccountIdParent))
                                       keystore
              case mbEsk of
                   Nothing  -> return (Left $ CreateAddressKeystoreNotFound accId)
-                  Just esk -> createHdRndAddress spendingPassword esk hdAccId pw
+                  Just esk -> createHdRndAddress nm spendingPassword esk hdAccId pw
 
 -- | Creates a new 'Address' using the random HD derivation under the hood.
 -- Being this an operation bound not only by the number of available derivation
@@ -113,12 +116,13 @@ createAddress spendingPassword accId pw = do
 -- 3. If the DB operation fails due to a collision, try again, up to a max of
 --    1024 attempts.
 -- 4. If after 1024 attempts there is still no result, flag this upstream.
-createHdRndAddress :: PassPhrase
+createHdRndAddress :: NetworkMagic
+                   -> PassPhrase
                    -> EncryptedSecretKey
                    -> HdAccountId
                    -> PassiveWallet
                    -> IO (Either CreateAddressError Address)
-createHdRndAddress spendingPassword esk accId pw = do
+createHdRndAddress nm spendingPassword esk accId pw = do
     gen <- createSystemRandom
     go gen 0
     where
@@ -135,7 +139,8 @@ createHdRndAddress spendingPassword esk accId pw = do
         tryGenerateAddress gen collisions = do
             newIndex <- deriveIndex (flip uniformR gen) HdAddressIx HardDerivation
             let hdAddressId = HdAddressId accId newIndex
-                mbAddr = deriveLvl2KeyPair (IsBootstrapEraAddr True)
+                mbAddr = deriveLvl2KeyPair nm
+                                           (IsBootstrapEraAddr True)
                                            (ShouldCheckPassphrase True)
                                            spendingPassword
                                            esk

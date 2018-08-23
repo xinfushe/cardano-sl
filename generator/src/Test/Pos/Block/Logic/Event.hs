@@ -42,6 +42,7 @@ import           Pos.Util.Util (eitherToThrow, lensOf)
 import           Test.Pos.Block.Logic.Mode (BlockTestContext,
                      PureDBSnapshotsVar (..))
 import           Test.Pos.Block.Logic.Util (satisfySlotCheck)
+import           Test.Pos.Core.Dummy (dummyNetworkMagic)
 import           Test.Pos.Crypto.Dummy (dummyProtocolMagic)
 
 data SnapshotMissingEx = SnapshotMissingEx SnapshotId
@@ -114,7 +115,7 @@ runBlockEvent rnm txpConfig (BlkEvApply ev) =
         BlockApplyFailure -> BlockEventFailure (IsExpected True) e
 
 runBlockEvent _ _ (BlkEvRollback ev) = do
-    (onSuccess <$ rollbackBlocks dummyProtocolMagic (ev ^. berInput))
+    (onSuccess <$ rollbackBlocks dummyProtocolMagic dummyNetworkMagic (ev ^. berInput))
        `catch` (return . onFailure)
   where
     onSuccess = case ev ^. berOutValid of

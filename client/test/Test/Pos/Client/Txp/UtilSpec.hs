@@ -39,6 +39,7 @@ import           Pos.Util.Util (leftToPanic)
 import           Test.Pos.Client.Txp.Mode (HasTxpConfigurations, TxpTestMode,
                      TxpTestProperty, withBVData)
 import           Test.Pos.Configuration (withDefConfigurations)
+import           Test.Pos.Core.Dummy (dummyNetworkMagic)
 import           Test.Pos.Crypto.Arbitrary ()
 import           Test.Pos.Crypto.Dummy (dummyProtocolMagic)
 import           Test.Pos.Util.QuickCheck.Arbitrary (nonrepeating)
@@ -414,10 +415,10 @@ generateTxOutAux amount sk =
 
 generateRedeemTxOutAux :: Integer -> RedeemSecretKey -> TxOutAux
 generateRedeemTxOutAux amount rsk =
-    makeTxOutAux amount (makeRedeemAddress $ redeemToPublic rsk)
+    makeTxOutAux amount (makeRedeemAddress dummyNetworkMagic $ redeemToPublic rsk)
 
 secretKeyToAddress :: SecretKey -> Address
-secretKeyToAddress = makePubKeyAddressBoot . toPublic
+secretKeyToAddress = (makePubKeyAddressBoot dummyNetworkMagic) . toPublic
 
 makeSigner :: SecretKey -> (SafeSigner, Address)
 makeSigner sk = (fakeSigner sk, secretKeyToAddress sk)

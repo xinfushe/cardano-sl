@@ -84,7 +84,7 @@ generateBlocks pm nm txpConfig bCount = do
                 Just ks -> ks
     bs <- flip evalRandT g $ genBlocks pm nm txpConfig
             (BlockGenParams
-                { _bgpSecrets = mkAllSecretsSimple secretKeys
+                { _bgpSecrets = mkAllSecretsSimple nm secretKeys
                 , _bgpBlockCount = bCount
                 , _bgpTxGenParams = TxGenParams
                     { _tgpTxCountRange = (0, 2)
@@ -294,5 +294,5 @@ main = do
             case res of
                 Left _ -> return ()
                 Right (_, blunds)
-                    -> whenJust (nonEmptyNewestFirst blunds) (rollbackBlocks pm)
+                    -> whenJust (nonEmptyNewestFirst blunds) (rollbackBlocks pm nm)
             return (verEnd - verStart, either (Just . Right) (const Nothing) res)

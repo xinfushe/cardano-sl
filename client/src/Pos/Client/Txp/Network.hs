@@ -26,6 +26,7 @@ import           Pos.Client.Txp.Util (InputSelectionPolicy,
 import           Pos.Communication.Types (InvOrDataTK)
 import           Pos.Core (Address, Coin, makeRedeemAddress, mkCoin,
                      unsafeAddCoin)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Core.Txp (Tx, TxAux (..), TxId, TxMsgContents (..),
                      TxOut (..), TxOutAux (..), txaF)
 import           Pos.Crypto (ProtocolMagic, RedeemSecretKey, SafeSigner, hash,
@@ -49,6 +50,7 @@ type TxMode m
 prepareMTx
     :: TxMode m
     => ProtocolMagic
+    -> NetworkMagic
     -> (Address -> Maybe SafeSigner)
     -> PendingAddresses
     -> InputSelectionPolicy
@@ -56,33 +58,35 @@ prepareMTx
     -> NonEmpty TxOutAux
     -> AddrData m
     -> m (TxAux, NonEmpty TxOut)
-prepareMTx pm hdwSigners pendingAddrs inputSelectionPolicy addrs outputs addrData = do
+prepareMTx pm nm hdwSigners pendingAddrs inputSelectionPolicy addrs outputs addrData = do
     utxo <- getOwnUtxos (toList addrs)
-    eitherToThrow =<< createMTx pm pendingAddrs inputSelectionPolicy utxo hdwSigners outputs addrData
+    eitherToThrow =<< createMTx pm nm pendingAddrs inputSelectionPolicy utxo hdwSigners outputs addrData
 
 -- | Construct unsigned Tx
 prepareUnsignedTx
     :: TxMode m
     => ProtocolMagic
+    -> NetworkMagic
     -> PendingAddresses
     -> InputSelectionPolicy
     -> NonEmpty Address
     -> NonEmpty TxOutAux
     -> Address
     -> m (Either TxError (Tx, NonEmpty TxOut))
-prepareUnsignedTx pm pendingAddrs inputSelectionPolicy addrs outputs changeAddress = do
+prepareUnsignedTx pm nm pendingAddrs inputSelectionPolicy addrs outputs changeAddress = do
     utxo <- getOwnUtxos (toList addrs)
-    createUnsignedTx pm pendingAddrs inputSelectionPolicy utxo outputs changeAddress
+    createUnsignedTx pm nm pendingAddrs inputSelectionPolicy utxo outputs changeAddress
 
 -- | Construct redemption Tx using redemption secret key and a output address
 prepareRedemptionTx
     :: TxMode m
     => ProtocolMagic
+    -> NetworkMagic
     -> RedeemSecretKey
     -> Address
     -> m (TxAux, Address, Coin)
-prepareRedemptionTx pm rsk output = do
-    let redeemAddress = makeRedeemAddress $ redeemToPublic rsk
+prepareRedemptionTx pm nm rsk output = do
+    let redeemAddress = makeRedeemAddress nm $ redeemToPublic rsk
     utxo <- getOwnUtxo redeemAddress
     let addCoin c = unsafeAddCoin c . txOutValue . toaOut
         redeemBalance = foldl' addCoin (mkCoin 0) utxo

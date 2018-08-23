@@ -166,7 +166,10 @@ withGenesisSpec theSystemStart conf@CoreConfiguration{..} fn val = case ccGenesi
             let
                 -- Generate
                 GeneratedGenesisData {..} =
-                    generateGenesisData pm (gsInitializer spec) (gsAvvmDistr spec)
+                    generateGenesisData pm
+                                        nm
+                                        (gsInitializer spec)
+                                        (gsAvvmDistr spec)
 
                 -- Unite with generated
                 finalHeavyDelegation :: GenesisDelegation

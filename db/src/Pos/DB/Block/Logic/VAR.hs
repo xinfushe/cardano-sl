@@ -181,6 +181,7 @@ verifyAndApplyBlocks pm nm txpConfig ctx rollback blocks = runExceptT $ do
                 applyAMAP e' (OldestFirst []) blunds nothingApplied
             Right (OldestFirst (undo :| []), pModifier) -> do
                 lift $ applyBlocksUnsafe pm
+                    nm
                     (vbcBlockVersion ctx)
                     (vbcBlockVersionData ctx)
                     (ShouldCallBListener True)
@@ -196,7 +197,7 @@ verifyAndApplyBlocks pm nm txpConfig ctx rollback blocks = runExceptT $ do
         -> ExceptT ApplyBlocksException m (HeaderHash, NewestFirst [] Blund)
     failWithRollback e toRollback = do
         logDebug "verifyAndapply failed, rolling back"
-        lift $ mapM_ (rollbackBlocks pm) toRollback
+        lift $ mapM_ (rollbackBlocks pm nm) toRollback
         throwError e
     -- This function tries to apply a new portion of blocks (prefix
     -- and suffix). It also has an aggregating parameter @blunds@ which is
@@ -214,7 +215,7 @@ verifyAndApplyBlocks pm nm txpConfig ctx rollback blocks = runExceptT $ do
             let epochIndex = prefixHead ^. epochIndexL
             logDebug $ "Rolling: Calculating LRC if needed for epoch "
                        <> pretty epochIndex
-            lift $ lrcSingleShot pm epochIndex
+            lift $ lrcSingleShot pm nm epochIndex
         logDebug "Rolling: verifying"
         lift (verifyBlocksPrefix pm ctx prefix) >>= \case
             Left (ApplyBlocksVerifyFailure -> failure)
@@ -232,6 +233,7 @@ verifyAndApplyBlocks pm nm txpConfig ctx rollback blocks = runExceptT $ do
                 let blunds' = toNewestFirst newBlunds : blunds
                 logDebug "Rolling: Verification done, applying unsafe block"
                 lift $ applyBlocksUnsafe pm
+                    nm
                     (vbcBlockVersion ctx)
                     (vbcBlockVersionData ctx)
                     (ShouldCallBListener True)
@@ -258,21 +260,22 @@ applyBlocks
        , HasMisbehaviorMetrics ctx
        )
     => ProtocolMagic
+    -> NetworkMagic
     -> Bool
     -> Maybe PollModifier
     -> OldestFirst NE Blund
     -> m ()
-applyBlocks pm calculateLrc pModifier blunds = do
+applyBlocks pm nm calculateLrc pModifier blunds = do
     when (isLeft prefixHead && calculateLrc) $
         -- Hopefully this lrc check is never triggered -- because
         -- caller most definitely should have computed lrc to verify
         -- the sequence beforehand.
-        lrcSingleShot pm (prefixHead ^. epochIndexL)
+        lrcSingleShot pm nm (prefixHead ^. epochIndexL)
     (bv, bvd) <- getAdoptedBVFull
-    applyBlocksUnsafe pm bv bvd (ShouldCallBListener True) prefix pModifier
+    applyBlocksUnsafe pm nm bv bvd (ShouldCallBListener True) prefix pModifier
     case getOldestFirst suffix of
         []           -> pass
-        (genesis:xs) -> applyBlocks pm calculateLrc pModifier (OldestFirst (genesis:|xs))
+        (genesis:xs) -> applyBlocks pm nm calculateLrc pModifier (OldestFirst (genesis:|xs))
   where
     prefixHead = prefix ^. _Wrapped . _neHead . _1
     (prefix, suffix) = spanEpoch blunds
@@ -286,13 +289,17 @@ applyBlocks pm calculateLrc pModifier blunds = do
 
 -- | Rollbacks blocks. Head must be the current tip.
 rollbackBlocks
-    :: (MonadBlockApply ctx m) => ProtocolMagic -> NewestFirst NE Blund -> m ()
-rollbackBlocks pm blunds = do
+    :: (MonadBlockApply ctx m)
+    => ProtocolMagic
+    -> NetworkMagic
+    -> NewestFirst NE Blund
+    -> m ()
+rollbackBlocks pm nm blunds = do
     tip <- GS.getTip
     let firstToRollback = blunds ^. _Wrapped . _neHead . _1 . headerHashG
     when (tip /= firstToRollback) $
         throwM $ RollbackTipMismatch tip firstToRollback
-    rollbackBlocksUnsafe pm (BypassSecurityCheck False) (ShouldCallBListener True) blunds
+    rollbackBlocksUnsafe pm nm (BypassSecurityCheck False) (ShouldCallBListener True) blunds
 
 -- | Rollbacks some blocks and then applies some blocks.
 applyWithRollback
@@ -314,6 +321,7 @@ applyWithRollback pm nm txpConfig toRollback toApply = runExceptT $ do
 
     let doRollback = rollbackBlocksUnsafe
             pm
+            nm
             (BypassSecurityCheck False)
             (ShouldCallBListener True)
             toRollback
@@ -327,7 +335,7 @@ applyWithRollback pm nm txpConfig toRollback toApply = runExceptT $ do
   where
     reApply = toOldestFirst toRollback
     applyBack :: m ()
-    applyBack = applyBlocks pm False Nothing reApply
+    applyBack = applyBlocks pm nm False Nothing reApply
     expectedTipApply = toApply ^. _Wrapped . _neHead . prevBlockL
     newestToRollback = toRollback ^. _Wrapped . _neHead . _1 . headerHashG
 

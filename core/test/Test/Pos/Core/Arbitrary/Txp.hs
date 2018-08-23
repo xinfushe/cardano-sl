@@ -35,6 +35,7 @@ import           Pos.Core.Attributes (mkAttributes)
 import           Pos.Core.Common (Coin, IsBootstrapEraAddr (..),
                      makePubKeyAddress)
 import           Pos.Core.Merkle (MerkleNode (..), MerkleRoot (..))
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Core.Txp (Tx (..), TxAux (..), TxIn (..), TxInWitness (..),
                      TxOut (..), TxOutAux (..), TxPayload (..), TxProof (..),
                      TxSigData (..), mkTxPayload)
@@ -42,6 +43,7 @@ import           Pos.Crypto (Hash, ProtocolMagic, SecretKey, SignTag (SignTx),
                      hash, sign, toPublic)
 
 import           Test.Pos.Core.Arbitrary ()
+import           Test.Pos.Core.Dummy (dummyNetworkMagic)
 import           Test.Pos.Crypto.Arbitrary (genRedeemSignature, genSignature)
 import           Test.Pos.Crypto.Dummy (dummyProtocolMagic)
 
@@ -118,10 +120,11 @@ instance Arbitrary Tx where
 buildProperTx
     :: ( )
     => ProtocolMagic
+    -> NetworkMagic
     -> NonEmpty (Tx, SecretKey, SecretKey, Coin)
     -> (Coin -> Coin, Coin -> Coin)
     -> NonEmpty (Tx, TxIn, TxOutAux, TxInWitness)
-buildProperTx pm inputList (inCoin, outCoin) =
+buildProperTx pm nm inputList (inCoin, outCoin) =
     txList <&> \(tx, txIn, fromSk, txOutput) ->
         ( tx
         , txIn
@@ -150,7 +153,7 @@ buildProperTx pm inputList (inCoin, outCoin) =
     mkWitness fromSk =
         PkWitness (toPublic fromSk) (sign pm SignTx fromSk $ TxSigData newTxHash)
     makeTxOutput s c =
-        TxOut (makePubKeyAddress (IsBootstrapEraAddr True) $ toPublic s) c
+        TxOut (makePubKeyAddress nm (IsBootstrapEraAddr True) $ toPublic s) c
 
 -- | Well-formed transaction 'Tx'.
 --
@@ -167,7 +170,9 @@ goodTxToTxAux (GoodTx l) = TxAux tx witness
 
 instance Arbitrary GoodTx where
     arbitrary =
-        GoodTx <$> (buildProperTx dummyProtocolMagic <$> arbitrary <*> pure (identity, identity))
+        GoodTx <$> (buildProperTx dummyProtocolMagic dummyNetworkMagic
+                        <$> arbitrary
+                        <*> pure (identity, identity))
     shrink = const []  -- used to be “genericShrink”, but shrinking is broken
                        -- because naive shrinking may turn a good transaction
                        -- into a bad one (by setting one of outputs to 0, for
@@ -194,6 +199,7 @@ instance Arbitrary DoubleInputTx where
     arbitrary = DoubleInputTx <$> do
         inputs <- arbitrary
         pure $ buildProperTx dummyProtocolMagic
+                             dummyNetworkMagic
                              (NE.cons (NE.head inputs) inputs)
                              (identity, identity)
     shrink = const []

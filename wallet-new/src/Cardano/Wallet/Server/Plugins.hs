@@ -200,14 +200,15 @@ legacyWalletBackend pm nm txpConfig WalletBackendParams {..} ntpStatus = pure $ 
 --
 -- NOTE: There is no web socket support in the new wallet for now.
 walletBackend :: ProtocolMagic
+              -> NetworkMagic
               -> NewWalletBackendParams
               -> (PassiveWalletLayer IO, PassiveWallet)
               -> Plugin Kernel.WalletMode
-walletBackend protocolMagic (NewWalletBackendParams WalletBackendParams{..}) (passiveLayer, passiveWallet) =
+walletBackend protocolMagic nm (NewWalletBackendParams WalletBackendParams{..}) (passiveLayer, passiveWallet) =
     pure $ \diffusion -> do
         env <- ask
         let diffusion' = Kernel.fromDiffusion (lower env) diffusion
-        WalletLayer.Kernel.bracketActiveWallet protocolMagic passiveLayer passiveWallet diffusion' $ \active _ -> do
+        WalletLayer.Kernel.bracketActiveWallet protocolMagic nm passiveLayer passiveWallet diffusion' $ \active _ -> do
           ctx <- view shutdownContext
           let
             portCallback :: Word16 -> IO ()
