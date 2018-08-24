@@ -28,6 +28,8 @@ import           Pos.Client.Txp.Util (InputSelectionPolicy (..), TxError (..),
 import           Pos.Core (Address, Coeff (..), TxFeePolicy (..),
                      TxSizeLinear (..), makePubKeyAddressBoot,
                      makeRedeemAddress, unsafeIntegerToCoin)
+import           Pos.Core.NetworkMagic (NetworkMagic, RequiresNetworkMagic (..),
+                     makeNetworkMagic)
 import           Pos.Core.Txp (Tx (..), TxAux (..), TxId, TxIn (..), TxOut (..),
                      TxOutAux (..))
 import           Pos.Core.Update (BlockVersionData (..))
@@ -39,7 +41,6 @@ import           Pos.Util.Util (leftToPanic)
 import           Test.Pos.Client.Txp.Mode (HasTxpConfigurations, TxpTestMode,
                      TxpTestProperty, withBVData)
 import           Test.Pos.Configuration (withDefConfigurations)
-import           Test.Pos.Core.Dummy (dummyNetworkMagic)
 import           Test.Pos.Crypto.Arbitrary ()
 import           Test.Pos.Crypto.Dummy (dummyProtocolMagic)
 import           Test.Pos.Util.QuickCheck.Arbitrary (nonrepeating)
@@ -49,40 +50,51 @@ import           Test.Pos.Util.QuickCheck.Property (stopProperty)
 -- Tests
 ----------------------------------------------------------------------------
 
+-- TODO @intricate @mhuesch: I'm guessing we should probably `describe`
+-- these as separate tests.
 spec :: Spec
-spec = withDefConfigurations $ \_ _nm _ _ ->
-    describe "Client.Txp.Util" $ do
-        describe "createMTx" $ createMTxSpec
+spec = do
+    go NMMustBeNothing
+    go NMMustBeJust
+  where
+    go rnm = withDefConfigurations $ \_ _nm _ _ ->
+        describe "Client.Txp.Util" $ do
+            -- TODO @intricate: Should I really be ignoring _nm?
+            let nm = makeNetworkMagic rnm dummyProtocolMagic
+            describe "createMTx" $ createMTxSpec nm
 
 -- GHC doesn't support impredicative polymorphism so we need a wrapper
 -- for the list below to typecheck.
 data TestFunctionWrapper
     = forall prop. (Testable prop) => TestFunctionWrapper (InputSelectionPolicy -> prop)
 
-createMTxSpec :: HasTxpConfigurations => Spec
-createMTxSpec = do
+createMTxSpec
+    :: HasTxpConfigurations
+    => NetworkMagic
+    -> Spec
+createMTxSpec nm = do
     let inputSelectionPolicies =
             [ ("Grouped inputs", OptimizeForSecurity)
             , ("Ungrouped inputs", OptimizeForHighThroughput)
             ]
     let testSpecs =
-            [ (createMTxWorksWhenWeAreRichDesc, TestFunctionWrapper createMTxWorksWhenWeAreRichSpec)
-            , (stabilizationDoesNotFailDesc, TestFunctionWrapper stabilizationDoesNotFailSpec)
-            , (feeIsNonzeroDesc, TestFunctionWrapper feeIsNonzeroSpec)
-            , (manyUtxoTo1Desc, TestFunctionWrapper manyUtxoTo1Spec)
-            , (manyAddressesTo1Desc, TestFunctionWrapper manyAddressesTo1Spec)
-            , (manyAddressesToManyDesc, TestFunctionWrapper manyAddressesToManySpec)
-            , (txWithRedeemOutputFailsDesc, TestFunctionWrapper txWithRedeemOutputFailsSpec)
-            , (feeForManyAddressesDesc, TestFunctionWrapper feeForManyAddressesSpec)
+            [ (createMTxWorksWhenWeAreRichDesc, TestFunctionWrapper $ createMTxWorksWhenWeAreRichSpec nm)
+            , (stabilizationDoesNotFailDesc, TestFunctionWrapper $ stabilizationDoesNotFailSpec nm)
+            , (feeIsNonzeroDesc, TestFunctionWrapper $ feeIsNonzeroSpec nm)
+            , (manyUtxoTo1Desc, TestFunctionWrapper $ manyUtxoTo1Spec nm)
+            , (manyAddressesTo1Desc, TestFunctionWrapper $ manyAddressesTo1Spec nm)
+            , (manyAddressesToManyDesc, TestFunctionWrapper $ manyAddressesToManySpec nm)
+            , (txWithRedeemOutputFailsDesc, TestFunctionWrapper $ txWithRedeemOutputFailsSpec nm)
+            , (feeForManyAddressesDesc, TestFunctionWrapper $ feeForManyAddressesSpec nm)
             ]
 
     for_ inputSelectionPolicies $ \(inputSelectionDesc, policy) ->
         describe inputSelectionDesc . for_ testSpecs $ \(funcDesc, TestFunctionWrapper func) ->
             prop funcDesc (func policy)
 
-    prop redemptionDesc redemptionSpec
-    prop groupedPolicyDesc groupedPolicySpec
-    prop ungroupedPolicyDesc ungroupedPolicySpec
+    prop redemptionDesc (redemptionSpec nm)
+    prop groupedPolicyDesc (groupedPolicySpec nm)
+    prop ungroupedPolicyDesc (ungroupedPolicySpec nm)
   where
     createMTxWorksWhenWeAreRichDesc =
         "Transaction is created successfully when we have 1 input with 1M coins " <>
@@ -115,46 +127,55 @@ createMTxSpec = do
 
 testCreateMTx
     :: HasTxpConfigurations
-    => CreateMTxParams
+    => NetworkMagic
+    -> CreateMTxParams
     -> TxpTestProperty (Either TxError (TxAux, NonEmpty TxOut))
-testCreateMTx CreateMTxParams{..} = lift $
-    createMTx dummyProtocolMagic mempty cmpInputSelectionPolicy cmpUtxo (getSignerFromList cmpSigners)
+testCreateMTx nm CreateMTxParams{..} = lift $
+    createMTx dummyProtocolMagic
+              nm
+              mempty
+              cmpInputSelectionPolicy
+              cmpUtxo
+              (getSignerFromList cmpSigners)
     cmpOutputs cmpAddrData
 
 createMTxWorksWhenWeAreRichSpec
     :: HasTxpConfigurations
-    => InputSelectionPolicy
+    => NetworkMagic
+    -> InputSelectionPolicy
     -> TxpTestProperty ()
-createMTxWorksWhenWeAreRichSpec inputSelectionPolicy =
+createMTxWorksWhenWeAreRichSpec nm inputSelectionPolicy =
     forAllM gen $ \txParams@CreateMTxParams{..} -> do
-        txOrError <- testCreateMTx txParams
+        txOrError <- testCreateMTx nm txParams
         case txOrError of
             Left err -> stopProperty $ sformat ("Failed to create tx: "%build) err
             Right tx -> ensureTxMakesSense tx cmpUtxo cmpOutputs
   where
-    gen = makeManyAddressesToManyParams inputSelectionPolicy 1 1000000 1 1
+    gen = makeManyAddressesToManyParams nm inputSelectionPolicy 1 1000000 1 1
 
 stabilizationDoesNotFailSpec
     :: HasTxpConfigurations
-    => InputSelectionPolicy
+    => NetworkMagic
+    -> InputSelectionPolicy
     -> TxpTestProperty ()
-stabilizationDoesNotFailSpec inputSelectionPolicy = do
+stabilizationDoesNotFailSpec nm inputSelectionPolicy = do
     forAllM gen $ \txParams@CreateMTxParams{..} -> do
-        txOrError <- testCreateMTx txParams
+        txOrError <- testCreateMTx nm txParams
         case txOrError of
             Left err@FailedToStabilize -> stopProperty $ pretty err
             Left _                     -> return ()
             Right tx                   -> ensureTxMakesSense tx cmpUtxo cmpOutputs
   where
-    gen = makeManyAddressesToManyParams inputSelectionPolicy 1 200000 1 1
+    gen = makeManyAddressesToManyParams nm inputSelectionPolicy 1 200000 1 1
 
 feeIsNonzeroSpec
     :: HasTxpConfigurations
-    => InputSelectionPolicy
+    => NetworkMagic
+    -> InputSelectionPolicy
     -> TxpTestProperty ()
-feeIsNonzeroSpec inputSelectionPolicy = do
+feeIsNonzeroSpec nm inputSelectionPolicy = do
     forAllM gen $ \txParams@CreateMTxParams{..} -> do
-        txOrError <- testCreateMTx txParams
+        txOrError <- testCreateMTx nm txParams
         case txOrError of
             Left (NotEnoughMoney _) -> return ()
             Left err -> stopProperty $ pretty err
@@ -162,49 +183,55 @@ feeIsNonzeroSpec inputSelectionPolicy = do
                 "Transaction was created even though there were " <>
                     "not enough funds for the fee"
   where
-    gen = makeManyAddressesToManyParams inputSelectionPolicy 1 100000 1 1
+    gen = makeManyAddressesToManyParams nm inputSelectionPolicy 1 100000 1 1
 
 manyUtxoTo1Spec
     :: HasTxpConfigurations
-    => InputSelectionPolicy
+    => NetworkMagic
+    -> InputSelectionPolicy
     -> TxpTestProperty ()
-manyUtxoTo1Spec inputSelectionPolicy = do
+manyUtxoTo1Spec nm inputSelectionPolicy = do
     forAllM gen $ \txParams@CreateMTxParams{..} -> do
-        txOrError <- testCreateMTx txParams
+        txOrError <- testCreateMTx nm txParams
         case txOrError of
             Left err -> stopProperty $ pretty err
             Right tx -> ensureTxMakesSense tx cmpUtxo cmpOutputs
   where
-    gen = makeManyUtxoTo1Params inputSelectionPolicy 10 100000 1
+    gen = makeManyUtxoTo1Params nm inputSelectionPolicy 10 100000 1
 
 manyAddressesTo1Spec
     :: HasTxpConfigurations
-    => InputSelectionPolicy
+    => NetworkMagic
+    -> InputSelectionPolicy
     -> TxpTestProperty ()
-manyAddressesTo1Spec inputSelectionPolicy = do
+manyAddressesTo1Spec nm inputSelectionPolicy = do
     forAllM gen $ \txParams@CreateMTxParams{..} -> do
-        txOrError <- testCreateMTx txParams
+        txOrError <- testCreateMTx nm txParams
         case txOrError of
             Left err -> stopProperty $ pretty err
             Right tx -> ensureTxMakesSense tx cmpUtxo cmpOutputs
   where
-    gen = makeManyAddressesToManyParams inputSelectionPolicy 10 100000 1 1
+    gen = makeManyAddressesToManyParams nm inputSelectionPolicy 10 100000 1 1
 
 manyAddressesToManySpec
     :: HasTxpConfigurations
-    => InputSelectionPolicy
+    => NetworkMagic
+    -> InputSelectionPolicy
     -> TxpTestProperty ()
-manyAddressesToManySpec inputSelectionPolicy = do
+manyAddressesToManySpec nm inputSelectionPolicy = do
     forAllM gen $ \txParams@CreateMTxParams{..} -> do
-        txOrError <- testCreateMTx txParams
+        txOrError <- testCreateMTx nm txParams
         case txOrError of
             Left err -> stopProperty $ pretty err
             Right tx -> ensureTxMakesSense tx cmpUtxo cmpOutputs
   where
-    gen = makeManyAddressesToManyParams inputSelectionPolicy 10 100000 10 1
+    gen = makeManyAddressesToManyParams nm inputSelectionPolicy 10 100000 10 1
 
-redemptionSpec :: HasTxpConfigurations => TxpTestProperty ()
-redemptionSpec = do
+redemptionSpec
+    :: HasTxpConfigurations
+    => NetworkMagic
+    -> TxpTestProperty ()
+redemptionSpec nm = do
     forAllM genParams $ \(CreateRedemptionTxParams {..}) -> do
         txOrError <- createRedemptionTx dummyProtocolMagic crpUtxo crpRsk crpOutputs
         case txOrError of
@@ -215,8 +242,8 @@ redemptionSpec = do
         crpRsk <- arbitrary
         skTo   <- arbitrary
 
-        let txOutAuxInput = generateRedeemTxOutAux 1 crpRsk
-            txOutAuxOutput = generateTxOutAux 1 skTo
+        let txOutAuxInput = generateRedeemTxOutAux nm 1 crpRsk
+            txOutAuxOutput = generateTxOutAux nm 1 skTo
             crpUtxo = one (TxInUtxo (unsafeIntegerToTxId 0) 0, txOutAuxInput)
             crpOutputs = one txOutAuxOutput
 
@@ -224,12 +251,17 @@ redemptionSpec = do
 
 txWithRedeemOutputFailsSpec
     :: HasTxpConfigurations
-    => InputSelectionPolicy
+    => NetworkMagic
+    -> InputSelectionPolicy
     -> TxpTestProperty ()
-txWithRedeemOutputFailsSpec inputSelectionPolicy = do
+txWithRedeemOutputFailsSpec nm inputSelectionPolicy = do
     forAllM genParams $ \(CreateMTxParams {..}) -> do
         txOrError <-
-            createMTx dummyProtocolMagic mempty cmpInputSelectionPolicy cmpUtxo
+            createMTx dummyProtocolMagic
+                      nm
+                      mempty
+                      cmpInputSelectionPolicy
+                      cmpUtxo
                       (getSignerFromList cmpSigners)
                       cmpOutputs cmpAddrData
         case txOrError of
@@ -239,16 +271,17 @@ txWithRedeemOutputFailsSpec inputSelectionPolicy = do
                 sformat ("Transaction to a redeem address was created")
   where
     genParams = do
-        txOutAuxOutput <- generateRedeemTxOutAux 1 <$> arbitrary
-        params <- makeManyAddressesToManyParams inputSelectionPolicy 1 1000000 1 1
+        txOutAuxOutput <- generateRedeemTxOutAux nm 1 <$> arbitrary
+        params <- makeManyAddressesToManyParams nm inputSelectionPolicy 1 1000000 1 1
         pure params{ cmpOutputs = one txOutAuxOutput }
 
 feeForManyAddressesSpec
     :: HasTxpConfigurations
-    => InputSelectionPolicy
+    => NetworkMagic
+    -> InputSelectionPolicy
     -> Bool
     -> TxpTestProperty ()
-feeForManyAddressesSpec inputSelectionPolicy manyAddrs =
+feeForManyAddressesSpec nm inputSelectionPolicy manyAddrs =
     forAllM (choose (5, 20)) $
         \(Coeff . fromInteger -> feePolicySlope) ->
     forAllM (choose (10000, 100000)) $
@@ -261,7 +294,7 @@ feeForManyAddressesSpec inputSelectionPolicy manyAddrs =
         \params ->
     withTxFeePolicy feePolicyConstTerm feePolicySlope $ do
         -- tx builder should find this utxo to be enough for construction
-        txOrError <- testCreateMTx params
+        txOrError <- testCreateMTx nm params
         txAux <- case txOrError of
             Left err ->
                 if isNotEnoughMoneyTxError err
@@ -277,20 +310,23 @@ feeForManyAddressesSpec inputSelectionPolicy manyAddrs =
         let enoughInputs = succ . length . _txInputs $ taTx txAux
             utxo' = M.fromList . take enoughInputs . M.toList $ cmpUtxo params
             params' = params { cmpUtxo = utxo' }
-        txOrError' <- testCreateMTx params'
+        txOrError' <- testCreateMTx nm params'
         case txOrError' of
             Left err -> stopProperty $ sformat ("On second attempt: "%build) err
             Right _  -> return ()
   where
     -- considering two corner cases of utxo outputs distribution
     mkParams
-        | manyAddrs = makeManyAddressesTo1Params inputSelectionPolicy
-        | otherwise = makeManyUtxoTo1Params inputSelectionPolicy
+        | manyAddrs = makeManyAddressesTo1Params nm inputSelectionPolicy
+        | otherwise = makeManyUtxoTo1Params nm inputSelectionPolicy
 
 
-groupedPolicySpec :: HasTxpConfigurations => TxpTestProperty ()
-groupedPolicySpec =
-    forAllM gen $ testCreateMTx >=> \case
+groupedPolicySpec
+    :: HasTxpConfigurations
+    => NetworkMagic
+    -> TxpTestProperty ()
+groupedPolicySpec nm =
+    forAllM gen $ testCreateMTx nm >=> \case
         Left err -> stopProperty $ pretty err
         Right (txAux, _) ->
             let picked = length . _txInputs . taTx $ txAux
@@ -298,18 +334,21 @@ groupedPolicySpec =
             $ sformat ("Only "%build%" inputs were used instead of all of the inputs") picked
   where
     utxoNum = 10
-    gen = makeManyUtxoTo1Params OptimizeForSecurity (fromIntegral utxoNum) 1000000 1
+    gen = makeManyUtxoTo1Params nm OptimizeForSecurity (fromIntegral utxoNum) 1000000 1
 
-ungroupedPolicySpec :: HasTxpConfigurations => TxpTestProperty ()
-ungroupedPolicySpec =
-    forAllM gen $ testCreateMTx >=> \case
+ungroupedPolicySpec
+    :: HasTxpConfigurations
+    => NetworkMagic
+    -> TxpTestProperty ()
+ungroupedPolicySpec nm =
+    forAllM gen $ testCreateMTx nm >=> \case
         Left err -> stopProperty $ pretty err
         Right (txAux, _) ->
             let picked = length . _txInputs . taTx $ txAux
             in unless (picked == 1) . stopProperty
             $ sformat ("Only "%build%" inputs were used instead of just 1 input") picked
   where
-    gen = makeManyUtxoTo1Params OptimizeForHighThroughput 10 1000000 1
+    gen = makeManyUtxoTo1Params nm OptimizeForHighThroughput 10 1000000 1
 
 ----------------------------------------------------------------------------
 -- Helpers
@@ -342,36 +381,43 @@ getSignerFromList :: NonEmpty (SafeSigner, Address) -> Address -> Maybe SafeSign
 getSignerFromList (HM.fromList . map swap . toList -> hm) =
     \addr -> HM.lookup addr hm
 
-makeManyUtxoTo1Params :: InputSelectionPolicy -> Int -> Integer -> Integer -> Gen CreateMTxParams
-makeManyUtxoTo1Params inputSelectionPolicy numFrom amountEachFrom amountTo = do
+makeManyUtxoTo1Params
+    :: NetworkMagic
+    -> InputSelectionPolicy
+    -> Int
+    -> Integer
+    -> Integer
+    -> Gen CreateMTxParams
+makeManyUtxoTo1Params nm inputSelectionPolicy numFrom amountEachFrom amountTo = do
     ~[skFrom, skTo] <- nonrepeating 2
-    let txOutAuxInput  = generateTxOutAux amountEachFrom skFrom
-        txOutAuxOutput = generateTxOutAux amountTo skTo
+    let txOutAuxInput  = generateTxOutAux nm amountEachFrom skFrom
+        txOutAuxOutput = generateTxOutAux nm amountTo skTo
         cmpInputSelectionPolicy = inputSelectionPolicy
         cmpUtxo = M.fromList
             [(TxInUtxo (unsafeIntegerToTxId 0) (fromIntegral k), txOutAuxInput) |
                 k <- [0..numFrom-1]]
-        cmpSigners = one $ makeSigner skFrom
+        cmpSigners = one $ makeSigner nm skFrom
         cmpOutputs = one txOutAuxOutput
         cmpAddrData = ()
 
     pure CreateMTxParams {..}
 
 makeManyAddressesToManyParams
-    :: InputSelectionPolicy
+    :: NetworkMagic
+    -> InputSelectionPolicy
     -> Int
     -> Integer
     -> Int
     -> Integer
     -> Gen CreateMTxParams
-makeManyAddressesToManyParams inputSelectionPolicy numFrom amountEachFrom numTo amountEachTo = do
+makeManyAddressesToManyParams nm inputSelectionPolicy numFrom amountEachFrom numTo amountEachTo = do
     sks <- nonrepeating (numFrom + numTo)
 
     let (sksFrom, sksTo) = splitAt numFrom sks
-        cmpSignersList = map makeSigner sksFrom
+        cmpSignersList = map (makeSigner nm) sksFrom
         cmpSigners = NE.fromList cmpSignersList
-        txOutAuxInputs = map (generateTxOutAux amountEachFrom) sksFrom
-        txOutAuxOutputs = map (generateTxOutAux amountEachTo) sksTo
+        txOutAuxInputs = map (generateTxOutAux nm amountEachFrom) sksFrom
+        txOutAuxOutputs = map (generateTxOutAux nm amountEachTo) sksTo
         cmpInputSelectionPolicy = inputSelectionPolicy
         cmpUtxo = M.fromList
             [(TxInUtxo (unsafeIntegerToTxId $ fromIntegral k) 0, txOutAux) |
@@ -381,9 +427,15 @@ makeManyAddressesToManyParams inputSelectionPolicy numFrom amountEachFrom numTo 
 
     pure CreateMTxParams {..}
 
-makeManyAddressesTo1Params :: InputSelectionPolicy -> Int -> Integer -> Integer -> Gen CreateMTxParams
-makeManyAddressesTo1Params inputSelectionPolicy numFrom amountEachFrom amountEachTo =
-    makeManyAddressesToManyParams inputSelectionPolicy numFrom amountEachFrom 1 amountEachTo
+makeManyAddressesTo1Params
+    :: NetworkMagic
+    -> InputSelectionPolicy
+    -> Int
+    -> Integer
+    -> Integer
+    -> Gen CreateMTxParams
+makeManyAddressesTo1Params nm inputSelectionPolicy numFrom amountEachFrom amountEachTo =
+    makeManyAddressesToManyParams nm inputSelectionPolicy numFrom amountEachFrom 1 amountEachTo
 
 ensureTxMakesSense
   :: TxWithSpendings -> Utxo -> TxOutputs -> TxpTestProperty ()
@@ -409,19 +461,19 @@ makeTxOutAux amount addr =
         txOut = TxOut addr coin
     in TxOutAux txOut
 
-generateTxOutAux :: Integer -> SecretKey -> TxOutAux
-generateTxOutAux amount sk =
-    makeTxOutAux amount (secretKeyToAddress sk)
+generateTxOutAux :: NetworkMagic -> Integer -> SecretKey -> TxOutAux
+generateTxOutAux nm amount sk =
+    makeTxOutAux amount (secretKeyToAddress nm sk)
 
-generateRedeemTxOutAux :: Integer -> RedeemSecretKey -> TxOutAux
-generateRedeemTxOutAux amount rsk =
-    makeTxOutAux amount (makeRedeemAddress dummyNetworkMagic $ redeemToPublic rsk)
+generateRedeemTxOutAux :: NetworkMagic -> Integer -> RedeemSecretKey -> TxOutAux
+generateRedeemTxOutAux nm amount rsk =
+    makeTxOutAux amount (makeRedeemAddress nm $ redeemToPublic rsk)
 
-secretKeyToAddress :: SecretKey -> Address
-secretKeyToAddress = (makePubKeyAddressBoot dummyNetworkMagic) . toPublic
+secretKeyToAddress :: NetworkMagic -> SecretKey -> Address
+secretKeyToAddress nm = (makePubKeyAddressBoot nm) . toPublic
 
-makeSigner :: SecretKey -> (SafeSigner, Address)
-makeSigner sk = (fakeSigner sk, secretKeyToAddress sk)
+makeSigner :: NetworkMagic -> SecretKey -> (SafeSigner, Address)
+makeSigner nm sk = (fakeSigner sk, secretKeyToAddress nm sk)
 
 withTxFeePolicy
   :: Coeff -> Coeff -> TxpTestProperty () -> TxpTestProperty ()
