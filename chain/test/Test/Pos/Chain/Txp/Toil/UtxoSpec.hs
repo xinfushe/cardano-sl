@@ -17,7 +17,8 @@ import           Serokell.Util (allDistinct)
 import           Test.Hspec (Expectation, Spec, describe, expectationFailure,
                      it)
 import           Test.Hspec.QuickCheck (prop)
-import           Test.QuickCheck (Property, arbitrary, counterexample, (==>))
+import           Test.QuickCheck (Property, arbitrary, counterexample, forAll,
+                     (==>))
 
 import           Pos.Chain.Script (PlutusError (..), Script)
 import           Pos.Chain.Script.Examples (alwaysSuccessValidator,
@@ -41,7 +42,8 @@ import           Pos.Crypto (ProtocolMagic, SignTag (SignTx), checkSig,
 import qualified Pos.Util.Modifier as MM
 
 import           Test.Pos.Core.Arbitrary.Txp (BadSigsTx (..),
-                     DoubleInputTx (..), GoodTx (..))
+                     DoubleInputTx (..), GoodTx (..),
+                     genGoodTxWithNetworkMagic)
 import           Test.Pos.Util.QuickCheck.Arbitrary (SmallGenerator (..),
                      nonrepeating, runGen)
 import           Test.Pos.Util.QuickCheck.Property (qcIsLeft, qcIsRight)
@@ -59,9 +61,9 @@ spec =
                       $ isNothing (utxoGetSimple mempty myTxIn)
                   prop description_findTxInUtxo findTxInUtxo
               describe "verifyTxUtxo" $ do
-                  prop description_verifyTxInUtxo (verifyTxInUtxo pm _nm)
-                  prop description_validateGoodTx (validateGoodTx pm _nm)
-                  prop description_badSigsTx      (badSigsTx pm _nm)
+                  prop description_verifyTxInUtxo (verifyTxInUtxo pm nm)
+                  prop description_validateGoodTx (validateGoodTx pm nm)
+                  prop description_badSigsTx      (badSigsTx pm nm)
                   prop description_doubleInputTx  doubleInputTx
               describe "applyTxToUtxo" $ do
                   prop description_applyTxToUtxoGood applyTxToUtxoGood
@@ -96,8 +98,8 @@ findTxInUtxo key txO utxo =
      in (isJust $ utxoGetSimple newUtxo key) &&
         (isNothing $ utxoGetSimple utxo' key)
 
-verifyTxInUtxo :: ProtocolMagic -> NetworkMagic -> SmallGenerator GoodTx -> Property
-verifyTxInUtxo pm nm (SmallGenerator (GoodTx ls)) =
+verifyTxInUtxo :: ProtocolMagic -> NetworkMagic -> Property
+verifyTxInUtxo pm nm = forAll (genGoodTxWithNetworkMagic pm nm) $ \(GoodTx ls) ->
     let txs = fmap (view _1) ls
         witness = V.fromList $ toList $ fmap (view _4) ls
         (ins, outs) = NE.unzip $ map (\(_, tIs, tOs, _) -> (tIs, tOs)) ls
@@ -137,8 +139,9 @@ doubleInputTx pm nm (SmallGenerator (getDoubleInputTx -> ls)) =
             not $ allDistinct (toList _txInputs)
     in someInputsAreDuplicated ==> qcIsLeft transactionVerRes
 
-validateGoodTx :: ProtocolMagic -> NetworkMagic -> SmallGenerator GoodTx -> Property
-validateGoodTx pm nm (SmallGenerator (getGoodTx -> ls)) =
+validateGoodTx :: ProtocolMagic -> NetworkMagic -> Property
+validateGoodTx pm nm =
+    forAll (genGoodTxWithNetworkMagic pm nm) $ \(GoodTx ls) ->
     let quadruple@(tx, utxo, _, txWits) = getTxFromGoodTx ls
         ctx = VTxContext False nm
         transactionVerRes =

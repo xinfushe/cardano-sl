@@ -17,6 +17,7 @@ module Test.Pos.Core.Arbitrary.Txp
        , genTxInWitness
        , genTxOutDist
        , genTxPayload
+       , genGoodTxWithNetworkMagic
        ) where
 
 import           Universum
@@ -161,6 +162,12 @@ buildProperTx pm nm inputList (inCoin, outCoin) =
 newtype GoodTx = GoodTx
     { getGoodTx :: NonEmpty (Tx, TxIn, TxOutAux, TxInWitness)
     } deriving (Generic, Show)
+
+genGoodTxWithNetworkMagic :: ProtocolMagic -> NetworkMagic -> Gen GoodTx
+genGoodTxWithNetworkMagic pm nm =
+        GoodTx <$> (buildProperTx pm nm
+                        <$> arbitrary
+                        <*> pure (identity, identity))
 
 goodTxToTxAux :: GoodTx -> TxAux
 goodTxToTxAux (GoodTx l) = TxAux tx witness
