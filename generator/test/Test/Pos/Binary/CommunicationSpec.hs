@@ -25,7 +25,6 @@ import           Test.Pos.Block.Logic.Util (EnableTxPayload (..),
                      InplaceDB (..), bpGenBlock)
 import           Test.Pos.Configuration (HasStaticConfigurations,
                      withStaticConfigurations)
-import           Test.Pos.Core.Dummy (dummyNetworkMagic)
 import           Test.Pos.Crypto.Dummy (dummyProtocolMagic)
 
 -- |

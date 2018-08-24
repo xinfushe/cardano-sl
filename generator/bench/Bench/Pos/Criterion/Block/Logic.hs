@@ -107,7 +107,7 @@ verifyBlocksBenchmark !pm !nm !tp !ctx =
                 Just ks -> ks
         bs <- flip evalRandT g $ genBlocks pm nm (_tpTxpConfiguration tp)
                 (BlockGenParams
-                    { _bgpSecrets = mkAllSecretsSimple secretKeys
+                    { _bgpSecrets = mkAllSecretsSimple nm secretKeys
                     , _bgpBlockCount = bCount
                     , _bgpTxGenParams = TxGenParams
                         { _tgpTxCountRange = (0, 2)
@@ -137,7 +137,7 @@ verifyBlocksBenchmark !pm !nm !tp !ctx =
             $ verifyAndApplyBlocks pm nm (_tpTxpConfiguration tp) verifyBlocksCtx False blocks >>= \case
                     Left err -> return (Just err)
                     Right (_, blunds) -> do
-                        whenJust (nonEmptyNewestFirst blunds) (rollbackBlocks pm)
+                        whenJust (nonEmptyNewestFirst blunds) (rollbackBlocks pm nm)
                         return Nothing
 
     verifyBlocksPrefixB
@@ -176,7 +176,7 @@ verifyHeaderBenchmark !pm !nm !tp = env (runBlockTestMode pm nm tp genEnv)
                 Nothing -> error "verifyHeaderBench: no genesisSecretKeys"
                 Just ks -> ks
         let blockGenParams = BlockGenParams
-                { _bgpSecrets = mkAllSecretsSimple secretKeys
+                { _bgpSecrets = mkAllSecretsSimple nm secretKeys
                 , _bgpBlockCount = BlockCount 1
                 , _bgpTxGenParams = TxGenParams
                     { _tgpTxCountRange = (0, 2)

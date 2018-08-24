@@ -30,8 +30,8 @@ import           Pos.Core (Coin, EpochIndex, StakeholderId, addressHash,
                      genesisSecretKeysPoor, genesisSecretKeysRich)
 import           Pos.Core.Genesis (GenesisData (..), GenesisInitializer (..),
                      TestnetBalanceOptions (..))
-import           Pos.Core.NetworkMagic (RequiresNetworkMagic (..),
-                     makeNetworkMagic)
+import           Pos.Core.NetworkMagic (NetworkMagic (..),
+                     RequiresNetworkMagic (..), makeNetworkMagic)
 import           Pos.Core.Txp (TxAux, mkTxPayload)
 import           Pos.Crypto (SecretKey, toPublic)
 import           Pos.DB.Block (ShouldCallBListener (..), applyBlocksUnsafe)
@@ -50,7 +50,6 @@ import           Test.Pos.Block.Logic.Util (EnableTxPayload (..),
 import           Test.Pos.Block.Property (blockPropertySpec)
 import           Test.Pos.Configuration (defaultTestBlockVersionData,
                      withStaticConfigurations)
-import           Test.Pos.Core.Dummy (dummyNetworkMagic)
 import           Test.Pos.Crypto.Dummy (dummyProtocolMagic)
 import           Test.Pos.Util.QuickCheck (maybeStopProperty, stopProperty)
 
@@ -69,10 +68,10 @@ spec = do
                 -- so we can run more than once).
                 modifyMaxSuccess (const 4) $ prop lrcCorrectnessDesc $
                     blockPropertyToProperty dummyProtocolMagic nm genTestParams
-                                            (lrcCorrectnessProp rnm txpConfig)
+                                            (lrcCorrectnessProp nm txpConfig)
                 -- This test is relatively slow, hence we launch it only 15 times.
                 modifyMaxSuccess (const 15) $ blockPropertySpec lessThanKAfterCrucialDesc
-                    (lessThanKAfterCrucialProp rnm txpConfig)
+                    (lessThanKAfterCrucialProp nm txpConfig)
       where
         nm = makeNetworkMagic rnm dummyProtocolMagic
         lrcCorrectnessDesc =
@@ -135,10 +134,10 @@ genGenesisInitializer = do
 ----------------------------------------------------------------------------
 
 lrcCorrectnessProp :: HasConfigurations
-                   => RequiresNetworkMagic
+                   => NetworkMagic
                    -> TxpConfiguration
                    -> BlockProperty ()
-lrcCorrectnessProp rnm txpConfig = do
+lrcCorrectnessProp nm txpConfig = do
     let k = blkSecurityParam
     -- This value is how many blocks we need to generate first. We
     -- want to generate blocks for all slots which will be considered
@@ -148,30 +147,30 @@ lrcCorrectnessProp rnm txpConfig = do
     -- but rather want to use our knowledge.
     let blkCount0 = 8 * k - 1
     () <$ bpGenBlocks dummyProtocolMagic
-                      (makeNetworkMagic rnm dummyProtocolMagic)
+                      nm
                       txpConfig
                       (Just blkCount0)
                       (EnableTxPayload False)
                       (InplaceDB True)
-    genAndApplyBlockFixedTxs rnm txpConfig =<< txsBeforeBoundary
+    genAndApplyBlockFixedTxs nm txpConfig =<< txsBeforeBoundary
     -- At this point we have applied '8 * k' blocks. The current state
     -- will be used in LRC.
     stableStakes <- lift getAllPotentiallyHugeStakesMap
     -- All further blocks will not be considered by LRC for the 1-st
     -- epoch. So we include some transactions to make sure they are
     -- not considered.
-    genAndApplyBlockFixedTxs rnm txpConfig =<< txsAfterBoundary
+    genAndApplyBlockFixedTxs nm txpConfig =<< txsAfterBoundary
     -- We need to have at least 'k' blocks after the boundary to make
     -- sure that stable blocks are indeed stable. Note that we have
     -- already applied 1 blocks, hence 'pred'.
     blkCount1 <- pred <$> pick (choose (k, 2 * k))
     () <$ bpGenBlocks dummyProtocolMagic
-                      (makeNetworkMagic rnm dummyProtocolMagic)
+                      nm
                       txpConfig
                       (Just blkCount1)
                       (EnableTxPayload False)
                       (InplaceDB True)
-    lift $ Lrc.lrcSingleShot dummyProtocolMagic 1
+    lift $ Lrc.lrcSingleShot dummyProtocolMagic nm 1
     leaders1 <-
         maybeStopProperty "No leaders for epoch#1!" =<< lift (LrcDB.getLeadersForEpoch 1)
     -- Here we use 'genesisSeed' (which is the seed for the 0-th
@@ -261,13 +260,12 @@ checkRichmen = do
                 poorGuyStake totalStake
 
 genAndApplyBlockFixedTxs :: HasConfigurations
-                         => RequiresNetworkMagic
+                         => NetworkMagic
                          -> TxpConfiguration
                          -> [TxAux]
                          -> BlockProperty ()
-genAndApplyBlockFixedTxs rnm txpConfig txs = do
+genAndApplyBlockFixedTxs nm txpConfig txs = do
     let txPayload = mkTxPayload txs
-    let nm = makeNetworkMagic rnm dummyProtocolMagic
     emptyBlund <- bpGenBlock dummyProtocolMagic
                              nm
                              txpConfig
@@ -276,6 +274,7 @@ genAndApplyBlockFixedTxs rnm txpConfig txs = do
     let blund = emptyBlund & _1 . _Right . mainBlockTxPayload .~ txPayload
     (adoptedBV, adoptedBVD) <- run getAdoptedBVFull
     lift $ applyBlocksUnsafe dummyProtocolMagic
+                             nm
                              adoptedBV
                              adoptedBVD
                              (ShouldCallBListener False)
@@ -306,10 +305,10 @@ txsAfterBoundary = pure []
 
 lessThanKAfterCrucialProp
     :: HasConfigurations
-    => RequiresNetworkMagic
+    => NetworkMagic
     -> TxpConfiguration
     -> BlockProperty ()
-lessThanKAfterCrucialProp rnm txpConfig = do
+lessThanKAfterCrucialProp nm txpConfig = do
     let k = blkSecurityParam
     -- We need to generate '8 * k' blocks for first '8 * k' slots.
     let inFirst8K = 8 * k
@@ -321,7 +320,7 @@ lessThanKAfterCrucialProp rnm txpConfig = do
     -- at least 'k'.
     let shouldSucceed = inLast2K >= k
     () <$ bpGenBlocks dummyProtocolMagic
-                      (makeNetworkMagic rnm dummyProtocolMagic)
+                      nm
                       txpConfig
                       (Just toGenerate)
                       (EnableTxPayload False)
@@ -331,7 +330,7 @@ lessThanKAfterCrucialProp rnm txpConfig = do
              " blocks after crucial slot, but it failed")
     let unexpectedFailMsg = sformat (mkFormat "succeed") inLast2K
     let unexpectedSuccessMsg = sformat (mkFormat "fail") inLast2K
-    lift (try $ Lrc.lrcSingleShot dummyProtocolMagic 1) >>= \case
+    lift (try $ Lrc.lrcSingleShot dummyProtocolMagic nm 1) >>= \case
         Left Lrc.UnknownBlocksForLrc
             | shouldSucceed -> stopProperty unexpectedFailMsg
             | otherwise -> pass
