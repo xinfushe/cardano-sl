@@ -14,8 +14,8 @@ import           Ntp.Client (NtpStatus)
 
 import           Pos.Wallet.Web.Swagger.Spec (swaggerSpecForWalletApi)
 import           Servant.API ((:<|>) ((:<|>)))
-import           Servant.Server.Generic (genericServerT)
 import           Servant.Server (Handler, Server, ServerT, hoistServer)
+import           Servant.Server.Generic (genericServerT)
 import           Servant.Swagger.UI (swaggerSchemaUIServer)
 
 import           Pos.Chain.Txp (TxpConfiguration)
