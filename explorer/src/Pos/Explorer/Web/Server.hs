@@ -66,6 +66,7 @@ import           Pos.Core (AddrType (..), Address (..), Coin, EpochIndex,
                      sumCoins, timestampToPosix, unsafeAddCoin,
                      unsafeIntegerToCoin, unsafeSubCoin)
 import           Pos.Core.Chrono (NewestFirst (..))
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Core.Txp (Tx (..), TxAux, TxId, TxIn (..), TxOutAux (..),
                      taTx, txOutAddress, txOutValue, txpTxs, _txOutputs)
 import           Pos.DB.Txp (MonadTxpMem, getFilteredUtxo, getLocalTxs,
@@ -125,8 +126,8 @@ explorerApp serv = serve explorerApi <$> serv
 
 explorerHandlers
     :: forall ctx m. ExplorerMode ctx m
-    => Diffusion m -> ServerT ExplorerApi m
-explorerHandlers _diffusion =
+    => NetworkMagic -> Diffusion m -> ServerT ExplorerApi m
+explorerHandlers nm _diffusion =
     toServant (ExplorerApiRecord
         { _totalAda           = getTotalAda
         , _blocksPages        = getBlocksPage
@@ -135,8 +136,8 @@ explorerHandlers _diffusion =
         , _blocksTxs          = getBlockTxs
         , _txsLast            = getLastTxs
         , _txsSummary         = getTxSummary
-        , _addressSummary     = getAddressSummary
-        , _addressUtxoBulk    = getAddressUtxoBulk
+        , _addressSummary     = getAddressSummary nm
+        , _addressUtxoBulk    = getAddressUtxoBulk nm
         , _epochPages         = getEpochPage
         , _epochSlots         = getEpochSlot
         , _genesisSummary     = getGenesisSummary
@@ -337,10 +338,11 @@ getBlockTxs cHash mLimit mSkip = do
 -- @UnknownAddressType@.
 getAddressSummary
     :: ExplorerMode ctx m
-    => CAddress
+    => NetworkMagic
+    -> CAddress
     -> m CAddressSummary
-getAddressSummary cAddr = do
-    addr <- cAddrToAddr cAddr
+getAddressSummary nm cAddr = do
+    addr <- cAddrToAddr nm cAddr
 
     when (isUnknownAddressType addr) $
         throwM $ Internal "Unknown address type"
@@ -379,9 +381,10 @@ getAddressSummary cAddr = do
 
 getAddressUtxoBulk
     :: (ExplorerMode ctx m)
-    => [CAddress]
+    => NetworkMagic
+    -> [CAddress]
     -> m [CUtxo]
-getAddressUtxoBulk cAddrs = do
+getAddressUtxoBulk nm cAddrs = do
     unless explorerExtendedApi $
         throwM err405
         { errReasonPhrase = "Explorer extended API is disabled by configuration!"
@@ -394,7 +397,7 @@ getAddressUtxoBulk cAddrs = do
         { errReasonPhrase = "Maximum number of addresses you can send to fetch Utxo in bulk is 10!"
         }
 
-    addrs <- mapM cAddrToAddr cAddrs
+    addrs <- mapM (cAddrToAddr nm) cAddrs
     utxo <- getFilteredUtxo addrs
 
     pure . map futxoToCUtxo . M.toList $ utxo
@@ -866,8 +869,8 @@ getBlundOrThrow headerHash =
 
 -- | Deserialize Cardano or RSCoin address and convert it to Cardano address.
 -- Throw exception on failure.
-cAddrToAddr :: MonadThrow m => CAddress -> m Address
-cAddrToAddr cAddr@(CAddress rawAddrText) =
+cAddrToAddr :: MonadThrow m => NetworkMagic -> CAddress -> m Address
+cAddrToAddr nm cAddr@(CAddress rawAddrText) =
     -- Try decoding address as base64. If both decoders succeed,
     -- the output of the first one is returned
     let mDecodedBase64 =
@@ -880,7 +883,7 @@ cAddrToAddr cAddr@(CAddress rawAddrText) =
             -- > RSCoin address == 32 bytes
             -- > Cardano address >= 34 bytes
             if (BS.length addr == 32)
-                then pure $ makeRedeemAddress $ redeemPkBuild addr
+                then pure $ makeRedeemAddress nm $ redeemPkBuild addr
                 else either badCardanoAddress pure (fromCAddress cAddr)
         Nothing ->
             -- cAddr is in Cardano address format or it's not valid

@@ -458,4 +458,6 @@ instance Show CByteString where
 --------------------------------------------------------------------------------
 
 instance Arbitrary CAddress where
-    arbitrary = toCAddress . secretKeyToAddress <$> arbitrary
+    arbitrary = do
+        nm <- arbitrary
+        toCAddress . secretKeyToAddress nm <$> arbitrary

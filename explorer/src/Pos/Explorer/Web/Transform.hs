@@ -26,6 +26,7 @@ import           Pos.Chain.Ssc (HasSscConfiguration)
 import           Pos.Chain.Update (HasUpdateConfiguration)
 import           Pos.Configuration (HasNodeConfiguration)
 import           Pos.Core (HasConfiguration)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.DB.Txp (MempoolExt, MonadTxpLocal (..))
 import           Pos.Infra.Diffusion.Types (Diffusion)
 import           Pos.Infra.Reporting (MonadReporting (..))
@@ -92,19 +93,21 @@ notifierPlugin settings _ = notifierApp settings
 
 explorerPlugin
     :: HasExplorerConfiguration
-    => Word16
+    => NetworkMagic
+    -> Word16
     -> Diffusion ExplorerProd
     -> ExplorerProd ()
-explorerPlugin = flip explorerServeWebReal
+explorerPlugin nm = flip (explorerServeWebReal nm)
 
 explorerServeWebReal
     :: HasExplorerConfiguration
-    => Diffusion ExplorerProd
+    => NetworkMagic
+    -> Diffusion ExplorerProd
     -> Word16
     -> ExplorerProd ()
-explorerServeWebReal diffusion port = do
+explorerServeWebReal nm diffusion port = do
     rctx <- ask
-    let handlers = explorerHandlers diffusion
+    let handlers = explorerHandlers nm diffusion
         server = hoistServer explorerApi (convertHandler rctx) handlers
         app = explorerApp (pure server)
     explorerServeImpl app port

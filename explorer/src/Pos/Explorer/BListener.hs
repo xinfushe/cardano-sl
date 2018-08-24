@@ -77,8 +77,8 @@ instance ( MonadDBRead m
          , HasConfiguration
          )
          => MonadBListener (ExplorerBListener m) where
-    onApplyBlocks     blunds = onApplyCallGeneral blunds
-    onRollbackBlocks  blunds = onRollbackCallGeneral blunds
+    onApplyBlocks    _nm blunds = onApplyCallGeneral blunds
+    onRollbackBlocks _nm blunds = onRollbackCallGeneral blunds
 
 
 ----------------------------------------------------------------------------

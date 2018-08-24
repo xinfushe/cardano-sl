@@ -21,6 +21,7 @@ import           Test.Hspec.QuickCheck (modifyMaxSize, prop)
 import           Test.QuickCheck (Property, arbitrary, forAll)
 import           Test.QuickCheck.Monadic (assert, monadicIO, run)
 
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Crypto (SecretKey)
 import           Pos.Explorer.ExplorerMode (runSubTestMode)
 import           Pos.Explorer.Socket.Holder (ConnectionsState,
@@ -110,11 +111,11 @@ spec =
                     unsubscribeFullyProp
 
 
-addressSetByTxsProp :: SecretKey -> Bool
-addressSetByTxsProp key =
+addressSetByTxsProp :: NetworkMagic -> SecretKey -> Bool
+addressSetByTxsProp nm key =
     let
-        addrA = secretKeyToAddress key
-        addrB = secretKeyToAddress key
+        addrA = secretKeyToAddress nm key
+        addrB = secretKeyToAddress nm key
         txA = mkTxOut 2 addrA
         txB = mkTxOut 3 addrA
         txC = mkTxOut 4 addrB

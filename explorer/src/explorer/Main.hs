@@ -70,7 +70,7 @@ action (ExplorerNodeArgs (cArgs@CommonNodeArgs{..}) ExplorerArgs{..}) =
 
         let plugins :: [Diffusion ExplorerProd -> ExplorerProd ()]
             plugins =
-                [ explorerPlugin webPort
+                [ explorerPlugin nm webPort
                 , notifierPlugin NotifierSettings{ nsPort = notifierPort }
                 , updateTriggerWorker
                 ]
