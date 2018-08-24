@@ -45,6 +45,7 @@ import           Pos.Core.Conc (concurrently, currentTime, delay,
                      forConcurrently, modifySharedAtomic, newSharedAtomic)
 import           Pos.Core.Configuration (genesisBlockVersionData,
                      genesisSecretKeys)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Core.Txp (TxAux (..), TxIn (TxInUtxo), TxOut (..),
                      TxOutAux (..), txaF)
 import           Pos.Core.Update (BlockVersionData (..))
@@ -87,10 +88,11 @@ addTxSubmit =
 sendToAllGenesis
     :: forall m. MonadAuxxMode m
     => ProtocolMagic
+    -> NetworkMagic
     -> Diffusion m
     -> SendToAllGenesisParams
     -> m ()
-sendToAllGenesis pm diffusion (SendToAllGenesisParams genesisTxsPerThread txsPerThread conc delay_ tpsSentFile) = do
+sendToAllGenesis pm nm diffusion (SendToAllGenesisParams genesisTxsPerThread txsPerThread conc delay_ tpsSentFile) = do
     let genesisSlotDuration = fromIntegral (toMicroseconds $ bvdSlotDuration genesisBlockVersionData) `div` 1000000 :: Int
         keysToSend  = fromMaybe (error "Genesis secret keys are unknown") genesisSecretKeys
     tpsMVar <- newSharedAtomic $ TxCount 0 conc
@@ -115,14 +117,14 @@ sendToAllGenesis pm diffusion (SendToAllGenesisParams genesisTxsPerThread txsPer
                 let signer = fakeSigner secretKey
                     publicKey = toPublic secretKey
                 -- construct transaction output
-                outAddr <- makePubKeyAddressAuxx publicKey
+                outAddr <- makePubKeyAddressAuxx nm publicKey
                 let txOut1 = TxOut {
                     txOutAddress = outAddr,
                     txOutValue = mkCoin 1
                     }
                     txOuts = TxOutAux txOut1 :| []
-                utxo <- getOwnUtxoForPk $ safeToPublic signer
-                etx <- createTx pm mempty utxo signer txOuts publicKey
+                utxo <- getOwnUtxoForPk nm $ safeToPublic signer
+                etx <- createTx pm nm mempty utxo signer txOuts publicKey
                 case etx of
                     Left err -> logError (sformat ("Error: "%build%" while trying to contruct tx") err)
                     Right (tx, _) -> do
@@ -144,7 +146,7 @@ sendToAllGenesis pm diffusion (SendToAllGenesisParams genesisTxsPerThread txsPer
                             txOuts2 = TxOutAux txOut1' :| []
                         -- It is expected that the output from the previously sent transaction is
                         -- included in the UTxO by the time this transaction will actually be sent.
-                        etx' <- createTx pm mempty utxo' (fakeSigner senderKey) txOuts2 (toPublic senderKey)
+                        etx' <- createTx pm nm mempty utxo' (fakeSigner senderKey) txOuts2 (toPublic senderKey)
                         case etx' of
                             Left err -> logError (sformat ("Error: "%build%" while trying to contruct tx") err)
                             Right (tx', _) -> do
@@ -229,10 +231,10 @@ send
 send pm nm diffusion idx outputs = do
     skey <- takeSecret
     let curPk = encToPublic skey
-    let plainAddresses = map (flip makePubKeyAddress curPk . IsBootstrapEraAddr) [False, True]
+    let plainAddresses = map (flip (makePubKeyAddress nm) curPk . IsBootstrapEraAddr) [False, True]
     let (hdAddresses, hdSecrets) = unzip $ map
             (\ibea -> fromMaybe (error "send: pass mismatch") $
-                    deriveFirstHDAddress (IsBootstrapEraAddr ibea) emptyPassphrase skey) [False, True]
+                    deriveFirstHDAddress nm (IsBootstrapEraAddr ibea) emptyPassphrase skey) [False, True]
     let allAddresses = hdAddresses ++ plainAddresses
     let allSecrets = hdSecrets ++ [skey, skey]
     etx <- withSafeSigners allSecrets (pure emptyPassphrase) $ \signers -> runExceptT @AuxxException $ do

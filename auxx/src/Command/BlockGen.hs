@@ -39,7 +39,7 @@ generateBlocks pm nm txpConfig GenBlocksParams{..} =
         seed <- liftIO $ maybe randomIO pure bgoSeed
         logInfo $ "Generating with seed " <> show seed
 
-        allSecrets <- mkAllSecretsSimple . map encToSecret <$> getSecretKeysPlain
+        allSecrets <- mkAllSecretsSimple nm . map encToSecret <$> getSecretKeysPlain
 
         let bgenParams =
                 BlockGenParams
