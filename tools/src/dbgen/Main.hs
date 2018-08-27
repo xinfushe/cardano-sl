@@ -176,7 +176,7 @@ main = do
         spec <- loadGenSpec config
         ws   <- newWalletState (isJust addTo) walletPath -- Recreate or not
 
-        let generatedWallet = generateWalletDB cli spec
+        let generatedWallet = generateWalletDB nm cli spec
         walletRunner pm nm txpConfig cfg dbs publicKeyPath secretKeyPath ws generatedWallet
         closeState ws
 

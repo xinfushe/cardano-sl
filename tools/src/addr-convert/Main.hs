@@ -14,11 +14,13 @@ import           Text.PrettyPrint.ANSI.Leijen (Doc)
 
 import           Paths_cardano_sl (version)
 import           Pos.Core (makeRedeemAddress)
+import           Pos.Core.NetworkMagic (NetworkMagic (..))
 import           Pos.Crypto.Signing (fromAvvmPk)
 import           Pos.Util.Util (eitherToThrow)
 
 data AddrConvertOptions = AddrConvertOptions
-    { address :: !(Maybe Text)
+    { address      :: !(Maybe Text)
+    , networkMagic :: !(Maybe Text)
     }
 
 optionsParser :: Parser AddrConvertOptions
@@ -28,7 +30,11 @@ optionsParser = do
         <> long    "address"
         <> help    "Address to convert. It must be in base64(url) format."
         <> metavar "STRING"
-    return AddrConvertOptions{..}
+    nm      <-  optional $ textOption $
+           long    "networkmagic"
+        <> help    "Generate mainnet or testnet address."
+        <> metavar "STRING"
+    return $ AddrConvertOptions address nm
     where
       textOption = option (toText <$> readerAsk)
 
@@ -57,14 +63,30 @@ Output example:
 You can also run it without arguments to switch to interactive mode.
 In this case each entered vending address is echoed with a testnet address.|]
 
-convertAddr :: Text -> IO Text
-convertAddr addr =
-    pretty . makeRedeemAddress <$>
+convertAddr :: NetworkMagic -> Text -> IO Text
+convertAddr nm addr =
+    pretty . (makeRedeemAddress nm) <$>
     (eitherToThrow . fromAvvmPk) (toText addr)
+
+fromNetworkMagic :: Text -> Either Text NetworkMagic
+fromNetworkMagic txt =
+    case txt of
+        "testnet" -> Right $ NMJust 1
+        "mainnet" -> Right NMNothing
+        _ -> Left $ toText ("Please enter either testnet or \
+                            \mainnet for --networkmagic flag" :: String)
 
 main :: IO ()
 main = do
     AddrConvertOptions{..} <- getAddrConvertOptions
-    case address of
-        Just addr -> convertAddr addr >>= putText
-        Nothing   -> forever (getLine >>= convertAddr >>= putText)
+    let networkMagic' = fromMaybe (error "Nothing entered") (fromNetworkMagic <$> networkMagic)
+    case (address, networkMagic') of
+        (Just addr, Right (NMJust 1)) -> convertAddr (NMJust 1) addr >>= putText
+        (Just addr, Right NMNothing) -> convertAddr (NMNothing) addr >>= putText
+        (Just addr , Left txt) -> do
+            putText txt
+            line <- getLine
+            case fromNetworkMagic line of
+                Left err -> putText err
+                Right nm -> convertAddr nm addr >>= putText
+        (_, _) -> error "Uncatchable error"
