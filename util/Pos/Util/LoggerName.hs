@@ -7,7 +7,7 @@ module Pos.Util.LoggerName
 
 import           Universum
 
-import           Pos.Util.Wlog (LoggerName)
+import           Pos.Util.Log (LoggerName)
 
 class HasLoggerName' ctx where
     loggerName :: Lens' ctx LoggerName

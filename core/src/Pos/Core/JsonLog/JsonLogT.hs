@@ -43,8 +43,8 @@ import           Control.Monad.Trans.Reader (ReaderT (..))
 import           Data.Aeson (ToJSON, encode)
 import           Data.ByteString.Lazy.Char8 (hPutStrLn)
 import           Formatting (sformat, shown, (%))
-import           Pos.Util.Wlog (CanLog, HasLoggerName (..), WithLogger,
-                     logWarning)
+import           Pos.Util.Log (CanLog, HasLoggerName (..), LogContext,
+                     WithLogger, logWarning)
 import           System.IO (Handle, hFlush)
 
 import           Pos.Core.JsonLog.CanJsonLog (CanJsonLog (..))
@@ -68,12 +68,11 @@ instance MonadBaseControl b m => MonadBaseControl b (JsonLogT m) where
 
     restoreM = restoreM
 
-instance WithLogger m => CanLog (JsonLogT m) where
+instance (LogContext (JsonLogT m), {-not necessary-}CanLog m) => CanLog (JsonLogT m) where
 
-instance WithLogger m => HasLoggerName (JsonLogT m) where
+instance (Monad m, HasLoggerName m) => HasLoggerName (JsonLogT m) where
 
     askLoggerName = lift askLoggerName
-
     modifyLoggerName f = hoist (modifyLoggerName f)
 
 
@@ -82,7 +81,7 @@ instance WithLogger m => HasLoggerName (JsonLogT m) where
 
 
 jsonLogDefault
-    :: (ToJSON a, MonadCatch m, MonadIO m, WithLogger m)
+    :: (ToJSON a, MonadCatch m, WithLogger m)
     => JsonLogConfig
     -> a -> m ()
 jsonLogDefault jlc x =

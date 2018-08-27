@@ -43,8 +43,8 @@ import           Pos.Core (EpochIndex (..), HasConfiguration, SlotId (..),
                      mkLocalSlotIndex)
 import           Pos.Core.JsonLog.JsonLogT (JsonLogConfig (..))
 import qualified Pos.Core.JsonLog.JsonLogT as JL
+import           Pos.Util.Log (WithLogger)
 import           Pos.Util.Util (realTime)
-import           Pos.Util.Wlog (WithLogger)
 
 type BlockId = Text
 type TxId = Text
@@ -201,7 +201,7 @@ class HasJsonLogConfig ctx where
 
 jsonLogDefault
     :: (ToJSON a, MonadReader ctx m, HasJsonLogConfig ctx, MonadCatch m,
-        MonadIO m, WithLogger m)
+        WithLogger m)
     => a -> m ()
 jsonLogDefault x = do
     jlc <- view jsonLogConfig

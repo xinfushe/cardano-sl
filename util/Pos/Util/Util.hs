@@ -105,8 +105,10 @@ import           Ether.Internal (HasLens (..))
 import qualified Formatting as F
 import           GHC.TypeLits (ErrorMessage (..))
 import qualified Language.Haskell.TH as TH
-import           Pos.Util.Wlog (LoggerName, WithLogger, logDebug, logError,
-                     logInfo, usingLoggerName)
+-- import           Pos.Util.Wlog (LoggerName, WithLogger, logDebug, logError,
+--                      logInfo, usingLoggerName)
+import           Pos.Util.Log (LoggerName, LoggingHandler, WithLogger, logDebug,
+                     logError, logInfo, usingLoggerName)
 import qualified Prelude
 import           Serokell.Util (listJson)
 import           Serokell.Util.Exceptions ()
@@ -327,13 +329,13 @@ multilineBounds maxSize = F.later formatList
    remaining = maxSize' - half
 
 -- | Catch and log an exception, then rethrow it
-logException :: LoggerName -> IO a -> IO a
-logException name = E.handleAsync (\e -> handler e >> E.throw e)
+logException :: LoggingHandler -> LoggerName -> IO a -> IO a
+logException lh name = E.handleAsync (\e -> handler e >> E.throw e)
   where
     handler :: E.SomeException -> IO ()
     handler exc = do
         let message = "logException: " <> pretty exc
-        usingLoggerName name (logError message) `E.catchAny` \loggingExc -> do
+        usingLoggerName lh name (logError message) `E.catchAny` \loggingExc -> do
             putStrLn message
             putStrLn $
                 "logException failed to use logging: " <> pretty loggingExc
@@ -435,7 +437,7 @@ sleep :: MonadIO m => NominalDiffTime -> m ()
 sleep n = liftIO (threadDelay (truncate (n * 10^(6::Int))))
 
 -- | 'tMeasure' with 'logDebug'.
-tMeasureLog :: (MonadIO m, WithLogger m) => Text -> m a -> m a
+tMeasureLog :: (WithLogger m) => Text -> m a -> m a
 tMeasureLog label = fmap fst . tMeasure logDebug label
 
 -- | 'tMeasure' with 'putText'. For places you don't have
@@ -443,7 +445,7 @@ tMeasureLog label = fmap fst . tMeasure logDebug label
 tMeasureIO :: (MonadIO m) => Text -> m a -> m a
 tMeasureIO label = fmap fst . tMeasure putText label
 
-timed :: (MonadIO m, WithLogger m) => Text -> m a -> m (a, Microsecond)
+timed :: (WithLogger m) => Text -> m a -> m (a, Microsecond)
 timed = tMeasure logDebug
 
 -- | Takes the first time sample, executes action (forcing its

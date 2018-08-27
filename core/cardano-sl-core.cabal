@@ -58,7 +58,7 @@ library
                        Pos.Core.Txp
                        Pos.Core.Update
 
-                       Pos.Core.Util.LogSafe
+                      --  Pos.Core.Util.LogSafe
                        Pos.Core.Util.TimeLimit
 
                        Pos.Core.Attributes

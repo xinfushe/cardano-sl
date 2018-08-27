@@ -34,7 +34,7 @@ import           UnliftIO.Async (async, cancel, concurrently, forConcurrently,
 import           UnliftIO.MVar (modifyMVar, newMVar)
 
 import           Pos.Util (realTime)
-import           Pos.Util.Wlog (HasLoggerName (..))
+import           Pos.Util.Log (HasLoggerName (..))
 
 currentTime :: MonadIO m => m Microsecond
 currentTime = liftIO realTime

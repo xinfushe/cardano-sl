@@ -10,6 +10,9 @@ module Pos.Util.Log
        -- * Compatibility
        , CanLog(..)
        , WithLogger
+       , HasLoggerName(..)
+       , LoggerNameBox
+       , LogHandlerTag(..)
        -- * Configuration
        , LoggerConfig(..)
        , parseLoggerConfig
@@ -19,6 +22,8 @@ module Pos.Util.Log
        -- * Do logging
        , loggerBracket
        , usingLoggerName
+       , usingLoggerName'
+    --    , usingLoggerNameLog
        , usingLoggerNames
        -- * Functions
        , logDebug
@@ -29,7 +34,7 @@ module Pos.Util.Log
        , logMessage
        -- * Naming/Context
        , LoggerName
-       , askLoggerName
+    --    , askLoggerName
        , addLoggerName
        ) where
 
@@ -39,7 +44,7 @@ import           Control.Lens (each)
 
 
 import qualified Data.Text as T
-import           Data.Text.Lazy.Builder
+-- import           Data.Text.Lazy.Builder
 
 import           Pos.Util.Log.Internal (LoggingHandler)
 import qualified Pos.Util.Log.Internal as Internal
@@ -47,20 +52,25 @@ import           Pos.Util.Log.LoggerConfig
 import           Pos.Util.Log.Scribes
 import           Pos.Util.Log.Severity (Severity (..))
 
+import           Control.Monad.Morph (MFunctor (..))
 import qualified Katip as K
 import qualified Katip.Core as KC
+import qualified Katip.Monadic as KM
+
 
 
 -- | alias - pretend not to depend on katip
 type LogContext = K.KatipContext
 type LogContextT = K.KatipContextT
 
-type WithLogger m = (CanLog m)
+type WithLogger m = CanLog m
 
 type LoggerName = Text
 
+type LoggerNameBox = KM.KatipContextT
+
 -- -- | compatibility
-class (MonadIO m, LogContext m) => CanLog m where
+class (LogContext m) => CanLog m where
     dispatchMessage :: LoggingHandler -> Severity -> Text -> m ()
     dispatchMessage _ s t = K.logItemM Nothing (Internal.sev2klog s) $ K.logStr t
 
@@ -95,12 +105,52 @@ logWarning msg = K.logItemM Nothing K.WarningS $ K.logStr msg
 logError :: (LogContext m) => Text -> m ()
 logError msg = K.logItemM Nothing K.ErrorS $ K.logStr msg
 
+class HasLoggerName m where
+    -- | Extract logger name from context
+    askLoggerName :: m LoggerName
 
--- | get current stack of logger names
-askLoggerName :: LogContext m => m LoggerName
-askLoggerName = do
-    ns <- K.getKatipNamespace
-    return $ toStrict $ toLazyText $ mconcat $ map fromText $ KC.intercalateNs ns
+    -- | Change logger name in context
+    modifyLoggerName :: (LoggerName -> LoggerName) -> m a -> m a
+
+    default askLoggerName :: (MonadTrans t, t n ~ m, Monad n, HasLoggerName n) => m LoggerName
+    askLoggerName = lift askLoggerName
+
+    default modifyLoggerName :: (MFunctor t, t n ~ m, Monad n, HasLoggerName n)
+                             => (LoggerName -> LoggerName)
+                             -> m a
+                             -> m a
+    modifyLoggerName f = hoist (modifyLoggerName f)
+
+instance (Monad m, HasLoggerName m) => HasLoggerName (ReaderT a m) where
+instance (Monad m, HasLoggerName m) => HasLoggerName (StateT a m) where
+instance (Monad m, HasLoggerName m) => HasLoggerName (ExceptT e m) where
+
+instance HasLoggerName Identity where
+    askLoggerName    = Identity "Identity"
+    modifyLoggerName = flip const
+
+-- class (LogContext m) => HasLoggerName m where
+--     -- | Extract logger name from context
+--     askLoggerName :: m LoggerName
+--     askLoggerName = do
+--         ns <- K.getKatipNamespace
+--         return $ toStrict $ toLazyText $ mconcat $ map fromText $ KC.intercalateNs ns
+
+--     modifyLoggerName :: (LoggerName -> LoggerName) -> m a -> m a
+--     modifyLoggerName = flip const --TODO fix it with K.localKatipNamespace
+
+--     -- default askLoggerName :: (MonadTrans t, t n ~ m, Monad n, HasLoggerName n) => m LoggerName
+--     -- askLoggerName = lift askLoggerName
+
+-- instance (Monad m, HasLoggerName m) => HasLoggerName (ReaderT a m)
+-- instance (Monad m, HasLoggerName m) => HasLoggerName (StateT a m)
+-- instance (Monad m, HasLoggerName m) => HasLoggerName (ExceptT e m)
+
+-- -- | get current stack of logger names
+-- askLoggerName :: LogContext m => m LoggerName
+-- askLoggerName = do
+--     ns <- K.getKatipNamespace
+--     return $ toStrict $ toLazyText $ mconcat $ map fromText $ KC.intercalateNs ns
 
 -- | push a local name
 addLoggerName :: LogContext m => LoggerName -> m a -> m a
@@ -182,6 +232,16 @@ usingLoggerNames lh names action = do
             Nothing -> error "logging not yet initialized. Abort."
             Just le -> K.runKatipContextT le () (Internal.s2knames names) $ action
 
+usingLoggerName' :: WithLogger m => LoggingHandler -> LoggerName -> LogContextT IO a -> m a
+usingLoggerName' lh name action = liftIO $ usingLoggerNames lh [name] action
+
+-- usingLoggerNameLog :: WithLogger m => LoggerName -> LogContextT IO a -> m a
+-- usingLoggerNameLog name action = do
+--     le <- K.getLogEnv
+--     ctx <- getKatipContext
+--     -- ns <- getKatipNamespace
+--     liftIO $ K.runKatipContextT le ctx (Internal.s2knames [name]) action
+
 {-| bracket logging
 
 !! this will close the backends at the end of the action !!
@@ -231,3 +291,10 @@ loggerBracket lh name action = do
    >>> usingLoggerName lh "testmore" $ do { logInfo "hello..." }
 -}
 
+-- log-warper code
+
+-- | Tag identifying handlers.
+data LogHandlerTag
+    = HandlerFilelike FilePath
+    | HandlerOther String
+    deriving (Show, Eq)

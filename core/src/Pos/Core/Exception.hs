@@ -16,7 +16,7 @@ import           Control.Exception.Safe (Exception (..))
 import           Data.Typeable (cast)
 import           Formatting (bprint, stext, (%))
 import qualified Formatting.Buildable
-import           Pos.Util.Wlog (WithLogger, logError)
+import           Pos.Util.Log (WithLogger, logError)
 import           Serokell.Util (Color (Red), colorize)
 import qualified Text.Show
 import           Universum

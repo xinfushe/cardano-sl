@@ -52,7 +52,12 @@ import           Formatting.Buildable (build)
 import qualified Language.Haskell.TH.Syntax as TH
 import           Serokell.Data.Memory.Units (Byte, fromBytes, toBytes)
 
-import           Pos.Util.Wlog (CanLog, HasLoggerName (..), LoggerNameBox (..))
+import           Pos.Util.Log (CanLog, HasLoggerName (..))
+
+import qualified Pos.Util.Log as Log
+
+import qualified Katip as K
+import qualified Katip.Monadic as KM
 
 ----------------------------------------------------------------------------
 -- Orphan miscellaneous instances
@@ -73,7 +78,7 @@ instance FromJSON Byte where
 instance ToJSON Byte where
     toJSON = toJSON . toBytes
 
-instance Rand.DRG drg => HasLoggerName (Rand.MonadPseudoRandom drg) where
+instance ({-Rand.DRG drg, -}Log.LogContext (Rand.MonadPseudoRandom drg)) => HasLoggerName (Rand.MonadPseudoRandom drg) where
     askLoggerName = pure "MonadPseudoRandom"
     modifyLoggerName = flip const
 
@@ -153,10 +158,10 @@ instance (Monad m, HasLoggerName m) => HasLoggerName (ResourceT m) where
 ----------------------------------------------------------------------------
 
 instance
-    (Monad m, MonadTrans t, Monad (t m), CanLog m) =>
+    (Monad m, MonadTrans t, Monad (t m), CanLog m, Log.LogContext (Ether.TaggedTrans tag t m)) =>
         CanLog (Ether.TaggedTrans tag t m)
 
-instance (Monad m, CanLog m) => CanLog (IdentityT m)
+instance (Monad m, CanLog m, K.Katip (IdentityT m)) => CanLog (IdentityT m)
 
 instance
     (LiftLocal t, Monad m, HasLoggerName m) =>
@@ -171,7 +176,7 @@ instance
     askLoggerName = lift askLoggerName
     modifyLoggerName = liftLocal askLoggerName modifyLoggerName
 
-deriving instance LiftLocal LoggerNameBox
+deriving instance LiftLocal KM.KatipContextT
 
 instance MonadUnliftIO (t m) => MonadUnliftIO (Ether.TaggedTrans tag t m) where
     {-# INLINE askUnliftIO #-}

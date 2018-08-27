@@ -76,6 +76,7 @@ library
                      , log-warper >= 1.0.3
                      , lrucache
                      , megaparsec
+                     , mmorph
                      , mtl
                      , optparse-applicative
                      , parsec

@@ -25,9 +25,9 @@ import           Formatting (sformat, shown, stext, (%))
 import           UnliftIO (MonadUnliftIO)
 
 import           Pos.Core.Conc (delay, withAsyncWithUnmask)
-import           Pos.Core.Util.LogSafe (logWarningS)
 import           Pos.Crypto.Random (randomNumber)
-import           Pos.Util.Wlog (WithLogger, logWarning)
+import           Pos.Util.Log (LoggingHandler, WithLogger, logWarning)
+import           Pos.Util.Log.LogSafe (logWarningS)
 
 -- | Data type to represent waiting strategy for printing warnings
 -- if action take too much time.
@@ -48,8 +48,8 @@ type CanLogInParallel m =
 logWarningLongAction
     :: forall m a.
        CanLogInParallel m
-    => Bool -> WaitingDelta -> Text -> m a -> m a
-logWarningLongAction secure delta actionTag action =
+    => LoggingHandler -> Bool -> WaitingDelta -> Text -> m a -> m a
+logWarningLongAction lh secure delta actionTag action =
     -- Previous implementation was
     --
     --   bracket (fork $ waitAndWarn delta) killThread (const action)
@@ -67,7 +67,8 @@ logWarningLongAction secure delta actionTag action =
     withAsyncWithUnmask (\unmask -> unmask $ waitAndWarn delta) (const action)
   where
     logFunc :: Text -> m ()
-    logFunc = bool logWarning logWarningS secure
+    logFunc = bool logWarning (logWarningS lh) secure
+    --TODO check if LoggingHandler or the necessaey elems can be acquired from the logging monad
     printWarning t = logFunc $ sformat ("Action `"%stext%"` took more than "%shown)
                                        actionTag t
 
@@ -91,21 +92,21 @@ logWarningLongAction secure delta actionTag action =
 {- Helper functions to avoid dealing with data type -}
 
 -- | Specialization of 'logWarningLongAction' with 'WaitOnce'.
-logWarningWaitOnce :: CanLogInParallel m => Second -> Text -> m a -> m a
-logWarningWaitOnce = logWarningLongAction False . WaitOnce
+logWarningWaitOnce :: CanLogInParallel m => LoggingHandler -> Second -> Text -> m a -> m a
+logWarningWaitOnce lh = logWarningLongAction lh False . WaitOnce
 
 -- | Specialization of 'logWarningLongAction' with 'WaiLinear'.
-logWarningWaitLinear :: CanLogInParallel m => Second -> Text -> m a -> m a
-logWarningWaitLinear = logWarningLongAction False . WaitLinear
+logWarningWaitLinear :: CanLogInParallel m => LoggingHandler -> Second -> Text -> m a -> m a
+logWarningWaitLinear lh = logWarningLongAction lh False . WaitLinear
 
 -- | Secure version of 'logWarningWaitLinear'.
-logWarningSWaitLinear :: CanLogInParallel m => Second -> Text -> m a -> m a
-logWarningSWaitLinear = logWarningLongAction True . WaitLinear
+logWarningSWaitLinear :: CanLogInParallel m => LoggingHandler -> Second -> Text -> m a -> m a
+logWarningSWaitLinear lh = logWarningLongAction lh True . WaitLinear
 
 -- | Specialization of 'logWarningLongAction' with 'WaitGeometric'
 -- with parameter @1.3@. Accepts 'Second'.
-logWarningWaitInf :: CanLogInParallel m => Second -> Text -> m a -> m a
-logWarningWaitInf = logWarningLongAction False . (`WaitGeometric` 1.3) . convertUnit
+logWarningWaitInf :: CanLogInParallel m => LoggingHandler -> Second -> Text -> m a -> m a
+logWarningWaitInf lh = logWarningLongAction lh False . (`WaitGeometric` 1.3) . convertUnit
 
 -- | Wait random number of 'Microsecond'`s between min and max.
 waitRandomInterval
