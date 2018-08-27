@@ -70,8 +70,9 @@ import           Pos.Core (CoreConfiguration (..), GenesisConfiguration (..),
 import           Pos.Core.Conc (currentTime)
 import           Pos.Core.Configuration (HasGenesisBlockVersionData,
                      withGenesisBlockVersionData)
-import           Pos.Core.Genesis (GenesisInitializer (..), GenesisSpec (..))
-import           Pos.Core.NetworkMagic (NetworkMagic)
+import           Pos.Core.Genesis (GenesisInitializer (..),
+                     GenesisProtocolConstants (..), GenesisSpec (..))
+import           Pos.Core.NetworkMagic (NetworkMagic, networkMagicToRequires)
 import           Pos.Core.Reporting (HasMisbehaviorMetrics (..),
                      MonadReporting (..))
 import           Pos.Core.Slotting (MonadSlotsData)
@@ -174,9 +175,12 @@ genGenesisInitializer = do
 
 -- This function creates 'CoreConfiguration' from 'TestParams' and
 -- uses it to satisfy 'HasConfiguration'.
-withTestParams :: TestParams -> (HasConfiguration => ProtocolMagic -> r) -> r
-withTestParams TestParams {..} f = withGenesisSpec _tpStartTime coreConfiguration
-                                                   id (\pm _nm -> f pm)
+withTestParams :: ProtocolMagic -> NetworkMagic -> TestParams
+               -> (HasConfiguration => ProtocolMagic -> r) -> r
+withTestParams pm nm TestParams {..} f =
+    withGenesisSpec _tpStartTime coreConfiguration
+                    -- TODO mhueschen : this is weird
+                    id (\_pm _nm -> f pm)
   where
     defaultCoreConf :: CoreConfiguration
     defaultCoreConf = ccCore defaultTestConf
@@ -186,6 +190,10 @@ withTestParams TestParams {..} f = withGenesisSpec _tpStartTime coreConfiguratio
         defaultTestGenesisSpec
         { gsInitializer = _tpGenesisInitializer
         , gsBlockVersionData = _tpBlockVersionData
+        , gsProtocolConstants = (gsProtocolConstants defaultTestGenesisSpec)
+            { gpcProtocolMagic        = pm
+            , gpcRequiresNetworkMagic = networkMagicToRequires nm
+            }
         }
 
 ----------------------------------------------------------------------------
@@ -340,7 +348,7 @@ blockPropertyToProperty
     -> Property
 blockPropertyToProperty pm nm tpGen blockProperty =
     forAll tpGen $ \tp ->
-        withTestParams tp $ \_ ->
+        withTestParams pm nm tp $ \_ ->
         monadic (ioProperty . runBlockTestMode pm nm tp) blockProperty
 
 -- | Simplified version of 'blockPropertyToProperty' which uses

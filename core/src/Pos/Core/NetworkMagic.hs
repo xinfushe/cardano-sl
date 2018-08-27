@@ -2,6 +2,7 @@ module Pos.Core.NetworkMagic
        ( NetworkMagic (..)
        , RequiresNetworkMagic (..)
        , makeNetworkMagic
+       , networkMagicToRequires
        ) where
 
 import           Universum
@@ -87,3 +88,8 @@ makeNetworkMagic rnm pm = case rnm of
                     b3 = fromIntegral $ shift (shift w 16) (-24)
                     b4 = fromIntegral $ shift (shift w 24) (-24)
                  in b1 + b2 + b3 + b4
+
+networkMagicToRequires :: NetworkMagic -> RequiresNetworkMagic
+networkMagicToRequires = \case
+    NMJust _  -> NMMustBeJust
+    NMNothing -> NMMustBeNothing
