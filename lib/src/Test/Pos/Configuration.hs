@@ -16,6 +16,7 @@ module Test.Pos.Configuration
        , withDefDlgConfiguration
        , withDefConfigurations
        , withStaticConfigurations
+       , withProvidedMagicConfig
 
        , HasConfigurations
        ) where
@@ -38,8 +39,9 @@ import           Pos.Configuration (HasNodeConfiguration, withNodeConfiguration)
 import           Pos.Core (HasConfiguration, withGenesisSpec)
 import           Pos.Core.Configuration (CoreConfiguration (..),
                      GenesisConfiguration (..))
-import           Pos.Core.Genesis (GenesisSpec (..))
-import           Pos.Core.NetworkMagic (NetworkMagic)
+import           Pos.Core.Genesis (GenesisProtocolConstants (..),
+                     GenesisSpec (..))
+import           Pos.Core.NetworkMagic (NetworkMagic, RequiresNetworkMagic)
 import           Pos.Core.Update (BlockVersionData)
 import           Pos.Crypto (ProtocolMagic)
 import           Pos.Launcher.Configuration (Configuration (..),
@@ -94,6 +96,21 @@ withDefDlgConfiguration = withDlgConfiguration (ccDlg defaultTestConf)
 
 withDefConfiguration :: (HasConfiguration => ProtocolMagic -> NetworkMagic -> r) -> r
 withDefConfiguration = withGenesisSpec 0 (ccCore defaultTestConf) id
+
+withProvidedMagicConfig :: ProtocolMagic -> RequiresNetworkMagic -> (HasConfigurations => TxpConfiguration -> r) -> r
+withProvidedMagicConfig pm rnm f = withGenesisSpec 0 (updateCC (ccCore defaultTestConf)) id (\_pm _nm -> withStaticConfigurations (\txpConfig _ -> f txpConfig))
+  where
+    updateCC :: CoreConfiguration -> CoreConfiguration
+    updateCC cc = cc { ccGenesis = updateGC (ccGenesis cc) }
+    --
+    updateGC :: GenesisConfiguration -> GenesisConfiguration
+    updateGC (GCSrc _ _) = error "got GCSrc"
+    updateGC (GCSpec spec) = GCSpec $ spec
+        { gsProtocolConstants = updateGPC (gsProtocolConstants spec) }
+    --
+    updateGPC :: GenesisProtocolConstants -> GenesisProtocolConstants
+    updateGPC gpc = gpc { gpcProtocolMagic = pm
+                        , gpcRequiresNetworkMagic = rnm }
 
 withStaticConfigurations :: (HasStaticConfigurations => TxpConfiguration -> NtpConfiguration -> r) -> r
 withStaticConfigurations patak =

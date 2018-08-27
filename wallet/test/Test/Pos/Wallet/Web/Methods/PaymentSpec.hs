@@ -17,7 +17,7 @@ import           Control.Exception.Safe (try)
 import           Data.List ((!!), (\\))
 import           Data.List.NonEmpty (fromList)
 import           Formatting (build, sformat, (%))
-import           Test.Hspec (Spec, describe, shouldBe)
+import           Test.Hspec (Spec, describe, runIO, shouldBe)
 import           Test.Hspec.QuickCheck (modifyMaxSuccess)
 import           Test.QuickCheck (arbitrary, choose, generate)
 import           Test.QuickCheck.Monadic (pick)
@@ -31,7 +31,7 @@ import           Pos.Core.NetworkMagic (NetworkMagic, RequiresNetworkMagic (..),
                      makeNetworkMagic)
 import           Pos.Core.Txp (Tx (..), TxAux (..), _TxOut)
 import           Pos.Core.Update (bvdTxFeePolicy)
-import           Pos.Crypto (PassPhrase)
+import           Pos.Crypto (PassPhrase, ProtocolMagic)
 import           Pos.DB.Class (MonadGState (..))
 import           Pos.Launcher (HasConfigurations)
 import           Pos.Util.CompileInfo (withCompileInfo)
@@ -48,8 +48,7 @@ import           Pos.Wallet.Web.Util (decodeCTypeOrFail, getAccountAddrsOrThrow)
 
 import           Pos.Util.Servant (encodeCType)
 
-import           Test.Pos.Configuration (withDefConfigurations)
-import           Test.Pos.Crypto.Dummy (dummyProtocolMagic)
+import           Test.Pos.Configuration (withProvidedMagicConfig)
 import           Test.Pos.Util.QuickCheck.Property (assertProperty, expectedOne,
                      maybeStopProperty, splitWord, stopProperty)
 import           Test.Pos.Wallet.Web.Mode (WalletProperty, getSentTxs,
@@ -68,13 +67,14 @@ spec = do
     go NMMustBeNothing
     go NMMustBeJust
   where
-    go rnm = do
-        withCompileInfo $
-           withDefConfigurations $ \_ _nm txpConfig _ ->
-           describe "Wallet.Web.Methods.Payment" $ modifyMaxSuccess (const 10) $ do
-               describe "newPaymentBatch" $ do
-                   describe "Submitting a payment when restoring" (rejectPaymentIfRestoringSpec rnm txpConfig)
-                   describe "One payment" (oneNewPaymentBatchSpec rnm txpConfig)
+    go rnm = withCompileInfo $ do
+        pm <- runIO (generate arbitrary)
+        let nm = makeNetworkMagic rnm pm
+        withProvidedMagicConfig pm rnm $ \txpConfig ->
+            describe "Wallet.Web.Methods.Payment" $ modifyMaxSuccess (const 10) $ do
+                describe "newPaymentBatch" $ do
+                    describe "Submitting a payment when restoring" (rejectPaymentIfRestoringSpec pm nm txpConfig)
+                    describe "One payment" (oneNewPaymentBatchSpec pm nm txpConfig)
 
 data PaymentFixture = PaymentFixture {
       pswd        :: PassPhrase
@@ -131,17 +131,23 @@ newPaymentFixture nm = do
 
 -- | Assess that if we try to submit a payment when the wallet is restoring,
 -- the backend prevents us from doing that.
-rejectPaymentIfRestoringSpec :: HasConfigurations => RequiresNetworkMagic -> TxpConfiguration -> Spec
-rejectPaymentIfRestoringSpec rnm txpConfig = walletPropertySpec "should fail with 403" $ do
-    let nm = makeNetworkMagic rnm dummyProtocolMagic
+rejectPaymentIfRestoringSpec :: HasConfigurations
+                             => ProtocolMagic
+                             -> NetworkMagic
+                             -> TxpConfiguration
+                             -> Spec
+rejectPaymentIfRestoringSpec pm nm txpConfig = walletPropertySpec "should fail with 403" $ do
     PaymentFixture{..} <- newPaymentFixture nm
-    res <- lift $ try (newPaymentBatch dummyProtocolMagic nm txpConfig submitTxTestMode pswd batch)
+    res <- lift $ try (newPaymentBatch pm nm txpConfig submitTxTestMode pswd batch)
     liftIO $ shouldBe res (Left (err403 { errReasonPhrase = "Transaction creation is disabled when the wallet is restoring." }))
 
 -- | Test one single, successful payment.
-oneNewPaymentBatchSpec :: HasConfigurations => RequiresNetworkMagic -> TxpConfiguration -> Spec
-oneNewPaymentBatchSpec rnm txpConfig = walletPropertySpec oneNewPaymentBatchDesc $ do
-    let nm = makeNetworkMagic rnm dummyProtocolMagic
+oneNewPaymentBatchSpec :: HasConfigurations
+                       => ProtocolMagic
+                       -> NetworkMagic
+                       -> TxpConfiguration
+                       -> Spec
+oneNewPaymentBatchSpec pm nm txpConfig = walletPropertySpec oneNewPaymentBatchDesc $ do
     PaymentFixture{..} <- newPaymentFixture nm
 
     -- Force the wallet to be in a (fake) synced state
@@ -149,7 +155,7 @@ oneNewPaymentBatchSpec rnm txpConfig = walletPropertySpec oneNewPaymentBatchDesc
     randomSyncTip <- liftIO $ generate arbitrary
     WS.setWalletSyncTip db walId randomSyncTip
 
-    void $ lift $ newPaymentBatch dummyProtocolMagic nm txpConfig submitTxTestMode pswd batch
+    void $ lift $ newPaymentBatch pm nm txpConfig submitTxTestMode pswd batch
     dstAddrs <- lift $ mapM decodeCTypeOrFail dstCAddrs
     txLinearPolicy <- lift $ (bvdTxFeePolicy <$> gsAdoptedBVData) <&> \case
         TxFeePolicyTxSizeLinear linear -> linear
