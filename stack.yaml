@@ -6,8 +6,6 @@ flags:
 
 extra-package-dbs: []
 
-allow-newer: true
-
 # The dependency graph which was previously here has been dropped in favor of
 # PNG output from the script `scripts/package-dep-graph.sh`, which uses
 # `stack dot` to construct a graph which represents the current state exactly.

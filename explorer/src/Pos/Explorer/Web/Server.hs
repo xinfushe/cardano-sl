@@ -48,7 +48,6 @@ import           Servant.API.Generic (toServant)
 import           Servant.Server (Server, ServerT, err405, errReasonPhrase,
                      serve)
 import           Servant.Server.Generic (AsServerT)
-import           System.Wlog (logDebug)
 
 import           Pos.Crypto (WithHash (..), hash, redeemPkBuild, withHash)
 

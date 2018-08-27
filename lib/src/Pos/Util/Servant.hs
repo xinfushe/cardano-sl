@@ -336,20 +336,23 @@ instance HasSwagger (subApi :> res) =>
 instance HasClient m (subApi :> res) => HasClient m (CDecodeApiArg subApi :> res) where
     type Client m (CDecodeApiArg subApi :> res) = Client m (subApi :> res)
     clientWithRoute p _ req = clientWithRoute p (Proxy @(subApi :> res)) req
-    hoistClientMonad _ _ _ _ = error "no hoistClientMonad here"
+    hoistClientMonad pm _ f cl =
+        hoistClientMonad pm (Proxy @(subApi :> res)) f cl
 
 instance HasClient m (subApi :> res) =>
          HasClient m (WithDefaultApiArg subApi :> res) where
     type Client m (WithDefaultApiArg subApi :> res) = Client m (subApi :> res)
     clientWithRoute p _ req = clientWithRoute p (Proxy @(subApi :> res)) req
-    hoistClientMonad _ _ _ _ = error "no hoistClientMonad here"
+    hoistClientMonad pm _ f cl =
+        hoistClientMonad pm (Proxy @(subApi :> res)) f cl
 
 instance (RunClient m, HasClient m (Verb mt st ct $ ApiModifiedRes mod a)) =>
          HasClient m (VerbMod mod (Verb (mt :: k1) (st :: Nat) (ct :: [*]) a)) where
     type Client m (VerbMod mod (Verb mt st ct a)) = Client m (Verb mt st ct $ ApiModifiedRes mod a)
     clientWithRoute p _ req =
         clientWithRoute p (Proxy @(Verb mt st ct $ ApiModifiedRes mod a)) req
-    hoistClientMonad _ _ _ _ = error "no hoistClientMonad here"
+    hoistClientMonad pm _ f cl =
+        hoistClientMonad pm (Proxy @(Verb mt st ct $ ApiModifiedRes mod a)) f cl
 
 -------------------------------------------------------------------------
 -- Logging
@@ -762,6 +765,8 @@ instance (KnownSymbol sym, Flaggable flag, HasClient m api) => HasClient m (Cust
     type Client m (CustomQueryFlag sym flag :> api) = flag -> Client m api
 
     clientWithRoute p _ req = clientWithRoute p (Proxy @(QueryFlag sym :> api)) req . toBool
+
+    hoistClientMonad pm _ f cl = \as -> hoistClientMonad pm (Proxy :: Proxy api) f (cl as)
 
 instance KnownSymbol s => ApiCanLogArg (CustomQueryFlag s a)
 instance KnownSymbol s => ApiHasArgClass (CustomQueryFlag s a)

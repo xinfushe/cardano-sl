@@ -250,4 +250,5 @@ instance
                 appendToQueryString
                     (toText (symbolVal (Proxy @(IndexToQueryParam res ix))))
                     (Just (toQueryParam sop))
-    hoistClientMonad _ _ _ _ = error "no hoistClientMonad here"
+    hoistClientMonad pm _ f cl =
+        hoistClientMonad pm (Proxy @(SortBy params res :> next)) f cl
