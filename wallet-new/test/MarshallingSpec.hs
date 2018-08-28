@@ -89,6 +89,25 @@ spec = parallel $ describe "Marshalling & Unmarshalling" $ do
         aesonRoundtripProp @SyncThroughput Proxy
         aesonRoundtripProp @AccountIndex Proxy
 
+        -- WalletLayer Errors
+        aesonRoundtripProp  @CreateWalletError Proxy
+        aesonRoundtripProp  @GetWalletError Proxy
+        aesonRoundtripProp  @UpdateWalletError Proxy
+        aesonRoundtripProp  @UpdateWalletPasswordError Proxy
+        aesonRoundtripProp  @DeleteWalletError Proxy
+        aesonRoundtripProp  @GetUtxosError Proxy
+        aesonRoundtripProp  @NewPaymentError Proxy
+        aesonRoundtripProp  @EstimateFeesError Proxy
+        aesonRoundtripProp  @RedeemAdaError Proxy
+        aesonRoundtripProp  @CreateAddressError Proxy
+        aesonRoundtripProp  @ValidateAddressError Proxy
+        aesonRoundtripProp  @CreateAccountError Proxy
+        aesonRoundtripProp  @GetAccountError Proxy
+        aesonRoundtripProp  @GetAccountsError Proxy
+        aesonRoundtripProp  @GetTxError Proxy
+        aesonRoundtripProp  @DeleteAccountError Proxy
+        aesonRoundtripProp  @UpdateAccountError Proxy
+
         -- HttpApiData roundtrips
         httpApiDataRoundtripProp @AccountIndex Proxy
         httpApiDataRoundtripProp @(V1 Txp.TxId) Proxy
