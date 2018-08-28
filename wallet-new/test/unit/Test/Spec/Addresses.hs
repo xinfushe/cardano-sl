@@ -17,6 +17,7 @@ import           Test.QuickCheck (arbitrary, choose, withMaxSuccess)
 import           Test.QuickCheck.Monadic (PropertyM, monadicIO, pick)
 
 import           Pos.Core (Address)
+import           Pos.Core.NetworkMagic (NetworkMagic, RequiresNetworkMagic (..), makeNetworkMagic)
 import           Pos.Crypto (EncryptedSecretKey, safeDeterministicKeyGen)
 
 import           Cardano.Wallet.API.V1.Handlers.Addresses as Handlers
@@ -42,6 +43,7 @@ import qualified Cardano.Wallet.WalletLayer.Kernel.Accounts as Accounts
 import qualified Cardano.Wallet.WalletLayer.Kernel.Addresses as Addresses
 import qualified Cardano.Wallet.WalletLayer.Kernel.Wallets as Wallets
 
+import           Test.Pos.Crypto.Dummy (dummyProtocolMagic)
 import qualified Test.Spec.Fixture as Fixture
 import qualified Test.Spec.Wallets as Wallets
 
@@ -63,10 +65,12 @@ data WithAddressFixture = WithAddressFixture {
 -- | Prepare some fixtures using the 'PropertyM' context to prepare the data,
 -- and execute the 'acid-state' update once the 'PassiveWallet' gets into
 -- scope (after the bracket initialisation).
-prepareFixtures :: Fixture.GenPassiveWalletFixture Fixture
-prepareFixtures = do
+prepareFixtures
+    :: NetworkMagic
+    -> Fixture.GenPassiveWalletFixture Fixture
+prepareFixtures nm = do
     let (_, esk) = safeDeterministicKeyGen (B.pack $ replicate 32 0x42) mempty
-    let newRootId = eskToHdRootId esk
+    let newRootId = eskToHdRootId nm esk
     newRoot <- initHdRoot <$> pure newRootId
                           <*> pure (WalletName "A wallet")
                           <*> pure NoSpendingPassword
@@ -83,145 +87,154 @@ prepareFixtures = do
                          , fixturePw  = pw
                          }
 
-prepareAddressFixture :: Fixture.GenPassiveWalletFixture WithAddressFixture
-prepareAddressFixture = do
+prepareAddressFixture
+    :: NetworkMagic
+    -> Fixture.GenPassiveWalletFixture WithAddressFixture
+prepareAddressFixture nm = do
     spendingPassword <- Fixture.genSpendingPassword
     newWalletRq <- Wallets.genNewWalletRq spendingPassword
     return $ \pw -> do
-        Right v1Wallet <- Wallets.createWallet pw newWalletRq
+        Right v1Wallet <- Wallets.createWallet nm pw newWalletRq
         -- Get all the available accounts
         db <- Kernel.getWalletSnapshot pw
         let Right accs = Accounts.getAccounts (V1.walId v1Wallet) db
         let (acc : _) = IxSet.toList accs
         let newAddressRq = V1.NewAddress spendingPassword (V1.accIndex acc) (V1.walId v1Wallet)
-        res <- Addresses.createAddress pw newAddressRq
+        res <- Addresses.createAddress nm pw newAddressRq
         case res of
              Left e     -> error (show e)
              Right addr -> return (WithAddressFixture addr)
 
-withFixture :: (  Keystore.Keystore
+withFixture :: NetworkMagic
+            -> (  Keystore.Keystore
                -> PassiveWalletLayer IO
                -> PassiveWallet
                -> Fixture
                -> IO a
                )
             -> PropertyM IO a
-withFixture = Fixture.withPassiveWalletFixture prepareFixtures
+withFixture nm = Fixture.withPassiveWalletFixture nm (prepareFixtures nm)
 
-withAddressFixture :: (  Keystore.Keystore
+withAddressFixture :: NetworkMagic
+                   -> (  Keystore.Keystore
                       -> PassiveWalletLayer IO
                       -> PassiveWallet
                       -> WithAddressFixture
                       -> IO a
                       )
                    -> PropertyM IO a
-withAddressFixture = Fixture.withPassiveWalletFixture prepareAddressFixture
+withAddressFixture nm = Fixture.withPassiveWalletFixture nm (prepareAddressFixture nm)
 
 spec :: Spec
-spec = describe "Addresses" $ do
-    describe "CreateAddress" $ do
-        describe "Address creation (wallet layer)" $ do
+spec = do
+    go NMMustBeNothing
+    go NMMustBeJust
+  where
+    go rnm = describe "Addresses" $ do
+        let nm = makeNetworkMagic rnm dummyProtocolMagic
+        describe "CreateAddress" $ do
+            describe "Address creation (wallet layer)" $ do
 
-            prop "works as expected in the happy path scenario" $ withMaxSuccess 200 $
-                monadicIO $ do
-                    withFixture $ \keystore layer _ Fixture{..} -> do
-                        Keystore.insert (WalletIdHdRnd fixtureHdRootId) fixtureESK keystore
-                        let (HdRootId hdRoot) = fixtureHdRootId
-                            (AccountIdHdRnd myAccountId) = fixtureAccountId
-                            wId = sformat build (view fromDb hdRoot)
-                            accIdx = myAccountId ^. hdAccountIdIx . to getHdAccountIx
-                        res <- (WalletLayer._pwlCreateAddress layer) (V1.NewAddress Nothing accIdx (V1.WalletId wId))
-                        (bimap STB STB res) `shouldSatisfy` isRight
+                prop "works as expected in the happy path scenario" $ withMaxSuccess 200 $
+                    monadicIO $ do
+                        withFixture nm $ \keystore layer _ Fixture{..} -> do
+                            Keystore.insert (WalletIdHdRnd fixtureHdRootId) fixtureESK keystore
+                            let (HdRootId hdRoot) = fixtureHdRootId
+                                (AccountIdHdRnd myAccountId) = fixtureAccountId
+                                wId = sformat build (view fromDb hdRoot)
+                                accIdx = myAccountId ^. hdAccountIdIx . to getHdAccountIx
+                            res <- (WalletLayer._pwlCreateAddress layer) (V1.NewAddress Nothing accIdx (V1.WalletId wId))
+                            (bimap STB STB res) `shouldSatisfy` isRight
 
-        describe "Address creation (kernel)" $ do
-            prop "works as expected in the happy path scenario" $ withMaxSuccess 200 $
-                monadicIO $ do
-                    withFixture $ \keystore _ _ Fixture{..} -> do
-                        Keystore.insert (WalletIdHdRnd fixtureHdRootId) fixtureESK keystore
-                        res <- Kernel.createAddress mempty fixtureAccountId fixturePw
-                        (bimap STB STB res) `shouldSatisfy` isRight
+            describe "Address creation (kernel)" $ do
+                prop "works as expected in the happy path scenario" $ withMaxSuccess 200 $
+                    monadicIO $ do
+                        withFixture nm $ \keystore _ _ Fixture{..} -> do
+                            Keystore.insert (WalletIdHdRnd fixtureHdRootId) fixtureESK keystore
+                            res <- Kernel.createAddress nm mempty fixtureAccountId fixturePw
+                            (bimap STB STB res) `shouldSatisfy` isRight
 
-            prop "fails if the account has no associated key in the keystore" $ do
-                monadicIO $ do
-                    withFixture $ \_ _ _ Fixture{..} -> do
-                        res <- Kernel.createAddress mempty fixtureAccountId fixturePw
-                        case res of
-                            (Left (Kernel.CreateAddressKeystoreNotFound acc)) | acc == fixtureAccountId -> return ()
-                            x -> fail (show (bimap STB STB x))
+                prop "fails if the account has no associated key in the keystore" $ do
+                    monadicIO $ do
+                        withFixture nm $ \_ _ _ Fixture{..} -> do
+                            res <- Kernel.createAddress nm mempty fixtureAccountId fixturePw
+                            case res of
+                                (Left (Kernel.CreateAddressKeystoreNotFound acc)) | acc == fixtureAccountId -> return ()
+                                x -> fail (show (bimap STB STB x))
 
-            prop "fails if the parent account doesn't exist" $ do
-                monadicIO $ do
-                    withFixture $ \keystore _ _ Fixture{..} -> do
-                        Keystore.insert (WalletIdHdRnd fixtureHdRootId) fixtureESK keystore
-                        let (AccountIdHdRnd hdAccountId) = fixtureAccountId
-                        void $ update (fixturePw ^. wallets) (DeleteHdAccount hdAccountId)
-                        res <- Kernel.createAddress mempty fixtureAccountId fixturePw
-                        case res of
-                            Left (Kernel.CreateAddressUnknownHdAccount _) -> return ()
-                            x -> fail (show (bimap STB STB x))
+                prop "fails if the parent account doesn't exist" $ do
+                    monadicIO $ do
+                        withFixture nm $ \keystore _ _ Fixture{..} -> do
+                            Keystore.insert (WalletIdHdRnd fixtureHdRootId) fixtureESK keystore
+                            let (AccountIdHdRnd hdAccountId) = fixtureAccountId
+                            void $ update (fixturePw ^. wallets) (DeleteHdAccount hdAccountId)
+                            res <- Kernel.createAddress nm mempty fixtureAccountId fixturePw
+                            case res of
+                                Left (Kernel.CreateAddressUnknownHdAccount _) -> return ()
+                                x -> fail (show (bimap STB STB x))
 
-        describe "Address creation (Servant)" $ do
-            prop "works as expected in the happy path scenario" $ do
-                monadicIO $
-                    withFixture $ \keystore layer _ Fixture{..} -> do
-                        Keystore.insert (WalletIdHdRnd fixtureHdRootId) fixtureESK keystore
-                        let (HdRootId hdRoot) = fixtureHdRootId
-                            (AccountIdHdRnd myAccountId) = fixtureAccountId
-                            wId = sformat build (view fromDb hdRoot)
-                            accIdx = myAccountId ^. hdAccountIdIx . to getHdAccountIx
-                            req = V1.NewAddress Nothing accIdx (V1.WalletId wId)
-                        res <- runExceptT . runHandler' $ Handlers.newAddress layer req
-                        (bimap identity STB res) `shouldSatisfy` isRight
+            describe "Address creation (Servant)" $ do
+                prop "works as expected in the happy path scenario" $ do
+                    monadicIO $
+                        withFixture nm $ \keystore layer _ Fixture{..} -> do
+                            Keystore.insert (WalletIdHdRnd fixtureHdRootId) fixtureESK keystore
+                            let (HdRootId hdRoot) = fixtureHdRootId
+                                (AccountIdHdRnd myAccountId) = fixtureAccountId
+                                wId = sformat build (view fromDb hdRoot)
+                                accIdx = myAccountId ^. hdAccountIdIx . to getHdAccountIx
+                                req = V1.NewAddress Nothing accIdx (V1.WalletId wId)
+                            res <- runExceptT . runHandler' $ Handlers.newAddress layer req
+                            (bimap identity STB res) `shouldSatisfy` isRight
 
-        describe "Address creation (wallet layer & kernel consistency)" $ do
-            prop "layer & kernel agrees on the result" $ do
-                monadicIO $ do
-                    res1 <- withFixture $ \keystore _ _ Fixture{..} -> do
-                        Keystore.insert (WalletIdHdRnd fixtureHdRootId) fixtureESK keystore
-                        Kernel.createAddress mempty fixtureAccountId fixturePw
-                    res2 <- withFixture $ \keystore layer _ Fixture{..} -> do
-                        Keystore.insert (WalletIdHdRnd fixtureHdRootId) fixtureESK keystore
-                        let (HdRootId hdRoot) = fixtureHdRootId
-                            (AccountIdHdRnd myAccountId) = fixtureAccountId
-                            wId = sformat build (view fromDb hdRoot)
-                            accIdx = myAccountId ^. hdAccountIdIx . to getHdAccountIx
-                        (WalletLayer._pwlCreateAddress layer) (V1.NewAddress Nothing accIdx (V1.WalletId wId))
-                    case res2 of
-                         Left (WalletLayer.CreateAddressError err) ->
-                             return $ (bimap STB STB res1) `shouldBe` (bimap STB STB (Left err))
-                         Left (WalletLayer.CreateAddressAddressDecodingFailed _) ->
-                             fail "Layer & Kernel mismatch: impossible error, CreateAddressAddressDecodingFailed"
-                         Right _ -> do
-                             -- If we get and 'Address', let's check that this is the case also for
-                             -- the kernel run. Unfortunately we cannot compare the two addresses for equality
-                             -- because the random index will be generated with a seed which changes every time
-                             -- as we uses random, IO-based generation deep down the guts.
-                             return $ (bimap STB STB res1) `shouldSatisfy` isRight
+            describe "Address creation (wallet layer & kernel consistency)" $ do
+                prop "layer & kernel agrees on the result" $ do
+                    monadicIO $ do
+                        res1 <- withFixture nm $ \keystore _ _ Fixture{..} -> do
+                            Keystore.insert (WalletIdHdRnd fixtureHdRootId) fixtureESK keystore
+                            Kernel.createAddress nm mempty fixtureAccountId fixturePw
+                        res2 <- withFixture nm $ \keystore layer _ Fixture{..} -> do
+                            Keystore.insert (WalletIdHdRnd fixtureHdRootId) fixtureESK keystore
+                            let (HdRootId hdRoot) = fixtureHdRootId
+                                (AccountIdHdRnd myAccountId) = fixtureAccountId
+                                wId = sformat build (view fromDb hdRoot)
+                                accIdx = myAccountId ^. hdAccountIdIx . to getHdAccountIx
+                            (WalletLayer._pwlCreateAddress layer) (V1.NewAddress Nothing accIdx (V1.WalletId wId))
+                        case res2 of
+                            Left (WalletLayer.CreateAddressError err) ->
+                                return $ (bimap STB STB res1) `shouldBe` (bimap STB STB (Left err))
+                            Left (WalletLayer.CreateAddressAddressDecodingFailed _) ->
+                                fail "Layer & Kernel mismatch: impossible error, CreateAddressAddressDecodingFailed"
+                            Right _ -> do
+                                -- If we get and 'Address', let's check that this is the case also for
+                                -- the kernel run. Unfortunately we cannot compare the two addresses for equality
+                                -- because the random index will be generated with a seed which changes every time
+                                -- as we uses random, IO-based generation deep down the guts.
+                                return $ (bimap STB STB res1) `shouldSatisfy` isRight
 
-    describe "ValidateAddress" $ do
-        describe "Address validation (wallet layer)" $ do
+        describe "ValidateAddress" $ do
+            describe "Address validation (wallet layer)" $ do
 
-            prop "works as expected in the happy path scenario (valid address, ours)" $ withMaxSuccess 25 $
-                monadicIO $ do
-                    withAddressFixture $ \_ layer _ WithAddressFixture{..} -> do
-                        res <- WalletLayer.validateAddress layer (sformat build (V1.unV1 . V1.addrId $ fixtureAddress))
-                        bimap STB STB res `shouldSatisfy` isRight
+                prop "works as expected in the happy path scenario (valid address, ours)" $ withMaxSuccess 25 $
+                    monadicIO $ do
+                        withAddressFixture nm $ \_ layer _ WithAddressFixture{..} -> do
+                            res <- WalletLayer.validateAddress layer (sformat build (V1.unV1 . V1.addrId $ fixtureAddress))
+                            bimap STB STB res `shouldSatisfy` isRight
 
-            prop "rejects a malformed address" $ withMaxSuccess 1 $
-                monadicIO $ do
-                    withAddressFixture $ \_ layer _ WithAddressFixture{..} -> do
-                        res <- WalletLayer.validateAddress layer "foobar"
-                        case res of
-                             Left (WalletLayer.ValidateAddressDecodingFailed "foobar") -> return ()
-                             Left err -> fail $ "Got different error than expected: " <> show err
-                             Right _ -> fail "I was expecting a failure, but it didn't happen."
+                prop "rejects a malformed address" $ withMaxSuccess 1 $
+                    monadicIO $ do
+                        withAddressFixture nm $ \_ layer _ WithAddressFixture{..} -> do
+                            res <- WalletLayer.validateAddress layer "foobar"
+                            case res of
+                                Left (WalletLayer.ValidateAddressDecodingFailed "foobar") -> return ()
+                                Left err -> fail $ "Got different error than expected: " <> show err
+                                Right _ -> fail "I was expecting a failure, but it didn't happen."
 
-            prop "rejects an address which is not ours" $ withMaxSuccess 1 $ do
-                monadicIO $ do
-                    (randomAddr :: Address) <- pick arbitrary
-                    withAddressFixture $ \_ layer _ WithAddressFixture{..} -> do
-                        res <- WalletLayer.validateAddress layer (sformat build randomAddr)
-                        case res of
-                             Left (WalletLayer.ValidateAddressNotOurs _) -> return ()
-                             Left err -> fail $ "Got different error than expected: " <> show err
-                             Right _ -> fail "I was expecting a failure, but it didn't happen."
+                prop "rejects an address which is not ours" $ withMaxSuccess 1 $ do
+                    monadicIO $ do
+                        (randomAddr :: Address) <- pick arbitrary
+                        withAddressFixture nm $ \_ layer _ WithAddressFixture{..} -> do
+                            res <- WalletLayer.validateAddress layer (sformat build randomAddr)
+                            case res of
+                                Left (WalletLayer.ValidateAddressNotOurs _) -> return ()
+                                Left err -> fail $ "Got different error than expected: " <> show err
+                                Right _ -> fail "I was expecting a failure, but it didn't happen."

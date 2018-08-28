@@ -17779,6 +17779,7 @@ license = stdenv.lib.licenses.mit;
 , cardano-sl-core
 , cardano-sl-core-test
 , cardano-sl-crypto
+, cardano-sl-crypto-test
 , cardano-sl-db
 , cardano-sl-infra
 , cardano-sl-networking
@@ -18009,6 +18010,7 @@ cardano-sl-client
 cardano-sl-core
 cardano-sl-core-test
 cardano-sl-crypto
+cardano-sl-crypto-test
 cardano-sl-db
 cardano-sl-util
 cardano-sl-util-test

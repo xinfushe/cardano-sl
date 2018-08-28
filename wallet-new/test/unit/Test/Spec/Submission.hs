@@ -27,11 +27,13 @@ import qualified Formatting as F
 import           Formatting.Buildable (build)
 import qualified Pos.Core as Core
 import           Pos.Core.Attributes (Attributes (..), UnparsedFields (..))
+import           Pos.Core.NetworkMagic (NetworkMagic, RequiresNetworkMagic (..), makeNetworkMagic)
 import qualified Pos.Core.Txp as Txp
 import           Pos.Crypto.Hashing (hash)
 import           Pos.Crypto.Signing.Safe (safeDeterministicKeyGen)
 import           Serokell.Util.Text (listJsonIndent)
 import qualified Test.Pos.Core.Arbitrary.Txp as Txp
+import           Test.Pos.Crypto.Dummy (dummyProtocolMagic)
 
 import           Cardano.Wallet.Kernel.Util (disjoint)
 import           Test.QuickCheck (Gen, Property, arbitrary, choose, conjoin,
@@ -57,14 +59,14 @@ genPending pMagic = do
     return $ Pending.fromTransactions elems
 
 -- | An hardcoded 'HdAccountId'.
-myAccountId :: HdAccountId
-myAccountId = HdAccountId {
+myAccountId :: NetworkMagic -> HdAccountId
+myAccountId nm = HdAccountId {
       _hdAccountIdParent = myHdRootId
     , _hdAccountIdIx     = HdAccountIx 0x42
     }
     where
         myHdRootId :: HdRootId
-        myHdRootId = eskToHdRootId .
+        myHdRootId = (eskToHdRootId nm) .
                                snd .
                                safeDeterministicKeyGen (BS.pack (replicate 32 0)) $ mempty
 
@@ -73,9 +75,9 @@ myAccountId = HdAccountId {
 -- things too far away in the future is not very useful for testing, if not
 -- testing that a scheduler will never reschedule something which cannot be
 -- reached.
-genSchedule :: MaxRetries -> Map HdAccountId Pending -> Slot -> Gen Schedule
-genSchedule maxRetries pending (Slot lowerBound) = do
-    let pendingTxs  = pending ^. at myAccountId
+genSchedule :: NetworkMagic -> MaxRetries -> Map HdAccountId Pending -> Slot -> Gen Schedule
+genSchedule nm maxRetries pending (Slot lowerBound) = do
+    let pendingTxs  = pending ^. at (myAccountId nm)
                                . anon Pending.empty Pending.null
                                . to Pending.toList
     slots    <- vectorOf (length pendingTxs) (fmap Slot (choose (lowerBound, lowerBound + 10)))
@@ -84,23 +86,24 @@ genSchedule maxRetries pending (Slot lowerBound) = do
     return $ Schedule events mempty
     where
         updateFn acc (slot, (txId, txAux), retries) =
-            let s = ScheduleSend myAccountId txId txAux (SubmissionCount retries)
+            let s = ScheduleSend (myAccountId nm) txId txAux (SubmissionCount retries)
                 e = ScheduleEvents [s] mempty
             in prependEvents slot e acc
 
-genWalletSubmissionState :: HdAccountId -> MaxRetries -> Gen WalletSubmissionState
-genWalletSubmissionState accId maxRetries = do
+genWalletSubmissionState :: NetworkMagic -> HdAccountId -> MaxRetries -> Gen WalletSubmissionState
+genWalletSubmissionState nm accId maxRetries = do
     pending   <- M.singleton accId <$> genPending (Core.ProtocolMagic 0)
     let slot  = Slot 0 -- Make the layer always start from 0, to make running the specs predictable.
-    scheduler <- genSchedule maxRetries pending slot
+    scheduler <- genSchedule nm maxRetries pending slot
     return $ WalletSubmissionState pending scheduler slot
 
-genWalletSubmission :: HdAccountId
+genWalletSubmission :: NetworkMagic
+                    -> HdAccountId
                     -> MaxRetries
                     -> ResubmissionFunction
                     -> Gen WalletSubmission
-genWalletSubmission accId maxRetries rho =
-    WalletSubmission <$> pure rho <*> genWalletSubmissionState accId maxRetries
+genWalletSubmission nm accId maxRetries rho =
+    WalletSubmission <$> pure rho <*> genWalletSubmissionState nm accId maxRetries
 
 {-------------------------------------------------------------------------------
   Submission layer tests
@@ -127,34 +130,36 @@ giveUpAfter retries currentSlot scheduled oldScheduler =
     in defaultResubmitFunction rPolicy currentSlot scheduled oldScheduler
 
 -- | Checks whether or not the second input is fully contained within the first.
-shouldContainPending :: Pending
+shouldContainPending :: NetworkMagic
+                     -> Pending
                      -> M.Map HdAccountId Pending
                      -> Bool
-shouldContainPending p1 p2 =
+shouldContainPending nm p1 p2 =
     let pending1 = p1
-        pending2 = p2 ^. at myAccountId . anon Pending.empty Pending.null
+        pending2 = p2 ^. at (myAccountId nm) . anon Pending.empty Pending.null
     in pending2 `Pending.isSubsetOf` pending1
 
 -- | Checks that @any@ of the input transactions (in the pending set) appears
 -- in the local pending set of the given 'WalletSubmission'.
-doesNotContainPending :: M.Map HdAccountId Pending
+doesNotContainPending :: NetworkMagic
+                      -> M.Map HdAccountId Pending
                       -> WalletSubmission
                       -> Bool
-doesNotContainPending p ws =
-    let pending      = p ^. at myAccountId . anon Pending.empty Pending.null
-        localPending = ws ^. localPendingSet myAccountId
+doesNotContainPending nm p ws =
+    let pending      = p ^. at (myAccountId nm) . anon Pending.empty Pending.null
+        localPending = ws ^. localPendingSet (myAccountId nm)
     in Pending.disjoint localPending pending
 
 toTxIdSet :: Pending -> Set Txp.TxId
 toTxIdSet = Pending.transactionIds
 
-toTxIdSet' :: M.Map HdAccountId Pending -> Set Txp.TxId
-toTxIdSet' p = p ^. at myAccountId
+toTxIdSet' :: NetworkMagic -> M.Map HdAccountId Pending -> Set Txp.TxId
+toTxIdSet' nm p = p ^. at (myAccountId nm)
                   . anon Pending.empty Pending.null
                   . to Pending.transactionIds
 
-toTxIdSet'' :: M.Map HdAccountId (Set Txp.TxId) -> Set Txp.TxId
-toTxIdSet'' p = p ^. at myAccountId . anon S.empty S.null
+toTxIdSet'' :: NetworkMagic -> M.Map HdAccountId (Set Txp.TxId) -> Set Txp.TxId
+toTxIdSet'' nm p = p ^. at (myAccountId nm) . anon S.empty S.null
 
 pendingFromTxs :: [Txp.TxAux] -> Pending
 pendingFromTxs = Pending.fromTransactions
@@ -216,16 +221,21 @@ dependentTransactions = do
 ---
 --- Pure generators, running in Identity
 ---
-genPureWalletSubmission :: HdAccountId -> Gen (ShowThroughBuild WalletSubmission)
-genPureWalletSubmission accId =
-    STB <$> genWalletSubmission accId 255 constantResubmit
+genPureWalletSubmission
+    :: NetworkMagic
+    -> HdAccountId
+    -> Gen (ShowThroughBuild WalletSubmission)
+genPureWalletSubmission nm accId =
+    STB <$> genWalletSubmission nm accId 255 constantResubmit
 
-genPurePair :: Gen (ShowThroughBuild (WalletSubmission, M.Map HdAccountId Pending))
-genPurePair = do
-    STB layer <- genPureWalletSubmission myAccountId
+genPurePair
+    :: NetworkMagic
+    -> Gen (ShowThroughBuild (WalletSubmission, M.Map HdAccountId Pending))
+genPurePair nm = do
+    STB layer <- genPureWalletSubmission nm (myAccountId nm)
     pending <- genPending (Core.ProtocolMagic 0)
-    let pending' = Pending.delete (toTxIdSet $ layer ^. localPendingSet myAccountId) pending
-    pure $ STB (layer, M.singleton myAccountId pending')
+    let pending' = Pending.delete (toTxIdSet $ layer ^. localPendingSet (myAccountId nm)) pending
+    pure $ STB (layer, M.singleton (myAccountId nm) pending')
 
 class ToTxIds a where
     toTxIds :: a -> [Txp.TxId]
@@ -282,36 +292,39 @@ addPending' m ws = M.foldlWithKey' (\acc k v -> addPending k v acc) ws m
 
 spec :: Spec
 spec = do
-    describe "Test wallet submission layer" $ do
-
+    go NMMustBeNothing
+    go NMMustBeJust
+  where
+    go rnm = describe "Test wallet submission layer" $ do
+      let nm = makeNetworkMagic rnm dummyProtocolMagic
       it "supports addition of pending transactions" $
-          forAll genPurePair $ \(unSTB -> (submission, toAdd)) ->
+          forAll (genPurePair nm) $ \(unSTB -> (submission, toAdd)) ->
               let currentSlot = submission ^. getCurrentSlot
                   submission' = addPending' toAdd submission
                   schedule = submission' ^. getSchedule
                   ((ScheduleEvents toSend _),_) = scheduledFor (mapSlot succ currentSlot) schedule
               in conjoin [
-                   failIf "localPending set not updated" shouldContainPending (submission' ^. localPendingSet myAccountId) toAdd
+                   failIf "localPending set not updated" (shouldContainPending nm) (submission' ^. localPendingSet (myAccountId nm)) toAdd
                    -- Check that all the added transactions are scheduled for the next slot
-                 , failIf "not infix of" S.isSubsetOf (toTxIdSet' toAdd) (S.fromList $ toTxIds toSend)
+                 , failIf "not infix of" S.isSubsetOf (toTxIdSet' nm toAdd) (S.fromList $ toTxIds toSend)
                  ]
 
       it "supports deletion of pending transactions" $
-          forAll genPurePair $ \(unSTB -> (submission, toRemove)) ->
-              doesNotContainPending toRemove $ remPendingById myAccountId (toTxIdSet' toRemove) submission
+          forAll (genPurePair nm) $ \(unSTB -> (submission, toRemove)) ->
+              doesNotContainPending nm toRemove $ remPendingById (myAccountId nm) (toTxIdSet' nm toRemove) submission
 
       it "remPending . addPending = id" $
-          forAll genPurePair $ \(unSTB -> (submission, pending)) ->
-              let originallyPending = submission ^. localPendingSet myAccountId
-                  currentlyPending  = view (localPendingSet myAccountId)
-                                           (remPendingById myAccountId
-                                                           (toTxIdSet' pending)
+          forAll (genPurePair nm) $ \(unSTB -> (submission, pending)) ->
+              let originallyPending = submission ^. localPendingSet (myAccountId nm)
+                  currentlyPending  = view (localPendingSet (myAccountId nm))
+                                           (remPendingById (myAccountId nm)
+                                                           (toTxIdSet' nm pending)
                                                            (addPending' pending submission)
                                            )
               in failIf "the two pending set are not equal" ((==) `on` Pending.transactions) originallyPending currentlyPending
 
       it "increases its internal slot after ticking" $ do
-          forAll (genPureWalletSubmission myAccountId) $ \(unSTB -> submission) ->
+          forAll (genPureWalletSubmission nm (myAccountId nm)) $ \(unSTB -> submission) ->
               let slotNow  = submission ^. getCurrentSlot
                   (_, _, ws') = tick submission
                   in failIf "internal slot didn't increase" (==) (ws' ^. getCurrentSlot) (mapSlot succ slotNow)
@@ -328,7 +341,7 @@ spec = do
               ]
 
       it "limit retries correctly" $ do
-          forAll genPurePair $ \(unSTB -> (ws, pending)) ->
+          forAll (genPurePair nm) $ \(unSTB -> (ws, pending)) ->
               let ws' = (addPending' pending ws) & wsResubmissionFunction .~ giveUpAfter 3
                   (evicted1, _, ws1) = tick ws'
                   (evicted2, _, ws2) = tick ws1
@@ -337,12 +350,12 @@ spec = do
                   (evicted5, _, ws5) = tick ws4
                   (evicted6, _, _) = tick ws5
               in conjoin [
-                   failIf "evicted1 includes any of pending" (\e p -> disjoint (toTxIdSet' p) (toTxIdSet'' e)) evicted1 pending
-                 , failIf "evicted2 includes any of pending" (\e p -> disjoint (toTxIdSet' p) (toTxIdSet'' e)) evicted2 pending
-                 , failIf "evicted3 includes any of pending" (\e p -> disjoint (toTxIdSet' p) (toTxIdSet'' e)) evicted3 pending
-                 , failIf "evicted4 includes any of pending" (\e p -> disjoint (toTxIdSet' p) (toTxIdSet'' e)) evicted4 pending
-                 , failIf "evicted5 doesn't contain all pending" (\e p -> (toTxIdSet' p) `S.isSubsetOf` (toTxIdSet'' e)) evicted5 pending
-                 , failIf "evicted6 contains something from evicted5" (\e6 e5 -> disjoint (toTxIdSet'' e5) (toTxIdSet'' e6)) evicted6 evicted5
+                   failIf "evicted1 includes any of pending" (\e p -> disjoint (toTxIdSet' nm p) (toTxIdSet'' nm e)) evicted1 pending
+                 , failIf "evicted2 includes any of pending" (\e p -> disjoint (toTxIdSet' nm p) (toTxIdSet'' nm e)) evicted2 pending
+                 , failIf "evicted3 includes any of pending" (\e p -> disjoint (toTxIdSet' nm p) (toTxIdSet'' nm e)) evicted3 pending
+                 , failIf "evicted4 includes any of pending" (\e p -> disjoint (toTxIdSet' nm p) (toTxIdSet'' nm e)) evicted4 pending
+                 , failIf "evicted5 doesn't contain all pending" (\e p -> (toTxIdSet' nm p) `S.isSubsetOf` (toTxIdSet'' nm e)) evicted5 pending
+                 , failIf "evicted6 contains something from evicted5" (\e6 e5 -> disjoint (toTxIdSet'' nm e5) (toTxIdSet'' nm e6)) evicted6 evicted5
                  ]
 
       describe "tickSlot" $ do
@@ -351,7 +364,7 @@ spec = do
           -- are all scheduled for submission.
           it "Given D->C->B->A all in the same slot, they are all sent" $ do
               let generator = do (b,c,a,d) <- dependentTransactions
-                                 ws  <- addPending myAccountId (pendingFromTxs (map labelledTxAux [a,b,c,d])) . unSTB <$> genPureWalletSubmission myAccountId
+                                 ws  <- addPending (myAccountId nm) (pendingFromTxs (map labelledTxAux [a,b,c,d])) . unSTB <$> genPureWalletSubmission nm (myAccountId nm)
                                  txs <- shuffle [b,c,a,d]
                                  return $ STB (ws, txs)
               forAll generator $ \(unSTB -> (submission, txs)) ->
@@ -373,8 +386,8 @@ spec = do
           -- send anything.
           it "Given D->C->B->A, if C,B,A are in the future, D is not sent this slot" $ do
               let generator = do (b,c,a,d) <- dependentTransactions
-                                 ws  <- addPending myAccountId (pendingFromTxs (map labelledTxAux [a,b,c])) . unSTB <$> genPureWalletSubmission myAccountId
-                                 return $ STB (addPending myAccountId (pendingFromTxs (map labelledTxAux [d])) ((\(_,_,s) -> s) . tick $ ws), d)
+                                 ws  <- addPending (myAccountId nm) (pendingFromTxs (map labelledTxAux [a,b,c])) . unSTB <$> genPureWalletSubmission nm (myAccountId nm)
+                                 return $ STB (addPending (myAccountId nm) (pendingFromTxs (map labelledTxAux [d])) ((\(_,_,s) -> s) . tick $ ws), d)
               forAll generator $ \(unSTB -> (submission, d)) ->
                   let currentSlot = submission ^. getCurrentSlot
                       schedule = submission ^. getSchedule
@@ -401,9 +414,9 @@ spec = do
           it "Given D->C->B->A, can send [A,B] now, [D,C] in the future" $ do
               let generator :: Gen (ShowThroughBuild (WalletSubmission, [LabelledTxAux]))
                   generator = do (b,c,a,d) <- dependentTransactions
-                                 ws  <- addPending myAccountId (pendingFromTxs (map labelledTxAux [a,b])) . unSTB <$> genPureWalletSubmission myAccountId
+                                 ws  <- addPending (myAccountId nm) (pendingFromTxs (map labelledTxAux [a,b])) . unSTB <$> genPureWalletSubmission nm (myAccountId nm)
                                  let (_, _, ws')  = tick ws
-                                 let ws'' = addPending myAccountId (pendingFromTxs (map labelledTxAux [d])) ws'
+                                 let ws'' = addPending (myAccountId nm) (pendingFromTxs (map labelledTxAux [d])) ws'
                                  return $ STB (ws'', [a,b,c,d])
 
               forAll generator $ \(unSTB -> (submission1, [a,b,c,d])) ->
@@ -412,8 +425,8 @@ spec = do
 
                       -- Let's assume that @A@ and @B@ finally are adopted,
                       -- and the wallet calls 'remPending' on them.
-                      modifyPending = addPending myAccountId (pendingFromTxs (map labelledTxAux [c]))
-                                    . remPendingById myAccountId (toTxIdSet (pendingFromTxs (map labelledTxAux [a,b])))
+                      modifyPending = addPending (myAccountId nm) (pendingFromTxs (map labelledTxAux [c]))
+                                    . remPendingById (myAccountId nm) (toTxIdSet (pendingFromTxs (map labelledTxAux [a,b])))
                       (_, _, submission2) = (\(e,s,st) -> (e, s, modifyPending st)) . tick $ submission1
 
                       -- We are in slot 2 now. During slot 2, @D@ is scheduled and

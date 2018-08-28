@@ -24,6 +24,7 @@ import qualified Formatting.Buildable
 import           Pos.Chain.Txp (Utxo, formatUtxo)
 import           Pos.Core (HasConfiguration)
 import           Pos.Core.Chrono
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Crypto (EncryptedSecretKey)
 
 import qualified Cardano.Wallet.Kernel.BListener as Kernel
@@ -171,12 +172,13 @@ interpretT injIntEx mkWallet EventCallbacks{..} Inductive{..} =
 -------------------------------------------------------------------------------}
 
 equivalentT :: forall h e m. (Hash h Addr, MonadIO m, MonadFail m)
-            => Internal.ActiveWallet
+            => NetworkMagic
+            -> Internal.ActiveWallet
             -> EncryptedSecretKey
             -> (DSL.Transaction h Addr -> Wallet h Addr)
             -> Inductive h Addr
             -> TranslateT e m (Validated EquivalenceViolation (Wallet h Addr, IntCtxt h))
-equivalentT activeWallet esk = \mkWallet w ->
+equivalentT nm activeWallet esk = \mkWallet w ->
     fmap validatedFromEither
       $ catchTranslateErrors
       $ interpretT notChecked mkWallet EventCallbacks{..} w
@@ -194,7 +196,8 @@ equivalentT activeWallet esk = \mkWallet w ->
                 -> Utxo
                 -> TranslateT EquivalenceViolation m HD.HdAccountId
     walletBootT ctxt utxo = do
-        res <- liftIO $ Kernel.createWalletHdRnd passiveWallet
+        res <- liftIO $ Kernel.createWalletHdRnd nm
+                                                 passiveWallet
                                                  False
                                                  walletName
                                                  assuranceLevel
@@ -211,9 +214,9 @@ equivalentT activeWallet esk = \mkWallet w ->
             walletName       = HD.WalletName "(test wallet)"
             assuranceLevel   = HD.AssuranceLevelNormal
 
-            utxoByAccount = prefilterUtxo rootId esk utxo
+            utxoByAccount = prefilterUtxo nm rootId esk utxo
             accountIds    = Map.keys utxoByAccount
-            rootId        = HD.eskToHdRootId esk
+            rootId        = HD.eskToHdRootId nm esk
 
             createWalletErr e =
                 error $ "ERROR: could not create the HdWallet due to " <> show e
@@ -238,7 +241,7 @@ equivalentT activeWallet esk = \mkWallet w ->
                       -> RawResolvedBlock
                       -> TranslateT EquivalenceViolation m ()
     walletApplyBlockT ctxt accountId block = do
-        liftIO $ Kernel.applyBlock passiveWallet (fromRawResolvedBlock block)
+        liftIO $ Kernel.applyBlock nm passiveWallet (fromRawResolvedBlock block)
         checkWalletState ctxt accountId
 
     walletNewPendingT :: InductiveCtxt h
@@ -248,7 +251,7 @@ equivalentT activeWallet esk = \mkWallet w ->
     walletNewPendingT ctxt accountId tx = do
         -- meta <- liftIO $ Kernel.toMeta accountId tx
         -- TODO: should meta history be tested here?
-        _ <- liftIO $ Kernel.newPending activeWallet accountId (rawResolvedTx tx) Nothing
+        _ <- liftIO $ Kernel.newPending nm activeWallet accountId (rawResolvedTx tx) Nothing
         checkWalletState ctxt accountId
 
     walletRollbackT :: InductiveCtxt h

@@ -16,6 +16,7 @@ import           Test.QuickCheck (withMaxSuccess)
 import           Test.QuickCheck.Monadic (monadicIO, pick)
 
 import           Pos.Core as Core
+import           Pos.Core.NetworkMagic (RequiresNetworkMagic (..), makeNetworkMagic)
 
 import           Cardano.Wallet.API.Request
 import           Cardano.Wallet.API.Request.Pagination
@@ -34,6 +35,7 @@ import           Cardano.Wallet.Kernel.Types (AccountId (..), WalletId (..))
 import           Cardano.Wallet.WalletLayer (walletPassiveLayer)
 import qualified Cardano.Wallet.WalletLayer as WalletLayer
 
+import           Test.Pos.Crypto.Dummy (dummyProtocolMagic)
 import qualified Test.Spec.Addresses as Addresses
 import           Test.Spec.CoinSelection.Generators (InitialBalance (..),
                      Pay (..))
@@ -45,13 +47,16 @@ import           Util.Buildable (ShowThroughBuild (..))
 {-# ANN module ("HLint: ignore Reduce duplication" :: Text) #-}
 
 spec :: Spec
-spec =
-    describe "GetTransactions" $ do
-
+spec = do
+    go NMMustBeNothing
+    go NMMustBeJust
+  where
+    go rnm = describe "GetTransactions" $ do
+        let nm = makeNetworkMagic rnm dummyProtocolMagic
         prop "scenario: Layer.CreateAddress -> TxMeta.putTxMeta -> Layer.getTransactions works properly." $ withMaxSuccess 50 $
             monadicIO $ do
                 testMetaSTB <- pick genMeta
-                Addresses.withFixture $ \keystore layer pwallet Addresses.Fixture{..} -> do
+                Addresses.withFixture nm $ \keystore layer pwallet Addresses.Fixture{..} -> do
                     liftIO $ Keystore.insert (WalletIdHdRnd fixtureHdRootId) fixtureESK keystore
                     let (HdRootId hdRoot) = fixtureHdRootId
                         (AccountIdHdRnd myAccountId) = fixtureAccountId
@@ -95,7 +100,7 @@ spec =
 
         prop "scenario: Layer.pay -> Layer.getTransactions works properly. Tx status should be Applying " $ withMaxSuccess 50 $
             monadicIO $ do
-                NewPayment.withFixture @IO (InitialADA 10000) (PayLovelace 10) $ \keystore activeLayer aw NewPayment.Fixture{..} -> do
+                NewPayment.withFixture @IO nm (InitialADA 10000) (PayLovelace 10) $ \keystore activeLayer aw NewPayment.Fixture{..} -> do
                     liftIO $ Keystore.insert (WalletIdHdRnd fixtureHdRootId) fixtureESK keystore
                     let (AccountIdHdRnd hdAccountId)  = fixtureAccountId
                     let (HdRootId (InDb rootAddress)) = fixtureHdRootId

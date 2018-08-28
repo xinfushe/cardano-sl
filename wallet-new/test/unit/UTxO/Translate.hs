@@ -107,7 +107,7 @@ runTranslateT (TranslateT ta) =
     withDefUpdateConfiguration $
       let env :: TranslateEnv
           env = TranslateEnv {
-                    teContext       = initContext (initCardanoContext pm nm)
+                    teContext       = initContext nm (initCardanoContext pm nm)
                   , teConfig        = Dict
                   , teUpdate        = Dict
                   }
