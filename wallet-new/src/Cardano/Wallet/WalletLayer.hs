@@ -352,6 +352,75 @@ instance Arbitrary GetTxError where
 instance Exception GetTxError
 
 ------------------------------------------------------------
+-- Active wallet errors
+------------------------------------------------------------
+
+data NewPaymentError =
+      NewPaymentError Kernel.PaymentError
+    | NewPaymentTimeLimitReached TimeExecutionLimit
+    | NewPaymentWalletIdDecodingFailed Text
+    | NewPaymentUnknownAccountId Kernel.UnknownHdAccount
+
+-- | Unsound show instance needed for the 'Exception' instance.
+instance Show NewPaymentError where
+    show = formatToString build
+
+instance Exception NewPaymentError
+
+instance Buildable NewPaymentError where
+    build (NewPaymentError kernelErr) =
+        bprint ("NewPaymentError " % build) kernelErr
+    build (NewPaymentTimeLimitReached ter) =
+        bprint ("NewPaymentTimeLimitReached " % build) ter
+    build (NewPaymentWalletIdDecodingFailed txt) =
+        bprint ("NewPaymentWalletIdDecodingFailed " % build) txt
+    build (NewPaymentUnknownAccountId err) =
+        bprint ("NewPaymentUnknownAccountId " % build) err
+
+
+data EstimateFeesError =
+      EstimateFeesError Kernel.EstimateFeesError
+    | EstimateFeesTimeLimitReached TimeExecutionLimit
+    | EstimateFeesWalletIdDecodingFailed Text
+
+-- | Unsound show instance needed for the 'Exception' instance.
+instance Show EstimateFeesError where
+    show = formatToString build
+
+instance Exception EstimateFeesError
+
+instance Buildable EstimateFeesError where
+    build (EstimateFeesError kernelErr) =
+        bprint ("EstimateFeesError " % build) kernelErr
+    build (EstimateFeesTimeLimitReached ter) =
+        bprint ("EstimateFeesTimeLimitReached " % build) ter
+    build (EstimateFeesWalletIdDecodingFailed txt) =
+        bprint ("EstimateFeesWalletIdDecodingFailed " % build) txt
+
+instance Arbitrary EstimateFeesError where
+    arbitrary = oneof [ EstimateFeesError <$> arbitrary
+                      , EstimateFeesTimeLimitReached <$> arbitrary
+                      ]
+
+data RedeemAdaError =
+    RedeemAdaError Kernel.RedeemAdaError
+  | RedeemAdaWalletIdDecodingFailed Text
+  | RedeemAdaInvalidRedemptionCode InvalidRedemptionCode
+
+instance Show RedeemAdaError where
+    show = formatToString build
+
+instance Exception RedeemAdaError
+
+instance Buildable RedeemAdaError where
+    build (RedeemAdaError err) =
+        bprint ("RedeemAdaError " % build) err
+    build (RedeemAdaWalletIdDecodingFailed txt) =
+        bprint ("RedeemAdaWalletIdDecodingFailed " % build) txt
+    build (RedeemAdaInvalidRedemptionCode txt) =
+        bprint ("RedeemAdaInvalidRedemptionCode " % build) txt
+
+------------------------------------------------------------
 -- Passive wallet layer
 ------------------------------------------------------------
 
@@ -466,72 +535,3 @@ data ActiveWalletLayer m = ActiveWalletLayer {
       -- status information about the diffusion layer
     , getNodeInfo :: ForceNtpCheck -> m NodeInfo
     }
-
-------------------------------------------------------------
--- Active wallet errors
-------------------------------------------------------------
-
-data NewPaymentError =
-      NewPaymentError Kernel.PaymentError
-    | NewPaymentTimeLimitReached TimeExecutionLimit
-    | NewPaymentWalletIdDecodingFailed Text
-    | NewPaymentUnknownAccountId Kernel.UnknownHdAccount
-
--- | Unsound show instance needed for the 'Exception' instance.
-instance Show NewPaymentError where
-    show = formatToString build
-
-instance Exception NewPaymentError
-
-instance Buildable NewPaymentError where
-    build (NewPaymentError kernelErr) =
-        bprint ("NewPaymentError " % build) kernelErr
-    build (NewPaymentTimeLimitReached ter) =
-        bprint ("NewPaymentTimeLimitReached " % build) ter
-    build (NewPaymentWalletIdDecodingFailed txt) =
-        bprint ("NewPaymentWalletIdDecodingFailed " % build) txt
-    build (NewPaymentUnknownAccountId err) =
-        bprint ("NewPaymentUnknownAccountId " % build) err
-
-
-data EstimateFeesError =
-      EstimateFeesError Kernel.EstimateFeesError
-    | EstimateFeesTimeLimitReached TimeExecutionLimit
-    | EstimateFeesWalletIdDecodingFailed Text
-
--- | Unsound show instance needed for the 'Exception' instance.
-instance Show EstimateFeesError where
-    show = formatToString build
-
-instance Exception EstimateFeesError
-
-instance Buildable EstimateFeesError where
-    build (EstimateFeesError kernelErr) =
-        bprint ("EstimateFeesError " % build) kernelErr
-    build (EstimateFeesTimeLimitReached ter) =
-        bprint ("EstimateFeesTimeLimitReached " % build) ter
-    build (EstimateFeesWalletIdDecodingFailed txt) =
-        bprint ("EstimateFeesWalletIdDecodingFailed " % build) txt
-
-instance Arbitrary EstimateFeesError where
-    arbitrary = oneof [ EstimateFeesError <$> arbitrary
-                      , EstimateFeesTimeLimitReached <$> arbitrary
-                      ]
-
-data RedeemAdaError =
-    RedeemAdaError Kernel.RedeemAdaError
-  | RedeemAdaWalletIdDecodingFailed Text
-  | RedeemAdaInvalidRedemptionCode InvalidRedemptionCode
-
-instance Show RedeemAdaError where
-    show = formatToString build
-
-instance Exception RedeemAdaError
-
-instance Buildable RedeemAdaError where
-    build (RedeemAdaError err) =
-        bprint ("RedeemAdaError " % build) err
-    build (RedeemAdaWalletIdDecodingFailed txt) =
-        bprint ("RedeemAdaWalletIdDecodingFailed " % build) txt
-    build (RedeemAdaInvalidRedemptionCode txt) =
-        bprint ("RedeemAdaInvalidRedemptionCode " % build) txt
