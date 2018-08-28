@@ -1,5 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE InstanceSigs               #-}
+{-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE RankNTypes                 #-}
 
 -- | Some utilities for working with acid-state
@@ -11,6 +12,7 @@ module Cardano.Wallet.Kernel.DB.Util.AcidState (
   , runUpdateNoErrors
   , runUpdateDiscardSnapshot
   , mapUpdateErrors
+  , discardUpdateErrors
     -- * Queries (to be run on a snapshot)
   , Query' -- opaque
   , runQuery'
@@ -83,6 +85,13 @@ runUpdateNoErrors = fmap (snd . mustBeRight) . runUpdate'
 mapUpdateErrors :: (e -> e') -> Update' st e a -> Update' st e' a
 mapUpdateErrors f (Update' upd) = Update' $
     strictStateT $ withExcept f . runStrictStateT upd
+
+discardUpdateErrors :: Update' st e a -> Update' st e' ()
+discardUpdateErrors (Update' upd) = Update' $
+    strictStateT $ \s -> ExceptT $ do
+        runExceptT (runStrictStateT (void upd) s) <&> \case
+            Left  _       -> return ((), s)
+            Right (_, s') -> return ((), s')
 
 -- | Like \"runUpdate'\", but it discards the DB after running the query.
 -- Use this function sparingly only when you are sure you won't need the

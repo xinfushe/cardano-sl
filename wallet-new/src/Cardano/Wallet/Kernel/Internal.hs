@@ -21,17 +21,15 @@ module Cardano.Wallet.Kernel.Internal (
   , ActiveWallet(..)
     -- * Restoration data
   , WalletRestorationInfo(..)
-  , WalletRestorationPosition(..)
+    -- ** Utility functions
+  , cancelRestoration
+  , restartRestoration
     -- ** Lenses
   , wriCurrentSlot
   , wriTargetSlot
   , wriThroughput
   , wriCancel
-  , wriPause
-  , wriUnpause
-  , wrpTargetHeaderHash
-  , wrpTargetSlotId
-  , wrpNextHistorical
+  , wriRestart
   ) where
 
 import           Universum hiding (State)
@@ -39,8 +37,7 @@ import           Universum hiding (State)
 import           Control.Lens.TH
 import           Data.Acid (AcidState)
 
-import           Pos.Chain.Block (HeaderHash)
-import           Pos.Core (BlockCount, FlatSlotId, ProtocolMagic, SlotId)
+import           Pos.Core (BlockCount, FlatSlotId, ProtocolMagic)
 import           Pos.Util.Wlog (Severity (..))
 
 import           Cardano.Wallet.API.Types.UnitOfMeasure (MeasuredIn (..),
@@ -52,45 +49,6 @@ import           Cardano.Wallet.Kernel.Keystore (Keystore)
 import           Cardano.Wallet.Kernel.NodeStateAdaptor (NodeStateAdaptor)
 import           Cardano.Wallet.Kernel.Submission (WalletSubmission)
 import           Cardano.Wallet.Kernel.Types (WalletId)
-
-{-------------------------------------------------------------------------------
-  Restoration status
--------------------------------------------------------------------------------}
-
--- | Wallet restoration information
---
--- The restoration info tracks the progress of a background wallet
--- restoration task currently in progress. In addition to giving
--- visibility into a restoration task, it also provides an action
--- that can be used to cancel the background restoration task.
-data WalletRestorationInfo = WalletRestorationInfo
-  { _wriCurrentSlot :: FlatSlotId
-     -- ^ The most recently restored slot
-  , _wriTargetSlot  :: FlatSlotId
-     -- ^ The target slot; when restoration reaches this slot,
-     -- it is finished and the wallet is up-to-date.
-  , _wriThroughput  :: MeasuredIn 'BlocksPerSecond BlockCount
-    -- ^ Speed of restoration.
-  , _wriCancel      :: IO ()
-    -- ^ The action that can be used to cancel the restoration task.
-  , _wriPause       :: IO WalletRestorationPosition
-    -- ^ Pause the restoration task, returning the current position.
-  , _wriUnpause     :: WalletRestorationPosition -> IO ()
-    -- ^ Unpause the restoration task and set a new position.
-  }
-
--- | Data about the restoration target block and the next
--- historical block to process.
-data WalletRestorationPosition = WalletRestorationPosition
-  { _wrpTargetHeaderHash :: HeaderHash
-    -- ^ The header hash of the target block.
-  , _wrpTargetSlotId     :: SlotId
-    -- ^ The slot id of the target block.
-  , _wrpNextHistorical   :: Maybe HeaderHash
-    -- ^ The header hash of the next block to process, or Nothing
-    -- to begin at successor of the genesis block.
-  }
-
 
 {-------------------------------------------------------------------------------
   Passive wallet
@@ -152,9 +110,38 @@ data PassiveWallet = PassiveWallet {
     , _walletRestorationTask :: MVar (Map WalletId WalletRestorationInfo)
     }
 
+{-------------------------------------------------------------------------------
+  Restoration status
+-------------------------------------------------------------------------------}
+
+-- | Wallet restoration information
+--
+-- The restoration info tracks the progress of a background wallet
+-- restoration task currently in progress. In addition to giving
+-- visibility into a restoration task, it also provides an action
+-- that can be used to cancel the background restoration task.
+data WalletRestorationInfo = WalletRestorationInfo
+  { _wriCurrentSlot :: FlatSlotId
+     -- ^ The most recently restored slot
+  , _wriTargetSlot  :: FlatSlotId
+     -- ^ The target slot; when restoration reaches this slot,
+     -- it is finished and the wallet is up-to-date.
+  , _wriThroughput  :: MeasuredIn 'BlocksPerSecond BlockCount
+    -- ^ Speed of restoration.
+  , _wriCancel      :: IO ()
+    -- ^ The action that can be used to cancel the restoration task.
+  , _wriRestart     :: IO ()
+    -- ^ Restart the restoration task from scratch, using the current tip.
+  }
+
+cancelRestoration :: WalletRestorationInfo -> IO ()
+cancelRestoration = _wriCancel
+
+restartRestoration :: WalletRestorationInfo -> IO ()
+restartRestoration = _wriRestart
+
 makeLenses ''PassiveWallet
 makeLenses ''WalletRestorationInfo
-makeLenses ''WalletRestorationPosition
 
 {-------------------------------------------------------------------------------
   Active wallet

@@ -19,7 +19,6 @@ import           Cardano.Wallet.Kernel.DB.AcidState (ApplyBlock (..),
                      SwitchToForkError (..))
 import           Cardano.Wallet.Kernel.DB.BlockContext
 import           Cardano.Wallet.Kernel.DB.HdWallet
-import           Cardano.Wallet.Kernel.DB.InDb (fromDb)
 import           Cardano.Wallet.Kernel.DB.Resolved (ResolvedBlock, rbContext)
 import           Cardano.Wallet.Kernel.DB.Spec.Update (ApplyBlockFailed)
 import           Cardano.Wallet.Kernel.DB.TxMeta.Types
@@ -74,37 +73,32 @@ switchToFork :: PassiveWallet
              -> Int             -- ^ Number of blocks to roll back
              -> [ResolvedBlock] -- ^ Blocks in the new fork
              -> IO (Either SwitchToForkError ())
-switchToFork _ _ [] = return (Left NotEnoughBlocks)
-switchToFork pw@PassiveWallet{..} n bs@(oldestBlock:_) = do
+switchToFork pw@PassiveWallet{..} n bs = do
     k <- Node.getSecurityParameter _walletNode
     blocksAndMeta <- mapM (prefilterBlock' pw) bs
     let (blockssByAccount, metas) = unzip blocksAndMeta
 
     -- Prevent new wallet restorations from starting while we
     -- switch to the new fork.
-    withMVar _walletRestorationTask $ \restoreInfo -> do
-        -- Pause all of the current restorations.
-        mapM_ (view wriPause) restoreInfo
+    (res, restorations) <- withMVar _walletRestorationTask $ \restorations -> do
+        -- Stop all of the current restorations.
+        mapM_ cancelRestoration restorations
         -- Switch to the new fork.
         res <- update' _wallets $ SwitchToFork k n blockssByAccount
-        -- Unpause all of the current restorations, setting the new
-        -- restoration target.
-        let wrp = WalletRestorationPosition
-              { _wrpTargetHeaderHash = oldestBlock ^. rbContext . bcHash   . fromDb
-              , _wrpTargetSlotId     = oldestBlock ^. rbContext . bcSlotId . fromDb
-              , _wrpNextHistorical   = Nothing -- start from genesis block
-              }
-        mapM_ (($ wrp) . view wriUnpause) restoreInfo
+        return (res, restorations)
 
-        case res of
-            Left  err     -> return $ Left err
-            Right changes -> do
-                mapM_ (putTxMeta _walletMeta) $ concat metas
-                modifyMVar_ _walletSubmission $
-                  return . Submission.addPendings (fst <$> changes)
-                modifyMVar_ _walletSubmission $
-                  return . Submission.remPending (snd <$> changes)
-                return $ Right ()
+    -- Restart all of the current restorations from the genesis block.
+    mapM_ (view wriRestart) restorations
+
+    case res of
+        Left  err     -> return $ Left err
+        Right changes -> do
+            mapM_ (putTxMeta _walletMeta) $ concat metas
+            modifyMVar_ _walletSubmission $
+                return . Submission.addPendings (fst <$> changes)
+            modifyMVar_ _walletSubmission $
+                return . Submission.remPending (snd <$> changes)
+            return $ Right ()
 
 -- | Observable rollback
 --
