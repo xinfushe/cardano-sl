@@ -97,6 +97,7 @@ withDefDlgConfiguration = withDlgConfiguration (ccDlg defaultTestConf)
 withDefConfiguration :: (HasConfiguration => ProtocolMagic -> NetworkMagic -> r) -> r
 withDefConfiguration = withGenesisSpec 0 (ccCore defaultTestConf) id
 
+-- TODO mhueschen : explain what is going on here.
 withProvidedMagicConfig :: ProtocolMagic -> RequiresNetworkMagic -> (HasConfigurations => TxpConfiguration -> r) -> r
 withProvidedMagicConfig pm rnm f = withGenesisSpec 0 (updateCC (ccCore defaultTestConf)) id (\_pm _nm -> withStaticConfigurations (\txpConfig _ -> f txpConfig))
   where

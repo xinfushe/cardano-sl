@@ -17,8 +17,9 @@ import qualified Data.List.NonEmpty as NE
 import qualified Data.Ratio as Ratio
 import           Data.Semigroup ((<>))
 import qualified GHC.Exts as IL
-import           Test.Hspec (Spec, describe)
+import           Test.Hspec (Spec, describe, runIO)
 import           Test.Hspec.QuickCheck (modifyMaxSuccess)
+import           Test.QuickCheck (arbitrary, generate)
 import           Test.QuickCheck.Gen (Gen (MkGen))
 import           Test.QuickCheck.Monadic (assert, pick, pre, run)
 import           Test.QuickCheck.Random (QCGen)
@@ -35,6 +36,7 @@ import           Pos.Core.NetworkMagic (NetworkMagic (..),
                      RequiresNetworkMagic (..), makeNetworkMagic,
                      networkMagicToRequires)
 import           Pos.Core.Slotting (EpochOrSlot (..), getEpochOrSlot)
+import           Pos.Crypto.Configuration (ProtocolMagic)
 import           Pos.DB.Block (getVerifyBlocksContext', verifyAndApplyBlocks,
                      verifyBlocksPrefix)
 import           Pos.DB.Pure (dbPureDump)
@@ -56,8 +58,7 @@ import           Test.Pos.Block.Logic.Util (EnableTxPayload (..),
                      bpGoToArbitraryState, getAllSecrets, satisfySlotCheck)
 import           Test.Pos.Block.Property (blockPropertySpec)
 import           Test.Pos.Configuration (HasStaticConfigurations,
-                     withStaticConfigurations)
-import           Test.Pos.Crypto.Dummy (dummyProtocolMagic)
+                     withProvidedMagicConfig)
 import           Test.Pos.Util.QuickCheck.Property (splitIntoChunks,
                      stopProperty)
 
@@ -66,22 +67,25 @@ spec :: Spec
 -- Unfortunatelly, blocks generation is quite slow nowdays.
 -- See CSL-1382.
 spec = do
-    go NMMustBeNothing
-    go NMMustBeJust
+    runWithMagic NMMustBeNothing
+    runWithMagic NMMustBeJust
   where
-    go rnm = withStaticConfigurations $ \txpConfig _ -> do
-        let nm = makeNetworkMagic rnm dummyProtocolMagic
-        describe "Block.Logic.VAR" $ modifyMaxSuccess (min 4) $ do
-            describe "verifyBlocksPrefix" $ verifyBlocksPrefixSpec nm txpConfig
-            describe "verifyAndApplyBlocks" $ verifyAndApplyBlocksSpec nm txpConfig
-            describe "applyBlocks" applyBlocksSpec
-            describe "Block.Event" $ do
-                describe "Successful sequence" $ blockEventSuccessSpec nm txpConfig
-                describe "Apply through epoch" $ applyThroughEpochSpec nm txpConfig 0
-                describe "Apply through epoch" $ applyThroughEpochSpec nm txpConfig 4
-                describe "Fork - short" $ singleForkSpec nm txpConfig ForkShort
-                describe "Fork - medium" $ singleForkSpec nm txpConfig ForkMedium
-                describe "Fork - deep" $ singleForkSpec nm txpConfig ForkDeep
+    runWithMagic rnm = {-withCompileInfo $-} do
+        pm <- runIO (generate arbitrary)
+        let nm = makeNetworkMagic rnm pm
+        withProvidedMagicConfig pm rnm $ \txpConfig ->
+            describe ("(requiresNetworkMagic= " ++ show rnm ++ ")") $
+                describe "Block.Logic.VAR" $ modifyMaxSuccess (min 4) $ do
+                    describe "verifyBlocksPrefix" $ verifyBlocksPrefixSpec pm nm txpConfig
+                    describe "verifyAndApplyBlocks" $ verifyAndApplyBlocksSpec pm nm txpConfig
+                    describe "applyBlocks" applyBlocksSpec
+                    describe "Block.Event" $ do
+                        describe "Successful sequence" $ blockEventSuccessSpec pm nm txpConfig
+                        describe "Apply through epoch" $ applyThroughEpochSpec pm nm txpConfig 0
+                        describe "Apply through epoch" $ applyThroughEpochSpec pm nm txpConfig 4
+                        describe "Fork - short" $ singleForkSpec pm nm txpConfig ForkShort
+                        describe "Fork - medium" $ singleForkSpec pm nm txpConfig ForkMedium
+                        describe "Fork - deep" $ singleForkSpec pm nm txpConfig ForkDeep
 
 ----------------------------------------------------------------------------
 -- verifyBlocksPrefix
@@ -89,12 +93,13 @@ spec = do
 
 verifyBlocksPrefixSpec
     :: HasStaticConfigurations
-    => NetworkMagic
+    => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> Spec
-verifyBlocksPrefixSpec nm txpConfig = do
-    blockPropertySpec verifyEmptyMainBlockDesc (verifyEmptyMainBlock nm txpConfig)
-    blockPropertySpec verifyValidBlocksDesc (verifyValidBlocks nm txpConfig)
+verifyBlocksPrefixSpec pm nm txpConfig = do
+    blockPropertySpec verifyEmptyMainBlockDesc (verifyEmptyMainBlock pm nm txpConfig)
+    blockPropertySpec verifyValidBlocksDesc (verifyValidBlocks pm nm txpConfig)
   where
     verifyEmptyMainBlockDesc =
         "verification of consistent empty main block " <>
@@ -109,28 +114,30 @@ verifyBlocksPrefixSpec nm txpConfig = do
         "(requiresNetworkMagic=" <> show (networkMagicToRequires nm) <> ")"
 
 verifyEmptyMainBlock :: HasConfigurations
-                     => NetworkMagic
+                     => ProtocolMagic
+                     -> NetworkMagic
                      -> TxpConfiguration
                      -> BlockProperty ()
-verifyEmptyMainBlock nm txpConfig = do
-    emptyBlock <- fst <$> bpGenBlock dummyProtocolMagic
+verifyEmptyMainBlock pm nm txpConfig = do
+    emptyBlock <- fst <$> bpGenBlock pm
                                      nm
                                      txpConfig
                                      (EnableTxPayload False)
                                      (InplaceDB False)
     ctx <- run $ getVerifyBlocksContext' (either (const Nothing) Just . unEpochOrSlot . getEpochOrSlot $ emptyBlock)
-    whenLeftM (lift $ verifyBlocksPrefix dummyProtocolMagic ctx (one emptyBlock))
+    whenLeftM (lift $ verifyBlocksPrefix pm ctx (one emptyBlock))
         $ stopProperty
         . pretty
 
 verifyValidBlocks
     :: HasConfigurations
-    => NetworkMagic
+    => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> BlockProperty ()
-verifyValidBlocks nm txpConfig = do
+verifyValidBlocks pm nm txpConfig = do
     bpGoToArbitraryState
-    blocks <- map fst . toList <$> bpGenBlocks dummyProtocolMagic
+    blocks <- map fst . toList <$> bpGenBlocks pm
                                                nm
                                                txpConfig
                                                Nothing
@@ -146,7 +153,7 @@ verifyValidBlocks nm txpConfig = do
 
     ctx <- run $ getVerifyBlocksContext' (lastSlot blocks)
     verRes <- lift $ satisfySlotCheck blocksToVerify $ verifyBlocksPrefix
-        dummyProtocolMagic
+        pm
         ctx
         blocksToVerify
     whenLeft verRes $ stopProperty . pretty
@@ -156,11 +163,12 @@ verifyValidBlocks nm txpConfig = do
 ----------------------------------------------------------------------------
 
 verifyAndApplyBlocksSpec :: HasStaticConfigurations
-                         => NetworkMagic
+                         => ProtocolMagic
+                         -> NetworkMagic
                          -> TxpConfiguration
                          -> Spec
-verifyAndApplyBlocksSpec nm txpConfig =
-    blockPropertySpec applyByOneOrAllAtOnceDesc (applyByOneOrAllAtOnce nm txpConfig applier)
+verifyAndApplyBlocksSpec pm nm txpConfig =
+    blockPropertySpec applyByOneOrAllAtOnceDesc (applyByOneOrAllAtOnce pm nm txpConfig applier)
   where
     applier :: HasConfiguration => OldestFirst NE Blund -> BlockTestMode ()
     applier blunds = do
@@ -169,7 +177,7 @@ verifyAndApplyBlocksSpec nm txpConfig =
         satisfySlotCheck blocks $
            -- we don't check current SlotId, because the applier is run twice
            -- and the check will fail the verification
-           whenLeftM (verifyAndApplyBlocks dummyProtocolMagic nm txpConfig ctx True blocks) throwM
+           whenLeftM (verifyAndApplyBlocks pm nm txpConfig ctx True blocks) throwM
     applyByOneOrAllAtOnceDesc =
         "verifying and applying blocks one by one leads " <>
         "to the same GState as verifying and applying them all at once " <>
@@ -198,13 +206,14 @@ applyBlocksSpec = pass
 
 applyByOneOrAllAtOnce
     :: HasConfigurations
-    => NetworkMagic
+    => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> (OldestFirst NE Blund -> BlockTestMode ())
     -> BlockProperty ()
-applyByOneOrAllAtOnce nm txpConfig applier = do
+applyByOneOrAllAtOnce pm nm txpConfig applier = do
     bpGoToArbitraryState
-    blunds <- getOldestFirst <$> bpGenBlocks dummyProtocolMagic
+    blunds <- getOldestFirst <$> bpGenBlocks pm
                                              nm
                                              txpConfig
                                              Nothing
@@ -234,11 +243,12 @@ applyByOneOrAllAtOnce nm txpConfig applier = do
 ----------------------------------------------------------------------------
 
 blockEventSuccessSpec :: HasStaticConfigurations
-                      => NetworkMagic
+                      => ProtocolMagic
+                      -> NetworkMagic
                       -> TxpConfiguration
                       -> Spec
-blockEventSuccessSpec nm txpConfig =
-    blockPropertySpec blockEventSuccessDesc (blockEventSuccessProp nm txpConfig)
+blockEventSuccessSpec pm nm txpConfig =
+    blockPropertySpec blockEventSuccessDesc (blockEventSuccessProp pm nm txpConfig)
   where
     blockEventSuccessDesc =
         "a sequence of interleaved block applications and rollbacks " <>
@@ -318,15 +328,16 @@ genSuccessWithForks = do
 
 blockPropertyScenarioGen
     :: HasConfigurations
-    => NetworkMagic
+    => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> BlockEventGenT QCGen BlockTestMode ()
     -> BlockProperty BlockScenario
-blockPropertyScenarioGen nm txpConfig m = do
+blockPropertyScenarioGen pm nm txpConfig m = do
     allSecrets <- getAllSecrets
     let genStakeholders = gdBootStakeholders genesisData
     g <- pick $ MkGen $ \qc _ -> qc
-    lift $ flip evalRandT g $ runBlockEventGenT dummyProtocolMagic
+    lift $ flip evalRandT g $ runBlockEventGenT pm
                                                 nm
                                                 txpConfig
                                                 allSecrets
@@ -336,10 +347,10 @@ blockPropertyScenarioGen nm txpConfig m = do
 prettyScenario :: BlockScenario -> Text
 prettyScenario scenario = pretty (fmap (headerHash . fst) scenario)
 
-blockEventSuccessProp :: HasConfigurations => NetworkMagic -> TxpConfiguration
+blockEventSuccessProp :: HasConfigurations => ProtocolMagic -> NetworkMagic -> TxpConfiguration
                       -> BlockProperty ()
-blockEventSuccessProp nm txpConfig = do
-    scenario <- blockPropertyScenarioGen nm txpConfig genSuccessWithForks
+blockEventSuccessProp pm nm txpConfig = do
+    scenario <- blockPropertyScenarioGen pm nm txpConfig genSuccessWithForks
     let (scenario', checkCount) = enrichWithSnapshotChecking scenario
     when (checkCount <= 0) $ stopProperty $
         "No checks were generated, this is a bug in the test suite: " <>
@@ -377,24 +388,26 @@ verifyBlockScenarioResult = \case
 -- Input: the amount of blocks after crossing.
 applyThroughEpochSpec
     :: HasStaticConfigurations
-    => NetworkMagic
+    => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> Int
     -> Spec
-applyThroughEpochSpec nm txpConfig afterCross = do
-    blockPropertySpec applyThroughEpochDesc (applyThroughEpochProp nm txpConfig afterCross)
+applyThroughEpochSpec pm nm txpConfig afterCross = do
+    blockPropertySpec applyThroughEpochDesc (applyThroughEpochProp pm nm txpConfig afterCross)
   where
     applyThroughEpochDesc =
       "apply a sequence of blocks that spans through epochs (additional blocks after crossing: " ++
       show afterCross ++ ")"
 
 applyThroughEpochProp :: HasConfigurations
-                      => NetworkMagic
+                      => ProtocolMagic
+                      -> NetworkMagic
                       -> TxpConfiguration
                       -> Int
                       -> BlockProperty ()
-applyThroughEpochProp nm txpConfig afterCross = do
-    scenario <- blockPropertyScenarioGen nm txpConfig $ do
+applyThroughEpochProp pm nm txpConfig afterCross = do
+    scenario <- blockPropertyScenarioGen pm nm txpConfig $ do
         let
             approachEpochEdge =
                 pathSequence mempty . OldestFirst . NE.fromList $
@@ -414,24 +427,26 @@ applyThroughEpochProp nm txpConfig afterCross = do
 ----------------------------------------------------------------------------
 
 singleForkSpec :: HasStaticConfigurations
-               => NetworkMagic
+               => ProtocolMagic
+               -> NetworkMagic
                -> TxpConfiguration
                -> ForkDepth
                -> Spec
-singleForkSpec nm txpConfig fd = do
-    blockPropertySpec singleForkDesc (singleForkProp nm txpConfig fd)
+singleForkSpec pm nm txpConfig fd = do
+    blockPropertySpec singleForkDesc (singleForkProp pm nm txpConfig fd)
   where
     singleForkDesc =
       "a blockchain of length q<=(9.5*k) blocks can switch to a fork " <>
       "of length j>i with a common prefix i, rollback depth d=q-i"
 
 singleForkProp :: HasConfigurations
-               => NetworkMagic
+               => ProtocolMagic
+               -> NetworkMagic
                -> TxpConfiguration
                -> ForkDepth
                -> BlockProperty ()
-singleForkProp nm txpConfig fd = do
-    scenario <- blockPropertyScenarioGen nm txpConfig $ genSingleFork fd
+singleForkProp pm nm txpConfig fd = do
+    scenario <- blockPropertyScenarioGen pm nm txpConfig $ genSingleFork fd
     runBlockScenarioAndVerify nm txpConfig scenario
 
 data ForkDepth = ForkShort | ForkMedium | ForkDeep

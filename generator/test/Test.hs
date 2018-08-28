@@ -2,7 +2,8 @@ import           Universum
 
 import           Test.Hspec (hspec)
 
-import           Spec (spec)
+-- import           Spec (spec)
+import           Test.Pos.Block.Logic.VarSpec (spec)
 import           Test.Pos.Configuration (defaultTestConf)
 
 main :: IO ()
