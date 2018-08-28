@@ -172,12 +172,18 @@ let
       ignoreCollisions = true;
     };
     mkDocker = { environment, connectArgs ? {} }: import ./docker.nix { inherit environment connect gitrev pkgs connectArgs; };
+    cabal2nix = import (pkgs.fetchFromGitHub {
+      owner = "NixOS";
+      repo = "cabal2nix";
+      rev = "v2.11";
+      sha256 = "0ir31ygah8byglhk5ldniv12191385ghs2zcikhcj98byhw9va50";
+    }) { inherit pkgs; };
     stack2nix = import (pkgs.fetchFromGitHub {
       owner = "avieth";
       repo = "stack2nix";
       rev = "c51db2d31892f7c4e7ff6acebe4504f788c56dca";
       sha256 = "10jcj33sxpq18gxf3zcck5i09b2y4jm6qjggqdlwd9ss86wg3ksb";
-    }) { inherit pkgs; };
+    }) { inherit pkgs; cabal2nix = cabal2nix; };
     inherit (pkgs) purescript;
     connectScripts = {
       mainnet = {
