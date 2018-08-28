@@ -269,7 +269,7 @@ restoreWalletHistoryAsync wallet rootId prefilter pos = restore NoTimingData
 
             -- Update our progress
             slotCount <- getSlotCount (wallet ^. walletNode)
-            let flat             = flattenSlotIdExplicit slotCount
+            let flat             = flattenSlotId slotCount
                 blockPerSec      = MeasuredIn . BlockCount . perSecond <$> rate
                 throughputUpdate = maybe identity (set wriThroughput) blockPerSec
                 slotId           = mb ^. mainBlockSlot
