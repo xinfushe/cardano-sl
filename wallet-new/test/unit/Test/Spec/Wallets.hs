@@ -7,16 +7,18 @@ module Test.Spec.Wallets (
 
 import           Universum
 
-import           Test.Hspec (Spec, describe, shouldBe, shouldSatisfy)
+import           Test.Hspec (Spec, describe, runIO, shouldBe, shouldSatisfy)
 import           Test.Hspec.QuickCheck (prop)
-import           Test.QuickCheck (arbitrary, suchThat, vectorOf, withMaxSuccess)
+import           Test.QuickCheck (arbitrary, generate, suchThat, vectorOf,
+                     withMaxSuccess)
 import           Test.QuickCheck.Monadic (PropertyM, monadicIO, pick)
 
 import           Data.Coerce (coerce)
 import           Formatting (build, formatToString)
 
 import           Pos.Core (decodeTextAddress)
-import           Pos.Core.NetworkMagic (NetworkMagic, RequiresNetworkMagic (..), makeNetworkMagic)
+import           Pos.Core.NetworkMagic (NetworkMagic, RequiresNetworkMagic (..),
+                     makeNetworkMagic)
 import           Pos.Crypto (emptyPassphrase, hash)
 
 import qualified Cardano.Wallet.Kernel.BIP39 as BIP39
@@ -44,7 +46,6 @@ import qualified Cardano.Wallet.API.V1.Types as V1
 import           Control.Monad.Except (runExceptT)
 import           Servant.Server
 
-import           Test.Pos.Crypto.Dummy (dummyProtocolMagic)
 import           Test.Spec.Fixture (GenPassiveWalletFixture,
                      genSpendingPassword, withLayer, withPassiveWalletFixture)
 import           Util.Buildable (ShowThroughBuild (..))
@@ -108,7 +109,8 @@ spec = do
     go NMMustBeJust
   where
     go rnm = describe "Wallets" $ do
-        let nm = makeNetworkMagic rnm dummyProtocolMagic
+        pm <- runIO (generate arbitrary)
+        let nm = makeNetworkMagic rnm pm
         describe "CreateWallet" $ do
             describe "Wallet creation (wallet layer)" $ do
 

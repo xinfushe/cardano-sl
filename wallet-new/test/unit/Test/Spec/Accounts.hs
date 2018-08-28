@@ -4,15 +4,16 @@ module Test.Spec.Accounts (spec) where
 
 import           Universum
 
-import           Test.Hspec (Spec, describe, shouldBe, shouldSatisfy)
+import           Test.Hspec (Spec, describe, runIO, shouldBe, shouldSatisfy)
 import           Test.Hspec.QuickCheck (prop)
-import           Test.QuickCheck (arbitrary, withMaxSuccess)
+import           Test.QuickCheck (arbitrary, generate, withMaxSuccess)
 import           Test.QuickCheck.Monadic (PropertyM, monadicIO, pick)
 import qualified Test.Spec.Wallets as Wallets
 
 import           Formatting (build, formatToString, (%))
 
-import           Pos.Core.NetworkMagic (NetworkMagic, RequiresNetworkMagic (..), makeNetworkMagic)
+import           Pos.Core.NetworkMagic (NetworkMagic, RequiresNetworkMagic (..),
+                     makeNetworkMagic)
 
 import           Cardano.Wallet.Kernel.Accounts (CreateAccountError (..))
 import qualified Cardano.Wallet.Kernel.DB.HdWallet as Kernel
@@ -32,7 +33,6 @@ import qualified Cardano.Wallet.WalletLayer.Kernel.Wallets as Wallets
 import           Control.Monad.Except (runExceptT)
 import           Servant.Server
 
-import           Test.Pos.Crypto.Dummy (dummyProtocolMagic)
 import           Test.Spec.Fixture (GenPassiveWalletFixture,
                      genSpendingPassword, withLayer, withPassiveWalletFixture)
 import           Util.Buildable (ShowThroughBuild (..))
@@ -81,7 +81,8 @@ spec = do
     go NMMustBeJust
   where
     go rnm = describe "Accounts" $ do
-        let nm = makeNetworkMagic rnm dummyProtocolMagic
+        pm <- runIO (generate arbitrary)
+        let nm = makeNetworkMagic rnm pm
         describe "CreateAccount" $ do
 
             prop "works as expected in the happy path scenario" $ withMaxSuccess 50 $ do

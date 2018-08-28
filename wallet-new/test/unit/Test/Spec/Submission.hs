@@ -27,17 +27,18 @@ import qualified Formatting as F
 import           Formatting.Buildable (build)
 import qualified Pos.Core as Core
 import           Pos.Core.Attributes (Attributes (..), UnparsedFields (..))
-import           Pos.Core.NetworkMagic (NetworkMagic, RequiresNetworkMagic (..), makeNetworkMagic)
+import           Pos.Core.NetworkMagic (NetworkMagic, RequiresNetworkMagic (..),
+                     makeNetworkMagic)
 import qualified Pos.Core.Txp as Txp
 import           Pos.Crypto.Hashing (hash)
 import           Pos.Crypto.Signing.Safe (safeDeterministicKeyGen)
 import           Serokell.Util.Text (listJsonIndent)
 import qualified Test.Pos.Core.Arbitrary.Txp as Txp
-import           Test.Pos.Crypto.Dummy (dummyProtocolMagic)
 
 import           Cardano.Wallet.Kernel.Util (disjoint)
+import           Test.Hspec (runIO)
 import           Test.QuickCheck (Gen, Property, arbitrary, choose, conjoin,
-                     forAll, listOf, shuffle, vectorOf, (===))
+                     forAll, generate, listOf, shuffle, vectorOf, (===))
 import           Test.QuickCheck.Property (counterexample)
 import           Util.Buildable (ShowThroughBuild (..))
 import           Util.Buildable.Hspec
@@ -296,7 +297,8 @@ spec = do
     go NMMustBeJust
   where
     go rnm = describe "Test wallet submission layer" $ do
-      let nm = makeNetworkMagic rnm dummyProtocolMagic
+      pm <- runIO (generate arbitrary)
+      let nm = makeNetworkMagic rnm pm
       it "supports addition of pending transactions" $
           forAll (genPurePair nm) $ \(unSTB -> (submission, toAdd)) ->
               let currentSlot = submission ^. getCurrentSlot

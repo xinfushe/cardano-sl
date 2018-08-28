@@ -11,13 +11,14 @@ import qualified Data.Map.Strict as M
 import           Formatting (build, sformat)
 import           Servant.Server
 
-import           Test.Hspec (Spec, describe, shouldBe, shouldSatisfy)
+import           Test.Hspec (Spec, describe, runIO, shouldBe, shouldSatisfy)
 import           Test.Hspec.QuickCheck (prop)
-import           Test.QuickCheck (arbitrary, choose, withMaxSuccess)
+import           Test.QuickCheck (arbitrary, choose, generate, withMaxSuccess)
 import           Test.QuickCheck.Monadic (PropertyM, monadicIO, pick)
 
 import           Pos.Core (Address)
-import           Pos.Core.NetworkMagic (NetworkMagic, RequiresNetworkMagic (..), makeNetworkMagic)
+import           Pos.Core.NetworkMagic (NetworkMagic, RequiresNetworkMagic (..),
+                     makeNetworkMagic)
 import           Pos.Crypto (EncryptedSecretKey, safeDeterministicKeyGen)
 
 import           Cardano.Wallet.API.V1.Handlers.Addresses as Handlers
@@ -43,7 +44,6 @@ import qualified Cardano.Wallet.WalletLayer.Kernel.Accounts as Accounts
 import qualified Cardano.Wallet.WalletLayer.Kernel.Addresses as Addresses
 import qualified Cardano.Wallet.WalletLayer.Kernel.Wallets as Wallets
 
-import           Test.Pos.Crypto.Dummy (dummyProtocolMagic)
 import qualified Test.Spec.Fixture as Fixture
 import qualified Test.Spec.Wallets as Wallets
 
@@ -131,7 +131,8 @@ spec = do
     go NMMustBeJust
   where
     go rnm = describe "Addresses" $ do
-        let nm = makeNetworkMagic rnm dummyProtocolMagic
+        pm <- runIO (generate arbitrary)
+        let nm = makeNetworkMagic rnm pm
         describe "CreateAddress" $ do
             describe "Address creation (wallet layer)" $ do
 

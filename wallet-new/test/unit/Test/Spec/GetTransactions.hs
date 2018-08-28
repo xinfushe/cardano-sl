@@ -9,14 +9,15 @@ import           Universum
 import           Control.Lens (to)
 import           Formatting (build, sformat)
 
-import           Test.Hspec (Spec, describe, expectationFailure, shouldBe,
-                     shouldMatchList)
+import           Test.Hspec (Spec, describe, expectationFailure, runIO,
+                     shouldBe, shouldMatchList)
 import           Test.Hspec.QuickCheck (prop)
-import           Test.QuickCheck (withMaxSuccess)
+import           Test.QuickCheck (arbitrary, generate, withMaxSuccess)
 import           Test.QuickCheck.Monadic (monadicIO, pick)
 
 import           Pos.Core as Core
-import           Pos.Core.NetworkMagic (RequiresNetworkMagic (..), makeNetworkMagic)
+import           Pos.Core.NetworkMagic (RequiresNetworkMagic (..),
+                     makeNetworkMagic)
 
 import           Cardano.Wallet.API.Request
 import           Cardano.Wallet.API.Request.Pagination
@@ -35,7 +36,6 @@ import           Cardano.Wallet.Kernel.Types (AccountId (..), WalletId (..))
 import           Cardano.Wallet.WalletLayer (walletPassiveLayer)
 import qualified Cardano.Wallet.WalletLayer as WalletLayer
 
-import           Test.Pos.Crypto.Dummy (dummyProtocolMagic)
 import qualified Test.Spec.Addresses as Addresses
 import           Test.Spec.CoinSelection.Generators (InitialBalance (..),
                      Pay (..))
@@ -52,7 +52,8 @@ spec = do
     go NMMustBeJust
   where
     go rnm = describe "GetTransactions" $ do
-        let nm = makeNetworkMagic rnm dummyProtocolMagic
+        pm <- runIO (generate arbitrary)
+        let nm = makeNetworkMagic rnm pm
         prop "scenario: Layer.CreateAddress -> TxMeta.putTxMeta -> Layer.getTransactions works properly." $ withMaxSuccess 50 $
             monadicIO $ do
                 testMetaSTB <- pick genMeta

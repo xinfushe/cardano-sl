@@ -8,21 +8,20 @@ import           Universum
 
 import           System.Directory (doesFileExist, removeFile)
 import           System.IO.Error (IOError)
-import           Test.Hspec (Spec, describe, it, shouldBe, shouldReturn,
+import           Test.Hspec (Spec, describe, it, runIO, shouldBe, shouldReturn,
                      shouldSatisfy)
 import           Test.Hspec.QuickCheck (prop)
-import           Test.QuickCheck (Gen, arbitrary)
+import           Test.QuickCheck (Gen, arbitrary, generate)
 import           Test.QuickCheck.Monadic (forAllM, monadicIO, pick, run)
 
 import           Cardano.Wallet.Kernel.DB.HdWallet (eskToHdRootId)
 import           Cardano.Wallet.Kernel.Keystore (DeletePolicy (..), Keystore)
 import qualified Cardano.Wallet.Kernel.Keystore as Keystore
 import           Cardano.Wallet.Kernel.Types (WalletId (..))
-import           Pos.Core.NetworkMagic (NetworkMagic, RequiresNetworkMagic (..), makeNetworkMagic)
+import           Pos.Core.NetworkMagic (NetworkMagic, RequiresNetworkMagic (..),
+                     makeNetworkMagic)
 import           Pos.Crypto (EncryptedSecretKey, hash, safeKeyGen)
 import           Util.Buildable (ShowThroughBuild (..))
-
-import           Test.Pos.Crypto.Dummy (dummyProtocolMagic)
 
 {-# ANN module ("HLint: ignore Reduce duplication" :: Text) #-}
 
@@ -61,7 +60,8 @@ spec = do
     go NMMustBeJust
   where
     go rnm = describe "Keystore to store UserSecret(s)" $ do
-        let nm = makeNetworkMagic rnm dummyProtocolMagic
+        pm <- runIO (generate arbitrary)
+        let nm = makeNetworkMagic rnm pm
         it "creating a brand new one works" $ do
             nukeKeystore "test_keystore.key"
             Keystore.bracketKeystore KeepKeystoreIfEmpty "test_keystore.key" $ \_ks ->

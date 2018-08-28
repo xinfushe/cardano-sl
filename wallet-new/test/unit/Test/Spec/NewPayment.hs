@@ -11,9 +11,9 @@ import           Universum
 
 import           Control.Lens (to)
 
-import           Test.Hspec (Spec, describe, shouldBe, shouldSatisfy)
+import           Test.Hspec (Spec, describe, runIO, shouldBe, shouldSatisfy)
 import           Test.Hspec.QuickCheck (prop)
-import           Test.QuickCheck (arbitrary, choose, withMaxSuccess)
+import           Test.QuickCheck (arbitrary, choose, generate, withMaxSuccess)
 import           Test.QuickCheck.Monadic (PropertyM, monadicIO, pick)
 
 import qualified Data.ByteString as B
@@ -24,12 +24,12 @@ import           Formatting (build, formatToString, sformat)
 
 import           Pos.Core (Address, Coin (..), IsBootstrapEraAddr (..),
                      deriveLvl2KeyPair, mkCoin)
-import           Pos.Core.NetworkMagic (NetworkMagic, RequiresNetworkMagic (..), makeNetworkMagic)
+import           Pos.Core.NetworkMagic (NetworkMagic, RequiresNetworkMagic (..),
+                     makeNetworkMagic)
 import           Pos.Core.Txp (TxOut (..), TxOutAux (..))
 import           Pos.Crypto (EncryptedSecretKey, ShouldCheckPassphrase (..),
                      safeDeterministicKeyGen)
 
-import           Test.Pos.Crypto.Dummy (dummyProtocolMagic)
 import           Test.Spec.CoinSelection.Generators (InitialBalance (..),
                      Pay (..), genPayee, genUtxoWithAtLeast)
 
@@ -176,7 +176,8 @@ spec = do
   where
     go rnm = describe "NewPayment" $ do
 
-        let nm = makeNetworkMagic rnm dummyProtocolMagic
+        pm <- runIO (generate arbitrary)
+        let nm = makeNetworkMagic rnm pm
 
         describe "Generating a new payment (wallet layer)" $ do
 
