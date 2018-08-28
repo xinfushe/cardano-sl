@@ -25,7 +25,7 @@ import           Pos.Chain.Txp (TxpConfiguration)
 import           Pos.Core.Chrono (NE, NewestFirst, OldestFirst)
 import           Pos.Core.Configuration (HasConfiguration)
 import           Pos.Core.Exception (CardanoFatalError (..))
-import           Pos.Core.NetworkMagic (RequiresNetworkMagic, makeNetworkMagic)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Core.Slotting (EpochOrSlot (..), SlotId, getEpochOrSlot)
 import           Pos.DB.Block (BlockLrcMode, getVerifyBlocksContext',
                      rollbackBlocks, verifyAndApplyBlocks)
@@ -73,11 +73,11 @@ verifyAndApplyBlocks' ::
        , BlockLrcMode BlockTestContext m
        , MonadTxpLocal m
        )
-    => RequiresNetworkMagic
+    => NetworkMagic
     -> TxpConfiguration
     -> OldestFirst NE Blund
     -> m ()
-verifyAndApplyBlocks' rnm txpConfig blunds = do
+verifyAndApplyBlocks' nm txpConfig blunds = do
     let -- We cannot simply take `getCurrentSlot` since blocks are generated in
         --`MonadBlockGen` which locally changes its current slot.  We just take
         -- the last slot of all generated blocks.
@@ -85,7 +85,6 @@ verifyAndApplyBlocks' rnm txpConfig blunds = do
         curSlot = lastSlot (map fst . IL.toList $ blunds)
     ctx <- getVerifyBlocksContext' curSlot
 
-    let nm = makeNetworkMagic rnm dummyProtocolMagic
     satisfySlotCheck blocks $ do
         _ :: (HeaderHash, NewestFirst [] Blund) <- eitherToThrow =<<
             verifyAndApplyBlocks dummyProtocolMagic nm txpConfig ctx True blocks
@@ -98,13 +97,13 @@ runBlockEvent ::
        ( BlockLrcMode BlockTestContext m
        , MonadTxpLocal m
        )
-    => RequiresNetworkMagic
+    => NetworkMagic
     -> TxpConfiguration
     -> BlockEvent
     -> m BlockEventResult
 
-runBlockEvent rnm txpConfig (BlkEvApply ev) =
-    (onSuccess <$ verifyAndApplyBlocks' rnm txpConfig (ev ^. beaInput))
+runBlockEvent nm txpConfig (BlkEvApply ev) =
+    (onSuccess <$ verifyAndApplyBlocks' nm txpConfig (ev ^. beaInput))
         `catch` (return . onFailure)
   where
     onSuccess = case ev ^. beaOutValid of
@@ -182,17 +181,17 @@ runBlockScenario ::
        , BlockLrcMode BlockTestContext m
        , MonadTxpLocal m
        )
-    => RequiresNetworkMagic
+    => NetworkMagic
     -> TxpConfiguration
     -> BlockScenario
     -> m BlockScenarioResult
 runBlockScenario _ _ (BlockScenario []) =
     return BlockScenarioFinishedOk
-runBlockScenario rnm txpConfig (BlockScenario (ev:evs)) = do
-    runBlockEvent rnm txpConfig ev >>= \case
+runBlockScenario nm txpConfig (BlockScenario (ev:evs)) = do
+    runBlockEvent nm txpConfig ev >>= \case
         BlockEventSuccess (IsExpected isExp) ->
             if isExp
-                then runBlockScenario rnm txpConfig (BlockScenario evs)
+                then runBlockScenario nm txpConfig (BlockScenario evs)
                 else return BlockScenarioUnexpectedSuccess
         BlockEventFailure (IsExpected isExp) e ->
             return $ if isExp
