@@ -27,6 +27,7 @@ import           Pos.Core.Configuration (HasConfiguration)
 import           Pos.Core.Exception (CardanoFatalError (..))
 import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Core.Slotting (EpochOrSlot (..), SlotId, getEpochOrSlot)
+import           Pos.Crypto.Configuration (ProtocolMagic)
 import           Pos.DB.Block (BlockLrcMode, getVerifyBlocksContext',
                      rollbackBlocks, verifyAndApplyBlocks)
 import           Pos.DB.Pure (DBPureDiff, MonadPureDB, dbPureDiff, dbPureDump,
@@ -42,8 +43,6 @@ import           Pos.Util.Util (eitherToThrow, lensOf)
 import           Test.Pos.Block.Logic.Mode (BlockTestContext,
                      PureDBSnapshotsVar (..))
 import           Test.Pos.Block.Logic.Util (satisfySlotCheck)
-import           Test.Pos.Core.Dummy (dummyNetworkMagic)
-import           Test.Pos.Crypto.Dummy (dummyProtocolMagic)
 
 data SnapshotMissingEx = SnapshotMissingEx SnapshotId
     deriving (Show)
@@ -73,11 +72,12 @@ verifyAndApplyBlocks' ::
        , BlockLrcMode BlockTestContext m
        , MonadTxpLocal m
        )
-    => NetworkMagic
+    => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> OldestFirst NE Blund
     -> m ()
-verifyAndApplyBlocks' nm txpConfig blunds = do
+verifyAndApplyBlocks' pm nm txpConfig blunds = do
     let -- We cannot simply take `getCurrentSlot` since blocks are generated in
         --`MonadBlockGen` which locally changes its current slot.  We just take
         -- the last slot of all generated blocks.
@@ -87,7 +87,7 @@ verifyAndApplyBlocks' nm txpConfig blunds = do
 
     satisfySlotCheck blocks $ do
         _ :: (HeaderHash, NewestFirst [] Blund) <- eitherToThrow =<<
-            verifyAndApplyBlocks dummyProtocolMagic nm txpConfig ctx True blocks
+            verifyAndApplyBlocks pm nm txpConfig ctx True blocks
         return ()
   where
     blocks = fst <$> blunds
@@ -97,13 +97,14 @@ runBlockEvent ::
        ( BlockLrcMode BlockTestContext m
        , MonadTxpLocal m
        )
-    => NetworkMagic
+    => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> BlockEvent
     -> m BlockEventResult
 
-runBlockEvent nm txpConfig (BlkEvApply ev) =
-    (onSuccess <$ verifyAndApplyBlocks' nm txpConfig (ev ^. beaInput))
+runBlockEvent pm nm txpConfig (BlkEvApply ev) =
+    (onSuccess <$ verifyAndApplyBlocks' pm nm txpConfig (ev ^. beaInput))
         `catch` (return . onFailure)
   where
     onSuccess = case ev ^. beaOutValid of
@@ -113,8 +114,8 @@ runBlockEvent nm txpConfig (BlkEvApply ev) =
         BlockApplySuccess -> BlockEventFailure (IsExpected False) e
         BlockApplyFailure -> BlockEventFailure (IsExpected True) e
 
-runBlockEvent _ _ (BlkEvRollback ev) = do
-    (onSuccess <$ rollbackBlocks dummyProtocolMagic dummyNetworkMagic (ev ^. berInput))
+runBlockEvent pm nm _ (BlkEvRollback ev) = do
+    (onSuccess <$ rollbackBlocks pm nm (ev ^. berInput))
        `catch` (return . onFailure)
   where
     onSuccess = case ev ^. berOutValid of
@@ -135,7 +136,7 @@ runBlockEvent _ _ (BlkEvRollback ev) = do
             in
                 BlockEventFailure (IsExpected isExpected) e
 
-runBlockEvent _ _ (BlkEvSnap ev) =
+runBlockEvent _ _ _ (BlkEvSnap ev) =
     (onSuccess <$ runSnapshotOperation ev)
         `catch` (return . onFailure)
   where
@@ -181,17 +182,18 @@ runBlockScenario ::
        , BlockLrcMode BlockTestContext m
        , MonadTxpLocal m
        )
-    => NetworkMagic
+    => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> BlockScenario
     -> m BlockScenarioResult
-runBlockScenario _ _ (BlockScenario []) =
+runBlockScenario _ _ _ (BlockScenario []) =
     return BlockScenarioFinishedOk
-runBlockScenario nm txpConfig (BlockScenario (ev:evs)) = do
-    runBlockEvent nm txpConfig ev >>= \case
+runBlockScenario pm nm txpConfig (BlockScenario (ev:evs)) = do
+    runBlockEvent pm nm txpConfig ev >>= \case
         BlockEventSuccess (IsExpected isExp) ->
             if isExp
-                then runBlockScenario nm txpConfig (BlockScenario evs)
+                then runBlockScenario pm nm txpConfig (BlockScenario evs)
                 else return BlockScenarioUnexpectedSuccess
         BlockEventFailure (IsExpected isExp) e ->
             return $ if isExp

@@ -355,16 +355,17 @@ blockEventSuccessProp pm nm txpConfig = do
     when (checkCount <= 0) $ stopProperty $
         "No checks were generated, this is a bug in the test suite: " <>
         prettyScenario scenario'
-    runBlockScenarioAndVerify nm txpConfig scenario'
+    runBlockScenarioAndVerify pm nm txpConfig scenario'
 
 runBlockScenarioAndVerify
     :: HasConfigurations
-    => NetworkMagic
+    => ProtocolMagic
+    -> NetworkMagic
     -> TxpConfiguration
     -> BlockScenario
     -> BlockProperty ()
-runBlockScenarioAndVerify nm txpConfig bs =
-    verifyBlockScenarioResult =<< lift (runBlockScenario nm txpConfig bs)
+runBlockScenarioAndVerify pm nm txpConfig bs =
+    verifyBlockScenarioResult =<< lift (runBlockScenario pm nm txpConfig bs)
 
 verifyBlockScenarioResult :: BlockScenarioResult -> BlockProperty ()
 verifyBlockScenarioResult = \case
@@ -420,7 +421,7 @@ applyThroughEpochProp pm nm txpConfig afterCross = do
                 replicate (afterCross + 2) "x"
         emitBlockApply BlockApplySuccess approachEpochEdge
         emitBlockApply BlockApplySuccess crossEpochEdge
-    runBlockScenarioAndVerify nm txpConfig scenario
+    runBlockScenarioAndVerify pm nm txpConfig scenario
 
 ----------------------------------------------------------------------------
 -- Forks
@@ -447,7 +448,7 @@ singleForkProp :: HasConfigurations
                -> BlockProperty ()
 singleForkProp pm nm txpConfig fd = do
     scenario <- blockPropertyScenarioGen pm nm txpConfig $ genSingleFork fd
-    runBlockScenarioAndVerify nm txpConfig scenario
+    runBlockScenarioAndVerify pm nm txpConfig scenario
 
 data ForkDepth = ForkShort | ForkMedium | ForkDeep
 
