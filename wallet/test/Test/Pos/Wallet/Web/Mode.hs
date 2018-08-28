@@ -39,7 +39,7 @@ import           System.Wlog (HasLoggerName (..), LoggerName)
 import           Test.Hspec (Spec)
 import           Test.Hspec.QuickCheck (prop)
 import           Test.QuickCheck (Arbitrary (..), Property, Testable (..),
-                     forAll, generate, ioProperty)
+                     forAll, ioProperty)
 import           Test.QuickCheck.Gen (Gen)
 import           Test.QuickCheck.Monadic (PropertyM (..), monadic)
 
@@ -57,13 +57,15 @@ import           Pos.Client.Txp.History (MonadTxHistory (..),
                      getBlockHistoryDefault, getLocalHistoryDefault,
                      saveTxDefault)
 import           Pos.Context (ConnectedPeers (..))
-import           Pos.Core (HasConfiguration, Timestamp (..),
+import           Pos.Core (CoreConfiguration (..), GenesisConfiguration (..),
+                     HasConfiguration, Timestamp (..), coreConfiguration,
                      largestHDAddressBoot)
+import           Pos.Core.Genesis (GenesisProtocolConstants (..),
+                     GenesisSpec (..))
 import           Pos.Core.JsonLog (CanJsonLog (..))
-import           Pos.Core.NetworkMagic (NetworkMagic, makeNetworkMagic)
+import           Pos.Core.NetworkMagic (makeNetworkMagic)
 import           Pos.Core.Txp (TxAux)
 import           Pos.Crypto (PassPhrase)
-import           Pos.Crypto.Configuration (ProtocolMagic (..))
 import           Pos.DB (MonadDB (..), MonadDBRead (..), MonadGState (..))
 import qualified Pos.DB as DB
 import           Pos.DB.Block (MonadBListener (..))
@@ -196,12 +198,15 @@ initWalletTestContext ::
        ( HasConfiguration
        , HasDlgConfiguration
        )
-    => ProtocolMagic
-    -> NetworkMagic
-    -> WalletTestParams
+    => WalletTestParams
     -> (WalletTestContext -> Emulation a)
     -> Emulation a
-initWalletTestContext pm nm WalletTestParams {..} callback =
+initWalletTestContext WalletTestParams {..} callback = do
+    let CoreConfiguration (GCSpec spec) _ = coreConfiguration
+        pc  = gsProtocolConstants spec
+        pm  = gpcProtocolMagic pc
+        rnm = gpcRequiresNetworkMagic pc
+        nm  = makeNetworkMagic rnm pm
     initBlockTestContext pm nm _wtpBlockTestParams $ \wtcBlockTestContext -> do
         wtc <- liftIO $ do
             wtcWalletState <- openMemState
@@ -229,12 +234,9 @@ runWalletTestMode ::
     => WalletTestParams
     -> WalletTestMode a
     -> IO a
-runWalletTestMode wtp action = do
-    pm <- generate arbitrary
-    rnm <- generate arbitrary
-    let nm = makeNetworkMagic rnm pm
+runWalletTestMode wtp action =
     runEmulation (getTimestamp $ wtp ^. wtpBlockTestParams . tpStartTime) $
-        initWalletTestContext pm nm wtp (runReaderT action)
+        initWalletTestContext wtp (runReaderT action)
 
 ----------------------------------------------------------------------------
 -- Property

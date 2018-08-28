@@ -11,18 +11,18 @@ import           Universum
 
 import qualified Data.HashSet as HS
 import           Data.List (intersect, (\\))
-import qualified Data.Set as Set
 import           Pos.Client.KeyStorage (getSecretKeysPlain)
-import           Test.Hspec (Spec, describe, xdescribe)
+import           Test.Hspec (Spec, describe, runIO, xdescribe)
 import           Test.Hspec.QuickCheck (modifyMaxSuccess, prop)
-import           Test.QuickCheck (Arbitrary (..), Property, choose, oneof,
-                     sublistOf, suchThat, vectorOf, (===))
+import           Test.QuickCheck (Arbitrary (..), Property, choose, generate,
+                     oneof, sublistOf, suchThat, vectorOf, (===))
 import           Test.QuickCheck.Monadic (pick)
 
 import           Pos.Chain.Txp (TxpConfiguration (..))
 import           Pos.Core (Address, BlockCount (..), blkSecurityParam)
 import           Pos.Core.Chrono (nonEmptyOldestFirst, toNewestFirst)
-import           Pos.Core.NetworkMagic (NetworkMagic)
+import           Pos.Core.NetworkMagic (NetworkMagic, RequiresNetworkMagic (..),
+                     makeNetworkMagic)
 import           Pos.Crypto (emptyPassphrase)
 import           Pos.Crypto.Configuration (ProtocolMagic (..))
 import           Pos.DB.Block (rollbackBlocks)
@@ -42,21 +42,27 @@ import           Pos.Wallet.Web.Tracking.Types (newSyncRequest)
 
 import           Test.Pos.Block.Logic.Util (EnableTxPayload (..),
                      InplaceDB (..))
-import           Test.Pos.Configuration (withDefConfigurations)
+import           Test.Pos.Configuration (withProvidedMagicConfig)
 import           Test.Pos.Util.QuickCheck.Property (assertProperty)
 import           Test.Pos.Wallet.Arbitrary.Web.ClientTypes ()
 import           Test.Pos.Wallet.Web.Mode (walletPropertySpec)
 import           Test.Pos.Wallet.Web.Util (importSomeWallets, wpGenBlocks)
 
 spec :: Spec
-spec = withDefConfigurations $ \pm nm _ _ -> do
-    describe "Pos.Wallet.Web.Tracking.BListener" $ modifyMaxSuccess (const 10) $ do
-        describe "Two applications and rollbacks" (twoApplyTwoRollbacksSpec pm nm)
-        -- TODO mhueschen : should this spec get run twice with NMNothing & NMJust?
-    xdescribe "Pos.Wallet.Web.Tracking.evalChange (pending, CSL-2473)" $ do
-        prop evalChangeDiffAccountsDesc evalChangeDiffAccounts
-        prop evalChangeSameAccountsDesc evalChangeSameAccounts
+spec = do
+    runWithMagic NMMustBeJust
+    runWithMagic NMMustBeNothing
   where
+    runWithMagic rnm = do
+        pm <- runIO (generate arbitrary)
+        let nm = makeNetworkMagic rnm pm
+        withProvidedMagicConfig pm rnm $ \txpConfig -> describe ("requiresNetworkMagic: " ++ show rnm) $ do
+            describe "Pos.Wallet.Web.Tracking.BListener" $ modifyMaxSuccess (const 10) $ do
+                describe "Two applications and rollbacks" (twoApplyTwoRollbacksSpec pm nm txpConfig)
+            xdescribe "Pos.Wallet.Web.Tracking.evalChange (pending, CSL-2473)" $ do
+                prop evalChangeDiffAccountsDesc evalChangeDiffAccounts
+                prop evalChangeSameAccountsDesc evalChangeSameAccounts
+    --
     evalChangeDiffAccountsDesc =
       "An outgoing transaction to another account."
     evalChangeSameAccountsDesc =
@@ -66,8 +72,9 @@ twoApplyTwoRollbacksSpec
     :: HasConfigurations
     => ProtocolMagic
     -> NetworkMagic
+    -> TxpConfiguration
     -> Spec
-twoApplyTwoRollbacksSpec pm nm = walletPropertySpec twoApplyTwoRollbacksDesc $ do
+twoApplyTwoRollbacksSpec pm nm txpConfig = walletPropertySpec twoApplyTwoRollbacksDesc $ do
     let k = fromIntegral blkSecurityParam :: Word64
     -- During these tests we need to manually switch back to the old synchronous
     -- way of restoring.
@@ -79,7 +86,6 @@ twoApplyTwoRollbacksSpec pm nm = walletPropertySpec twoApplyTwoRollbacksDesc $ d
     genesisWalletDB <- lift WS.askWalletSnapshot
     applyBlocksCnt1 <- pick $ choose (1, k `div` 2)
     applyBlocksCnt2 <- pick $ choose (1, k `div` 2)
-    let txpConfig = TxpConfiguration 200 Set.empty
     blunds1 <- wpGenBlocks pm
                            nm
                            txpConfig
