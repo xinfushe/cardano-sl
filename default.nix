@@ -124,9 +124,7 @@ let
   };
 
   cardanoPkgsBase = ((import ./pkgs { inherit pkgs; }).override {
-    ghc = overrideDerivation pkgs.haskell.compiler.ghc822 (drv: {
-      patches = drv.patches ++ [ ./ghc-8.0.2-darwin-rec-link.patch ];
-    });
+    ghc = pkgs.haskell.compiler.ghc843;
   });
 
   activeOverlays = [ requiredOverlay ]
@@ -172,18 +170,14 @@ let
       ignoreCollisions = true;
     };
     mkDocker = { environment, connectArgs ? {} }: import ./docker.nix { inherit environment connect gitrev pkgs connectArgs; };
-    cabal2nix = import (pkgs.fetchFromGitHub {
-      owner = "NixOS";
-      repo = "cabal2nix";
-      rev = "v2.11";
-      sha256 = "0ir31ygah8byglhk5ldniv12191385ghs2zcikhcj98byhw9va50";
-    }) { inherit pkgs; };
+
+    # fixup stack2nix to support a more recent cabal2nix, such that we can parse ...OR... licenses.
     stack2nix = import (pkgs.fetchFromGitHub {
-      owner = "avieth";
+      owner = "input-output-hk";
       repo = "stack2nix";
-      rev = "c51db2d31892f7c4e7ff6acebe4504f788c56dca";
-      sha256 = "10jcj33sxpq18gxf3zcck5i09b2y4jm6qjggqdlwd9ss86wg3ksb";
-    }) { inherit pkgs; cabal2nix = cabal2nix; };
+      rev = "e88a8ab79cf2d354735f546f40690e5607894d46";
+      sha256 = "0wmhkfwgrhjbz7s01mli12xhxcqmrr9yz3b72pwv3qnk56cjhx9s";
+    }) { inherit pkgs; };
     inherit (pkgs) purescript;
     connectScripts = {
       mainnet = {
