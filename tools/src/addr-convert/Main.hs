@@ -4,6 +4,7 @@ module Main (main) where
 
 import           Universum
 
+import           Data.Text.Read (decimal)
 import           Data.Version (showVersion)
 import           NeatInterpolation (text)
 import           Options.Applicative (Parser, execParser, footerDoc, fullDesc,
@@ -14,13 +15,15 @@ import           Text.PrettyPrint.ANSI.Leijen (Doc)
 
 import           Paths_cardano_sl (version)
 import           Pos.Core (makeRedeemAddress)
-import           Pos.Core.NetworkMagic (NetworkMagic (..))
+import           Pos.Core.NetworkMagic (NetworkMagic (..),
+                     RequiresNetworkMagic (..), makeNetworkMagic)
+import           Pos.Crypto.Configuration (ProtocolMagic (..))
 import           Pos.Crypto.Signing (fromAvvmPk)
 import           Pos.Util.Util (eitherToThrow)
 
 data AddrConvertOptions = AddrConvertOptions
-    { address      :: !(Maybe Text)
-    , networkMagic :: !(Maybe Text)
+    { address       :: !(Maybe Text)
+    , protocolMagic :: !Text
     }
 
 optionsParser :: Parser AddrConvertOptions
@@ -30,11 +33,12 @@ optionsParser = do
         <> long    "address"
         <> help    "Address to convert. It must be in base64(url) format."
         <> metavar "STRING"
-    nm      <-  optional $ textOption $
-           long    "networkmagic"
+    pm      <- textOption $
+           short   'p'
+        <> long    "protocolMagic"
         <> help    "Generate mainnet or testnet address."
         <> metavar "STRING"
-    return $ AddrConvertOptions address nm
+    return $ AddrConvertOptions address pm
     where
       textOption = option (toText <$> readerAsk)
 
@@ -54,13 +58,13 @@ usageExample :: Maybe Doc
 usageExample = (Just . fromString @Doc . toString @Text) [text|
 Command example:
 
-  stack exec -- cardano-addr-convert -a 2HF83bvYCTzoCbVta6t64W8rFEnvnkJbIUFoT5tOyoU=
+  stack exec -- cardano-addr-convert -a 2HF83bvYCTzoCbVta6t64W8rFEnvnkJbIUFoT5tOyoU= -p mainnet
 
 Output example:
 
-  3mhNKjfhaCT13DjcQ9eMK4VHfZrFxmyXq8SjVPRtz7SWfP
+  Ae2tdPwUPEZLTt73QktZUahV9FXnBRJNgzpbueBqQKGyPDgPdzPdwVretyk
 
-You can also run it without arguments to switch to interactive mode.
+You can also run it without the address argument to switch to interactive mode.
 In this case each entered vending address is echoed with a testnet address.|]
 
 convertAddr :: NetworkMagic -> Text -> IO Text
@@ -68,25 +72,38 @@ convertAddr nm addr =
     pretty . (makeRedeemAddress nm) <$>
     (eitherToThrow . fromAvvmPk) (toText addr)
 
-fromNetworkMagic :: Text -> Either Text NetworkMagic
-fromNetworkMagic txt =
+-- Both mainnet & staging use NMNothing. We explicity disallow provision of
+-- their integer values, so as to avoid confusion with NMJust.
+toNetworkMagic :: Text -> Either Text NetworkMagic
+toNetworkMagic txt =
     case txt of
-        "testnet" -> Right $ NMJust 1
         "mainnet" -> Right NMNothing
-        _ -> Left $ toText ("Please enter either testnet or \
-                            \mainnet for --networkmagic flag" :: String)
+        "staging" -> Right NMNothing
+
+        num -> case decimal num of
+            Right (pm, _)
+                | pm == stagingProtocolMagic ->
+                    Left "Got staging's ProtocolMagic;\
+                        \ please enter 'staging' instead"
+                | pm == mainnetProtocolMagic ->
+                    Left "Got mainnet's ProtocolMagic;\
+                        \ please enter 'mainnet' instead"
+            Right (pm, _) -> Right (makeNetworkMagic NMMustBeJust (ProtocolMagic pm))
+            Left err -> Left $ toText ("Please enter either 'mainnet', 'staging', or\
+                                      \ an Int32 value: " ++ err)
+
+-- As documented [here](https://iohk.myjetbrains.com/youtrack/issue/DEVOPS-844), these are
+-- the ProtocolMagic Int32 values of mainnet & staging.
+stagingProtocolMagic :: Int32
+stagingProtocolMagic = 633343913
+
+mainnetProtocolMagic :: Int32
+mainnetProtocolMagic = 764824073
 
 main :: IO ()
 main = do
     AddrConvertOptions{..} <- getAddrConvertOptions
-    let networkMagic' = fromMaybe (error "Nothing entered") (fromNetworkMagic <$> networkMagic)
-    case (address, networkMagic') of
-        (Just addr, Right (NMJust 1)) -> convertAddr (NMJust 1) addr >>= putText
-        (Just addr, Right NMNothing) -> convertAddr (NMNothing) addr >>= putText
-        (Just addr , Left txt) -> do
-            putText txt
-            line <- getLine
-            case fromNetworkMagic line of
-                Left err -> putText err
-                Right nm -> convertAddr nm addr >>= putText
-        (_, _) -> error "Uncatchable error"
+    case (address, toNetworkMagic protocolMagic) of
+        (_        , Left txt) -> putTextLn txt >> exitFailure
+        (Just addr, Right nm) -> convertAddr nm addr >>= putTextLn
+        (Nothing  , Right nm) -> forever (getLine >>= convertAddr nm >>= putTextLn)
