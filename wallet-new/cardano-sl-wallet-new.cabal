@@ -142,6 +142,7 @@ library
                        Cardano.Wallet.Util
 
                        Cardano.Wallet.WalletLayer
+                       Cardano.Wallet.WalletLayer.Exception
                        Cardano.Wallet.WalletLayer.ExecutionTimeLimit
                        Cardano.Wallet.WalletLayer.Kernel.Accounts
                        Cardano.Wallet.WalletLayer.Kernel.Active
