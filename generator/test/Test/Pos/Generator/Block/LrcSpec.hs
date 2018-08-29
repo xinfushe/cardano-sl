@@ -70,9 +70,11 @@ spec = do
                     blockPropertyToProperty dummyProtocolMagic nm genTestParams
                                             (lrcCorrectnessProp nm txpConfig)
                 -- This test is relatively slow, hence we launch it only 15 times.
-                modifyMaxSuccess (const 15) $ blockPropertySpec lessThanKAfterCrucialDesc
+                -- TODO @intricate: Remove this usage of dummyProtocolMagic
+                modifyMaxSuccess (const 15) $ blockPropertySpec dummyProtocolMagic nm lessThanKAfterCrucialDesc
                     (lessThanKAfterCrucialProp nm txpConfig)
       where
+        -- TODO @intricate: Remove this usage of dummyProtocolMagic
         nm = makeNetworkMagic rnm dummyProtocolMagic
         lrcCorrectnessDesc =
             "Computes richmen correctly according to the stake distribution " <>

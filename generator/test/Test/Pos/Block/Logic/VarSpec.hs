@@ -98,8 +98,8 @@ verifyBlocksPrefixSpec
     -> TxpConfiguration
     -> Spec
 verifyBlocksPrefixSpec pm nm txpConfig = do
-    blockPropertySpec verifyEmptyMainBlockDesc (verifyEmptyMainBlock pm nm txpConfig)
-    blockPropertySpec verifyValidBlocksDesc (verifyValidBlocks pm nm txpConfig)
+    blockPropertySpec pm nm verifyEmptyMainBlockDesc (verifyEmptyMainBlock pm nm txpConfig)
+    blockPropertySpec pm nm verifyValidBlocksDesc (verifyValidBlocks pm nm txpConfig)
   where
     verifyEmptyMainBlockDesc =
         "verification of consistent empty main block " <>
@@ -168,7 +168,7 @@ verifyAndApplyBlocksSpec :: HasStaticConfigurations
                          -> TxpConfiguration
                          -> Spec
 verifyAndApplyBlocksSpec pm nm txpConfig =
-    blockPropertySpec applyByOneOrAllAtOnceDesc (applyByOneOrAllAtOnce pm nm txpConfig applier)
+    blockPropertySpec pm nm applyByOneOrAllAtOnceDesc (applyByOneOrAllAtOnce pm nm txpConfig applier)
   where
     applier :: HasConfiguration => OldestFirst NE Blund -> BlockTestMode ()
     applier blunds = do
@@ -248,7 +248,7 @@ blockEventSuccessSpec :: HasStaticConfigurations
                       -> TxpConfiguration
                       -> Spec
 blockEventSuccessSpec pm nm txpConfig =
-    blockPropertySpec blockEventSuccessDesc (blockEventSuccessProp pm nm txpConfig)
+    blockPropertySpec pm nm blockEventSuccessDesc (blockEventSuccessProp pm nm txpConfig)
   where
     blockEventSuccessDesc =
         "a sequence of interleaved block applications and rollbacks " <>
@@ -395,7 +395,7 @@ applyThroughEpochSpec
     -> Int
     -> Spec
 applyThroughEpochSpec pm nm txpConfig afterCross = do
-    blockPropertySpec applyThroughEpochDesc (applyThroughEpochProp pm nm txpConfig afterCross)
+    blockPropertySpec pm nm applyThroughEpochDesc (applyThroughEpochProp pm nm txpConfig afterCross)
   where
     applyThroughEpochDesc =
       "apply a sequence of blocks that spans through epochs (additional blocks after crossing: " ++
@@ -434,7 +434,7 @@ singleForkSpec :: HasStaticConfigurations
                -> ForkDepth
                -> Spec
 singleForkSpec pm nm txpConfig fd = do
-    blockPropertySpec singleForkDesc (singleForkProp pm nm txpConfig fd)
+    blockPropertySpec pm nm singleForkDesc (singleForkProp pm nm txpConfig fd)
   where
     singleForkDesc =
       "a blockchain of length q<=(9.5*k) blocks can switch to a fork " <>
