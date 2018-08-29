@@ -11,10 +11,12 @@ import           Universum hiding (State)
 
 import           Control.Concurrent.MVar (modifyMVar_, withMVar)
 import           Data.Acid.Advanced (update')
+import qualified Data.Map.Strict as Map
 
 import           Pos.Crypto (EncryptedSecretKey)
 
 import           Cardano.Wallet.Kernel.DB.AcidState (ApplyBlock (..),
+                     DeleteAllHdAccounts (..),
                      ObservableRollbackUseInTestsOnly (..), SwitchToFork (..),
                      SwitchToForkError (..))
 import           Cardano.Wallet.Kernel.DB.BlockContext
@@ -81,14 +83,19 @@ switchToFork pw@PassiveWallet{..} n bs = do
     -- Prevent new wallet restorations from starting while we
     -- switch to the new fork.
     (res, restorations) <- withMVar _walletRestorationTask $ \restorations -> do
-        -- Stop all of the current restorations.
-        mapM_ cancelRestoration restorations
+        -- Stop all of the current restorations, and delete all accounts in
+        -- the restoring wallets.
+        forM_ (Map.toList restorations) $ \(wId, task) -> do
+            cancelRestoration task
+            case wId of
+                WalletIdHdRnd root -> update' _wallets (DeleteAllHdAccounts root)
+
         -- Switch to the new fork.
         res <- update' _wallets $ SwitchToFork k n blockssByAccount
         return (res, restorations)
 
     -- Restart all of the current restorations from the genesis block.
-    mapM_ (view wriRestart) restorations
+    mapM_ restartRestoration restorations
 
     case res of
         Left  err     -> return $ Left err

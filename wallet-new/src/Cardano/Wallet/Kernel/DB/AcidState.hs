@@ -32,6 +32,7 @@ module Cardano.Wallet.Kernel.DB.AcidState (
     -- *** DELETE
   , DeleteHdRoot(..)
   , DeleteHdAccount(..)
+  , DeleteAllHdAccounts(..)
     -- ** Software updates
   , AddUpdate(..)
   , RemoveNextUpdate(..)
@@ -53,7 +54,6 @@ import qualified Data.Map.Strict as Map
 import           Data.SafeCopy (base, deriveSafeCopy)
 import           Formatting (bprint, build, (%))
 import qualified Formatting.Buildable
-import           Test.QuickCheck (Arbitrary (..), oneof)
 
 import           Pos.Chain.Txp (Utxo)
 import           Pos.Core.Chrono (NewestFirst, OldestFirst (..))
@@ -79,6 +79,7 @@ import           Cardano.Wallet.Kernel.PrefilterTx (AddrWithId,
                      PrefilteredBlock (..), emptyPrefilteredBlock)
 import           Cardano.Wallet.Kernel.Util (markMissingMapEntries)
 import           Cardano.Wallet.Kernel.Util.StrictNonEmpty (StrictNonEmpty)
+import           Test.QuickCheck (Arbitrary (..), oneof)
 
 {-------------------------------------------------------------------------------
   Top-level database
@@ -622,6 +623,10 @@ recreateHdRoot hdRoot = do
     -- Now create it again.
     HD.createHdRoot hdRoot
 
+deleteAllHdAccounts :: HdRootId -> Update DB (Either UnknownHdRoot ())
+deleteAllHdAccounts rootId = runUpdateDiscardSnapshot . zoom dbHdWallets $
+    HD.deleteAllHdAccounts rootId
+
 {-------------------------------------------------------------------------------
   Software updates
 -------------------------------------------------------------------------------}
@@ -669,6 +674,7 @@ makeAcidic ''DB [
     , 'updateHdAccountName
     , 'deleteHdRoot
     , 'deleteHdAccount
+    , 'deleteAllHdAccounts
     , 'restoreHdWallet
       -- Software updates
     , 'addUpdate
