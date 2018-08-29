@@ -44,6 +44,7 @@ import           Cardano.Wallet.API.Response (JSONValidationError)
 import           Cardano.Wallet.API.V1.Migration.Types (Migrate (..),
                      MigrationError)
 import           Cardano.Wallet.API.V1.Types
+import qualified Cardano.Wallet.Kernel.DB.HdWallet as HdWallet
 import           Cardano.Wallet.Kernel.DB.InDb (InDb (..))
 import           Cardano.Wallet.Orphans ()
 import qualified Cardano.Wallet.Util as Util
@@ -88,6 +89,14 @@ spec = parallel $ describe "Marshalling & Unmarshalling" $ do
         aesonRoundtripProp @SyncProgress Proxy
         aesonRoundtripProp @SyncThroughput Proxy
         aesonRoundtripProp @AccountIndex Proxy
+
+        -- Kernel Types and Errors
+        aesonRoundtripProp  @HdWallet.HdAccountIx Proxy
+        aesonRoundtripProp  @HdWallet.HdAddressIx Proxy
+        aesonRoundtripProp  @HdWallet.HdRootId Proxy
+        aesonRoundtripProp  @HdWallet.HdAccountId Proxy
+        aesonRoundtripProp  @HdWallet.UnknownHdRoot Proxy
+        aesonRoundtripProp  @HdWallet.UnknownHdAccount Proxy
 
         -- WalletLayer Errors
         aesonRoundtripProp  @CreateWalletError Proxy
