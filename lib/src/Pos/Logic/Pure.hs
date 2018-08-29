@@ -5,7 +5,6 @@ module Pos.Logic.Pure
     , blockVersionData
     ) where
 
-import qualified Prelude as P
 import           Universum
 
 import qualified Data.ByteString as BS
@@ -36,7 +35,8 @@ import           Pos.Core.Txp (TxProof (..))
 import           Pos.Core.Update (ApplicationName (..), BlockVersion (..),
                      BlockVersionData (..), SoftforkRule (..),
                      SoftwareVersion (..), UpdatePayload (..), UpdateProof)
-import           Pos.Crypto.Configuration (ProtocolMagic (..))
+import           Pos.Crypto.Configuration (ProtocolMagic (..),
+                     RequiresNetworkMagic (..))
 import           Pos.Crypto.Hashing (Hash, unsafeMkAbstractHash)
 import           Pos.Crypto.Signing (PublicKey (..), SecretKey (..),
                      Signature (..), deterministicKeyGen, signRaw)
@@ -250,8 +250,7 @@ blockSignature :: BlockSignature
 blockSignature = BlockSignature (coerce (signRaw protocolMagic Nothing secretKey mempty))
 
 protocolMagic :: ProtocolMagic
-protocolMagic = ProtocolMagic 0 (P.error "ProtocolMagic in blocks has \
-                                         \no `requiresNetworkMagic`")
+protocolMagic = ProtocolMagic 0 NMUndefined
 
 extraHeaderData :: ExtraHeaderData MainBlockchain
 extraHeaderData = MainExtraHeaderData

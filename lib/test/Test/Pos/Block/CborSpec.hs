@@ -20,19 +20,26 @@ import           Test.Pos.Core.Arbitrary ()
 import           Test.Pos.DB.Block.Arbitrary ()
 
 spec :: Spec
-spec =
-    withGenesisSpec 0 defaultCoreConfiguration id $ \_ -> do
-        describe "Block network types" $ modifyMaxSuccess (min 10) $ do
-            binaryTest @Block.MsgGetHeaders
-            binaryTest @Block.MsgGetBlocks
-            binaryTest @Block.MsgHeaders
-            binaryTest @Block.MsgBlock
-            binaryTest @Block.MsgStream
-            binaryTest @Block.MsgStreamBlock
+spec = do
+    runWithMagic NMMustBeNothing
+    runWithMagic NMMustBeJust
 
-        describe "Block types defined in the block package" $ do
-            describe "Bi instances" $ do
-                describe "Undo" $ do
-                    binaryTest @Block.SlogUndo
-                    modifyMaxSuccess (min 50) $ do
-                        binaryTest @Block.Undo
+runWithMagic :: RequiresNetworkMagic -> Spec
+runWithMagic rnm = do
+    pm <- (\ident -> ProtocolMagic ident rnm) <$> runIO (generate arbitrary)
+    describe ("(requiresNetworkMagic=" ++ show rnm ++ ")") $
+        withGenesisSpec 0 (defaultCoreConfiguration pm) id $ \_ -> do
+            describe "Block network types" $ modifyMaxSuccess (min 10) $ do
+                binaryTest @Block.MsgGetHeaders
+                binaryTest @Block.MsgGetBlocks
+                binaryTest @Block.MsgHeaders
+                binaryTest @Block.MsgBlock
+                binaryTest @Block.MsgStream
+                binaryTest @Block.MsgStreamBlock
+
+            describe "Block types defined in the block package" $ do
+                describe "Bi instances" $ do
+                    describe "Undo" $ do
+                        binaryTest @Block.SlogUndo
+                        modifyMaxSuccess (min 50) $ do
+                            binaryTest @Block.Undo

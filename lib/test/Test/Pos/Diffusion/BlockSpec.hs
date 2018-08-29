@@ -280,22 +280,23 @@ spec = do
 runWithMagic :: RequiresNetworkMagic -> Spec
 runWithMagic rnm = do
     pm <- (\ident -> ProtocolMagic ident rnm) <$> runIO (generate arbitrary)
-    describe ("(requiresNetworkMagic=" ++ show rnm ++ ")") $ do
-        it "Stream 4 blocks" $ do
-            r <- streamSimple pm 2048 4
-            r `shouldBe` True
-        it "Stream 128 blocks" $ do
-            r <- streamSimple pm 2048 128
-            r `shouldBe` True
-        it "Stream 4096 blocks" $ do
-            r <- streamSimple pm 128 4096
-            r `shouldBe` True
-        it "Streaming dislabed by client" $ do
-            r <- streamSimple pm 0 4
-            r `shouldBe` False
-        it "Batch, single block" $ do
-            r <- batchSimple pm 1
-            r `shouldBe` True
-        it "Batch of blocks" $ do
-            r <- batchSimple pm 2200
-            r `shouldBe` True
+    describe ("(requiresNetworkMagic=" ++ show rnm ++ ")") $
+        describe "Blockdownload" $ do
+            it "Stream 4 blocks" $ do
+                r <- streamSimple pm 2048 4
+                r `shouldBe` True
+            it "Stream 128 blocks" $ do
+                r <- streamSimple pm 2048 128
+                r `shouldBe` True
+            it "Stream 4096 blocks" $ do
+                r <- streamSimple pm 128 4096
+                r `shouldBe` True
+            it "Streaming dislabed by client" $ do
+                r <- streamSimple pm 0 4
+                r `shouldBe` False
+            it "Batch, single block" $ do
+                r <- batchSimple pm 1
+                r `shouldBe` True
+            it "Batch of blocks" $ do
+                r <- batchSimple pm 2200
+                r `shouldBe` True
