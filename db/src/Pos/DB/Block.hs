@@ -35,6 +35,7 @@ import           Universum
 
 import           Pos.Chain.Block (HeaderHash)
 import qualified Pos.Chain.Block as CB
+import           Pos.Core (GenesisHash)
 import           Pos.DB.Block.Epoch (dbGetConsolidatedSerBlockRealDefault,
                      dbGetConsolidatedSerBlundRealDefault,
                      dbGetConsolidatedSerUndoRealDefault)
@@ -65,19 +66,22 @@ import           Pos.DB.Block.Slog.Logic as X
 -- been consolidated) or a regular blund file if it has not.
 dbGetSerBlundRealDefault
     :: (MonadDBRead m, MonadRealDB ctx m)
-    => HeaderHash
+    => GenesisHash
+    -> HeaderHash
     -> m (Maybe SerializedBlund)
 dbGetSerBlundRealDefault = dbGetConsolidatedSerBlundRealDefault
 
 dbGetSerBlockRealDefault
     :: (MonadDBRead m, MonadRealDB ctx m)
-    => HeaderHash
+    => GenesisHash
+    -> HeaderHash
     -> m (Maybe SerializedBlock)
 dbGetSerBlockRealDefault = dbGetConsolidatedSerBlockRealDefault
 
 dbGetSerUndoRealDefault
     :: (MonadDBRead m, MonadRealDB ctx m)
-    => HeaderHash
+    => GenesisHash
+    -> HeaderHash
     -> m (Maybe SerializedUndo)
 dbGetSerUndoRealDefault = dbGetConsolidatedSerUndoRealDefault
 
@@ -92,20 +96,24 @@ type DBSumEnv ctx m =
 
 dbGetSerBlockSumDefault
     :: forall ctx m. (DBSumEnv ctx m)
-    => HeaderHash -> m (Maybe SerializedBlock)
-dbGetSerBlockSumDefault hh = eitherDB (dbGetSerBlockRealDefault hh) (dbGetSerBlockPureDefault hh)
+    => GenesisHash -> HeaderHash -> m (Maybe SerializedBlock)
+dbGetSerBlockSumDefault genesisHash hh = eitherDB
+    (dbGetSerBlockRealDefault genesisHash hh)
+    (dbGetSerBlockPureDefault genesisHash hh)
 
 dbGetSerUndoSumDefault
     :: forall ctx m. DBSumEnv ctx m
-    => HeaderHash -> m (Maybe SerializedUndo)
-dbGetSerUndoSumDefault hh =
-    eitherDB (dbGetSerUndoRealDefault hh) (dbGetSerUndoPureDefault hh)
+    => GenesisHash -> HeaderHash -> m (Maybe SerializedUndo)
+dbGetSerUndoSumDefault genesisHash hh = eitherDB
+    (dbGetSerUndoRealDefault genesisHash hh)
+    (dbGetSerUndoPureDefault genesisHash hh)
 
 dbGetSerBlundSumDefault
     :: forall ctx m. DBSumEnv ctx m
-    => HeaderHash -> m (Maybe SerializedBlund)
-dbGetSerBlundSumDefault hh =
-    eitherDB (dbGetSerBlundRealDefault hh) (dbGetSerBlundPureDefault hh)
+    => GenesisHash -> HeaderHash -> m (Maybe SerializedBlund)
+dbGetSerBlundSumDefault genesisHash hh = eitherDB
+    (dbGetSerBlundRealDefault genesisHash hh)
+    (dbGetSerBlundPureDefault genesisHash hh)
 
 dbPutSerBlundsSumDefault
     :: forall ctx m. (DBSumEnv ctx m)

@@ -44,6 +44,7 @@ import           Pos.Chain.Block (Block, GenesisBlock, HeaderHash,
                      SlogUndo (..), Undo (..), headerHash)
 import qualified Pos.Chain.Block as CB
 import           Pos.Chain.Delegation (DlgUndo (..))
+import           Pos.Core (GenesisHash)
 import           Pos.Crypto (hashHexF)
 import           Pos.DB.BlockIndex (deleteHeaderIndex, putHeadersIndex)
 import           Pos.DB.Class (MonadDB (..), MonadDBRead (..), Serialized (..),
@@ -161,9 +162,10 @@ prepareBlockDB blk =
 
 dbGetSerBlockPureDefault
     :: (MonadPureDB ctx m)
-    => HeaderHash
+    => GenesisHash
+    -> HeaderHash
     -> m (Maybe SerializedBlock)
-dbGetSerBlockPureDefault h = do
+dbGetSerBlockPureDefault _ h = do
     (serblund :: Maybe ByteString) <-
         view (pureBlocksStorage . at h) <$> (view (lensOf @DBPureVar) >>= readIORef)
     case decodeFull' @(ByteString, ByteString) <$> serblund of
@@ -173,9 +175,10 @@ dbGetSerBlockPureDefault h = do
 
 dbGetSerUndoPureDefault
     :: forall ctx m. (MonadPureDB ctx m)
-    => HeaderHash
+    => GenesisHash
+    -> HeaderHash
     -> m (Maybe SerializedUndo)
-dbGetSerUndoPureDefault h =  do
+dbGetSerUndoPureDefault _ h =  do
     (serblund :: Maybe ByteString) <-
         view (pureBlocksStorage . at h) <$> (view (lensOf @DBPureVar) >>= readIORef)
     case decodeFull' @(ByteString, ByteString) <$> serblund of
@@ -185,9 +188,10 @@ dbGetSerUndoPureDefault h =  do
 
 dbGetSerBlundPureDefault
     :: forall ctx m. (MonadPureDB ctx m)
-    => HeaderHash
+    => GenesisHash
+    -> HeaderHash
     -> m (Maybe SerializedBlund)
-dbGetSerBlundPureDefault h =  do
+dbGetSerBlundPureDefault _ h =  do
     (serblund :: Maybe ByteString) <-
         view (pureBlocksStorage . at h) <$> (view (lensOf @DBPureVar) >>= readIORef)
     case decodeFull' @(ByteString, ByteString) <$> serblund of

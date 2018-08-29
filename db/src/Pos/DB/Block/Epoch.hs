@@ -33,8 +33,9 @@ import           System.IO.Error (isDoesNotExistError)
 import           Pos.Binary.Class (Cons (..), Field (..), deriveSimpleBi)
 import           Pos.Chain.Block (HeaderHash, blockHeaderHash)
 import           Pos.Core as Core (Config (..), EpochIndex (..),
-                     EpochOrSlot (..), LocalSlotIndex (..), SlotCount (..),
-                     SlotId (..), configEpochSlots, getEpochOrSlot)
+                     EpochOrSlot (..), GenesisHash, LocalSlotIndex (..),
+                     SlotCount (..), SlotId (..), configEpochSlots,
+                     getEpochOrSlot)
 import           Pos.DB.Block.GState.BlockExtra (getFirstGenesisBlockHash,
                      resolveForwardLink)
 import           Pos.DB.Block.Internal (bspBlund, dbGetSerBlockRealFile,
@@ -97,7 +98,7 @@ consoldidateEpochs coreConfig = ExceptT $ do
     elock <- view epochLock <$> getNodeDBs
     mr <- whenAcquireWrite elock $ do
             tipEpoch <- getTipEpoch
-            checkPoint <- getConsolidateCheckPoint
+            checkPoint <- getConsolidateCheckPoint (configGenesisHash coreConfig)
             if tipEpoch < 2
                 then pure $ Right ()
                 else consolidateLoop checkPoint (configEpochSlots coreConfig) (tipEpoch - 1)
@@ -109,10 +110,11 @@ consoldidateEpochs coreConfig = ExceptT $ do
 -- retieve it using 'dbGetSerBlundRealDefault'.
 dbGetConsolidatedSerBlundRealDefault
     :: (MonadDBRead m, MonadRealDB ctx m)
-    => HeaderHash
+    => GenesisHash
+    -> HeaderHash
     -> m (Maybe SerializedBlund)
-dbGetConsolidatedSerBlundRealDefault hh = do
-    bloc <- blundLocation hh
+dbGetConsolidatedSerBlundRealDefault genesisHash hh = do
+    bloc <- blundLocation genesisHash hh
     case bloc of
         BlundUnknown -> pure Nothing
         BlundFile -> dbGetSerBlundRealFile hh
@@ -122,10 +124,11 @@ dbGetConsolidatedSerBlundRealDefault hh = do
 -- | Like 'dbGetConsolidatedSerBlundRealDefault' but for 'Block'.
 dbGetConsolidatedSerBlockRealDefault
     :: (MonadDBRead m, MonadRealDB ctx m)
-    => HeaderHash
+    => GenesisHash
+    -> HeaderHash
     -> m (Maybe SerializedBlock)
-dbGetConsolidatedSerBlockRealDefault hh = do
-    bloc <- blundLocation hh
+dbGetConsolidatedSerBlockRealDefault genesisHash hh = do
+    bloc <- blundLocation genesisHash hh
     case bloc of
         BlundUnknown -> pure Nothing
         BlundFile -> dbGetSerBlockRealFile hh
@@ -135,10 +138,11 @@ dbGetConsolidatedSerBlockRealDefault hh = do
 -- | Like 'dbGetConsolidatedSerBlundRealDefault' but for 'Undo'.
 dbGetConsolidatedSerUndoRealDefault
     :: (MonadDBRead m, MonadRealDB ctx m)
-    => HeaderHash
+    => GenesisHash
+    -> HeaderHash
     -> m (Maybe SerializedUndo)
-dbGetConsolidatedSerUndoRealDefault hh = do
-    bloc <- blundLocation hh
+dbGetConsolidatedSerUndoRealDefault genesisHash hh = do
+    bloc <- blundLocation genesisHash hh
     case bloc of
         BlundUnknown -> pure Nothing
         BlundFile -> dbGetSerUndoRealFile hh
@@ -155,9 +159,9 @@ data BlundLocation
 
 -- Figure out where a 'Blund' is located. If the 'Blund' has been consolidated
 -- into an epoch file, return its 'SlofId' within that epoch.
-blundLocation :: MonadDBRead m => HeaderHash -> m BlundLocation
-blundLocation hh = do
-    cei <- ccpEpochIndex <$> getConsolidateCheckPoint
+blundLocation :: MonadDBRead m => GenesisHash -> HeaderHash -> m BlundLocation
+blundLocation genesisHash hh = do
+    cei <- ccpEpochIndex <$> getConsolidateCheckPoint genesisHash
     meos <- getHeaderEpochOrSlot hh
     pure $ case unEpochOrSlot <$> meos of
             Nothing -> BlundUnknown
@@ -395,11 +399,11 @@ data ConsolidateCheckPoint = ConsolidateCheckPoint
 -- of the original genesis block.
 -- This can fail (due to getFirstGenesisBlockHash failing) if the database
 -- context is not set up correctly.
-getConsolidateCheckPoint :: MonadDBRead m => m ConsolidateCheckPoint
-getConsolidateCheckPoint =
+getConsolidateCheckPoint :: MonadDBRead m => GenesisHash -> m ConsolidateCheckPoint
+getConsolidateCheckPoint genesisHash =
    miscGetBi consolidateCheckPointKey >>= \case
         Just eh -> pure eh
-        Nothing -> ConsolidateCheckPoint 0 <$> getFirstGenesisBlockHash
+        Nothing -> ConsolidateCheckPoint 0 <$> getFirstGenesisBlockHash genesisHash
 
 -- | Store the hash of the epoch boundary block which is at the start of the
 -- next epoch to be consolidated.

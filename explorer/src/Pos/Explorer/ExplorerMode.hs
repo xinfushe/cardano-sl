@@ -60,8 +60,7 @@ import           Pos.WorkMode (MinWorkMode)
 -- Need Emulation because it has instance Mockable CurrentTime
 import           Test.Pos.Block.Logic.Emulation (Emulation (..), runEmulation)
 import           Test.Pos.Block.Logic.Mode (TestParams (..))
-import           Test.Pos.Core.Dummy (dummyConfig, dummyEpochSlots,
-                     dummyGenesisData)
+import           Test.Pos.Core.Dummy (dummyConfig, dummyEpochSlots)
 
 
 -------------------------------------------------------------------------------------
@@ -310,7 +309,7 @@ explorerPropertyToProperty
     -> Property
 explorerPropertyToProperty tpGen explorerTestProperty =
     forAll tpGen $ \tp ->
-        monadic (ioProperty . (runExplorerTestMode tp (makeExtraCtx dummyGenesisData))) explorerTestProperty
+        monadic (ioProperty . (runExplorerTestMode tp (makeExtraCtx dummyConfig))) explorerTestProperty
 
 instance (Testable a, HasConfigurations) => Testable (ExplorerProperty a) where
     property = explorerPropertyToProperty arbitrary
