@@ -146,6 +146,10 @@ instance Aeson.ToJSON NewForeignError where
 instance Aeson.FromJSON NewForeignError where
     parseJSON = Aeson.genericParseJSON Aeson.defaultOptions
 
+instance Arbitrary NewForeignError where
+    arbitrary = oneof [ NewForeignUnknown <$> arbitrary
+                      , NewForeignFailed  <$> arbitrary
+                      ]
 -- | Errors thrown by 'SwitchToFork'
 data SwitchToForkError =
     -- | We cannot roll back  when we don't have full historical data available

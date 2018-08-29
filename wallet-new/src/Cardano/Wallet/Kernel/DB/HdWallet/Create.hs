@@ -36,6 +36,8 @@ import           Cardano.Wallet.Kernel.DB.Util.IxSet (AutoIncrementKey (..),
                      Indexed (..))
 import qualified Cardano.Wallet.Kernel.DB.Util.IxSet as IxSet
 
+import           Test.QuickCheck (Arbitrary (..), oneof)
+
 {-------------------------------------------------------------------------------
   Errors
 -------------------------------------------------------------------------------}
@@ -51,6 +53,9 @@ instance ToJSON CreateHdRootError where
 
 instance FromJSON CreateHdRootError where
     parseJSON = genericParseJSON defaultOptions
+
+instance Arbitrary CreateHdRootError where
+    arbitrary = oneof [ CreateHdRootExists <$> arbitrary ]
 
 -- | Errors thrown by 'createHdAccount'
 data CreateHdAccountError =

@@ -84,15 +84,13 @@ data NewTransactionError =
   | NewTransactionErrorCreateAddressFailed Kernel.CreateAddressError
   | NewTransactionErrorSignTxFailed SignTransactionError
   | NewTransactionInvalidTxIn
-
-instance Eq NewTransactionError where
-    (==) = error ""
+  deriving (Generic, Eq, Show)
 
 instance Aeson.ToJSON NewTransactionError where
-    toJSON = error ""
+    toJSON = Aeson.genericToJSON Aeson.defaultOptions
 
 instance Aeson.FromJSON NewTransactionError where
-    parseJSON = error ""
+    parseJSON = Aeson.genericParseJSON Aeson.defaultOptions
 
 instance Buildable NewTransactionError where
     build (NewTransactionUnknownAccount err) =
@@ -404,6 +402,13 @@ data SignTransactionError =
     SignTransactionMissingKey Address
   | SignTransactionErrorUnknownAddress Address
   | SignTransactionErrorNotOwned Address
+  deriving (Generic, Eq, Show)
+
+instance Aeson.ToJSON SignTransactionError where
+    toJSON = Aeson.genericToJSON Aeson.defaultOptions
+
+instance Aeson.FromJSON SignTransactionError where
+    parseJSON = Aeson.genericParseJSON Aeson.defaultOptions
 
 instance Buildable SignTransactionError where
     build (SignTransactionMissingKey addr) =
@@ -416,7 +421,10 @@ instance Buildable SignTransactionError where
 -- in order to be able to generate an Arbitrary address we'd need to use
 -- the cardano-sl-core test package
 instance Arbitrary SignTransactionError where
-    arbitrary = oneof []
+    arbitrary = oneof [ SignTransactionMissingKey <$> arbitrary
+                      , SignTransactionErrorUnknownAddress <$> arbitrary
+                      , SignTransactionErrorNotOwned <$> arbitrary
+                      ]
 
 mkSigner :: PassPhrase
          -> Maybe EncryptedSecretKey
@@ -507,7 +515,12 @@ instance Buildable RedeemAdaError where
       bprint ("RedeemAdaNewForeignFailed " % build) err
 
 instance Arbitrary RedeemAdaError where
-    arbitrary = oneof []
+    arbitrary = oneof [ RedeemAdaUnknownAccountId <$> arbitrary
+                      , RedeemAdaErrorCreateAddressFailed <$> arbitrary
+                      , RedeemAdaNotAvailable <$> arbitrary
+                      , RedeemAdaMultipleOutputs <$> arbitrary
+                      , RedeemAdaNewForeignFailed <$> arbitrary
+                      ]
 
 -- | Redeem Ada voucher
 --

@@ -63,7 +63,7 @@ instance Aeson.FromJSON CreateWalletError where
     parseJSON = Aeson.genericParseJSON Aeson.defaultOptions
 
 instance Arbitrary CreateWalletError where
-    arbitrary = oneof []
+    arbitrary = oneof [ CreateWalletFailed <$> arbitrary ]
 
 instance Buildable CreateWalletError where
     build (CreateWalletFailed dbOperation) =
@@ -96,7 +96,11 @@ instance Aeson.FromJSON UpdateWalletPasswordError where
     parseJSON = Aeson.genericParseJSON Aeson.defaultOptions
 
 instance Arbitrary UpdateWalletPasswordError where
-    arbitrary = oneof []
+    arbitrary = oneof [ UpdateWalletPasswordOldPasswordMismatch <$> arbitrary
+                      , UpdateWalletPasswordKeyNotFound <$> arbitrary
+                      , UpdateWalletPasswordUnknownHdRoot <$> arbitrary
+                      , UpdateWalletPasswordKeystoreChangedInTheMeantime <$> arbitrary
+                      ]
 
 instance Buildable UpdateWalletPasswordError where
     build (UpdateWalletPasswordOldPasswordMismatch hdRootId) =

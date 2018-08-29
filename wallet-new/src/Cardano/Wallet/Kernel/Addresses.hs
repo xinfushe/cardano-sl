@@ -61,7 +61,11 @@ instance Aeson.FromJSON CreateAddressError where
     parseJSON = Aeson.genericParseJSON Aeson.defaultOptions
 
 instance Arbitrary CreateAddressError where
-    arbitrary = oneof []
+    arbitrary = oneof [ CreateAddressUnknownHdAccount <$> arbitrary
+                      , CreateAddressKeystoreNotFound <$> arbitrary
+                      , CreateAddressHdRndGenerationFailed <$> arbitrary
+                      , CreateAddressHdRndAddressSpaceSaturated <$> arbitrary
+                      ]
 
 instance Buildable CreateAddressError where
     build (CreateAddressUnknownHdAccount uAccount) =

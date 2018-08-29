@@ -39,6 +39,8 @@ import           Cardano.Wallet.Kernel.DB.InDb
 import           Cardano.Wallet.Kernel.DB.Resolved
 import qualified Cardano.Wallet.Kernel.Util.Core as Core
 
+import           Test.QuickCheck (Arbitrary (..), oneof)
+
 {-------------------------------------------------------------------------------
   Abstract WalletId and AccountId
 -------------------------------------------------------------------------------}
@@ -71,6 +73,9 @@ instance Buildable WalletId where
     build (WalletIdHdRnd rootId) =
         bprint ("WalletIdHdRnd " % F.build) rootId
 
+instance Arbitrary WalletId where
+    arbitrary = WalletIdHdRnd <$> arbitrary
+
 accountToWalletId :: HD.HdAccountId -> WalletId
 accountToWalletId accountId
     = WalletIdHdRnd $ accountId ^. HD.hdAccountIdParent
@@ -93,6 +98,9 @@ instance Aeson.FromJSON AccountId where
 instance Buildable AccountId where
     build (AccountIdHdRnd accountId) =
         bprint ("AccountIdHdRnd " % F.build) accountId
+
+instance Arbitrary AccountId where
+    arbitrary = oneof [ AccountIdHdRnd <$> arbitrary ]
 
 {-------------------------------------------------------------------------------
   Input resolution: raw types

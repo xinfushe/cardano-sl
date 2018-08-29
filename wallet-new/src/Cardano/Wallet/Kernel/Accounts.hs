@@ -57,7 +57,10 @@ instance Aeson.FromJSON CreateAccountError where
     parseJSON = Aeson.genericParseJSON Aeson.defaultOptions
 
 instance Arbitrary CreateAccountError where
-    arbitrary = oneof []
+    arbitrary = oneof [ CreateAccountUnknownHdRoot <$> arbitrary
+                      , CreateAccountKeystoreNotFound <$> arbitrary
+                      , CreateAccountHdRndAccountSpaceSaturated <$> arbitrary
+                      ]
 
 instance Buildable CreateAccountError where
     build (CreateAccountUnknownHdRoot uRoot) =
