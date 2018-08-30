@@ -62,11 +62,8 @@ data NewPendingFailed =
     NewPendingInputsUnavailable (InDb (Set Txp.TxIn))
     deriving (Generic, Eq)
 
-instance Aeson.ToJSON NewPendingFailed where
-    toJSON = Aeson.genericToJSON Aeson.defaultOptions
-
-instance Aeson.FromJSON NewPendingFailed where
-    parseJSON = Aeson.genericParseJSON Aeson.defaultOptions
+instance Aeson.ToJSON NewPendingFailed
+instance Aeson.FromJSON NewPendingFailed
 
 deriveSafeCopy 1 'base ''NewPendingFailed
 
@@ -84,11 +81,8 @@ data NewForeignFailed =
     NewForeignInputsAvailable (InDb (Set Txp.TxIn))
     deriving (Generic, Eq)
 
-instance Aeson.ToJSON NewForeignFailed where
-    toJSON = Aeson.genericToJSON Aeson.defaultOptions
-
-instance Aeson.FromJSON NewForeignFailed where
-    parseJSON = Aeson.genericParseJSON Aeson.defaultOptions
+instance Aeson.ToJSON NewForeignFailed
+instance Aeson.FromJSON NewForeignFailed
 
 deriveSafeCopy 1 'base ''NewForeignFailed
 

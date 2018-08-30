@@ -97,6 +97,7 @@ spec = parallel $ describe "Marshalling & Unmarshalling" $ do
         aesonRoundtripProp  @HdWallet.HdAccountId Proxy
         aesonRoundtripProp  @HdWallet.UnknownHdRoot Proxy
         aesonRoundtripProp  @HdWallet.UnknownHdAccount Proxy
+        aesonRoundtripProp  @(InDb Core.Address) Proxy
 
         -- WalletLayer Errors
         aesonRoundtripProp  @CreateWalletError Proxy

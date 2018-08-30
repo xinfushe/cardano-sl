@@ -63,11 +63,8 @@ data WalletId =
 
     deriving (Generic, Eq, Ord)
 
-instance Aeson.ToJSON WalletId where
-    toJSON = Aeson.genericToJSON Aeson.defaultOptions
-
-instance Aeson.FromJSON WalletId where
-    parseJSON = Aeson.genericParseJSON Aeson.defaultOptions
+instance Aeson.ToJSON WalletId
+instance Aeson.FromJSON WalletId
 
 instance Buildable WalletId where
     build (WalletIdHdRnd rootId) =
@@ -89,11 +86,8 @@ data AccountId =
     AccountIdHdRnd HD.HdAccountId
     deriving (Generic, Eq, Ord)
 
-instance Aeson.ToJSON AccountId where
-    toJSON = Aeson.genericToJSON Aeson.defaultOptions
-
-instance Aeson.FromJSON AccountId where
-    parseJSON = Aeson.genericParseJSON Aeson.defaultOptions
+instance Aeson.ToJSON AccountId
+instance Aeson.FromJSON AccountId
 
 instance Buildable AccountId where
     build (AccountIdHdRnd accountId) =

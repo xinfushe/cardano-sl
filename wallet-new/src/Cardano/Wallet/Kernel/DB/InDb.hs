@@ -67,7 +67,7 @@ import qualified Cardano.Crypto.Wallet as CCW
 -- is correct /only/ if @x@ has a primitive type (i.e., not one defined in
 -- the Cardano core, but in the Haskell base libraries).
 newtype InDb a = InDb { _fromDb :: a }
-    deriving (Eq, Show, Ord, Buildable)
+    deriving (Eq, Show, Ord, Buildable, ToJSON, FromJSON)
 
 instance Functor InDb where
     fmap f = InDb . f . _fromDb
@@ -79,11 +79,6 @@ instance Applicative InDb where
 instance (Arbitrary a) => Arbitrary (InDb a) where
     arbitrary = InDb <$> arbitrary
 
-instance ToJSON a => ToJSON (InDb a) where
-    toJSON = toJSON . _fromDb
-
-instance FromJSON a => FromJSON (InDb a) where
-    parseJSON = fmap InDb . parseJSON
 
 makeLenses ''InDb
 

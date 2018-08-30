@@ -20,8 +20,7 @@ module Cardano.Wallet.Kernel.DB.HdWallet.Create (
 import           Universum
 
 import           Control.Lens (at, (+~), (.=))
-import           Data.Aeson (FromJSON (..), ToJSON (..), defaultOptions,
-                     genericParseJSON, genericToJSON)
+import           Data.Aeson (FromJSON (..), ToJSON (..))
 import           Data.SafeCopy (base, deriveSafeCopy)
 
 import           Formatting (bprint, build, sformat, (%))
@@ -48,11 +47,8 @@ data CreateHdRootError =
     CreateHdRootExists HdRootId
     deriving (Generic, Eq)
 
-instance ToJSON CreateHdRootError where
-    toJSON = genericToJSON defaultOptions
-
-instance FromJSON CreateHdRootError where
-    parseJSON = genericParseJSON defaultOptions
+instance ToJSON CreateHdRootError
+instance FromJSON CreateHdRootError
 
 instance Arbitrary CreateHdRootError where
     arbitrary = oneof [ CreateHdRootExists <$> arbitrary ]

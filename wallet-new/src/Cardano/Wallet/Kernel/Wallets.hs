@@ -56,11 +56,8 @@ data CreateWalletError =
       -- ^ When trying to create the 'Wallet', the DB operation failed.
       deriving (Generic, Eq)
 
-instance Aeson.ToJSON CreateWalletError where
-    toJSON = Aeson.genericToJSON Aeson.defaultOptions
-
-instance Aeson.FromJSON CreateWalletError where
-    parseJSON = Aeson.genericParseJSON Aeson.defaultOptions
+instance Aeson.ToJSON CreateWalletError
+instance Aeson.FromJSON CreateWalletError
 
 instance Arbitrary CreateWalletError where
     arbitrary = oneof [ CreateWalletFailed <$> arbitrary ]
@@ -89,11 +86,8 @@ data UpdateWalletPasswordError =
       -- this operation is not valid anymore.
     deriving (Generic, Eq)
 
-instance Aeson.ToJSON UpdateWalletPasswordError where
-    toJSON = Aeson.genericToJSON Aeson.defaultOptions
-
-instance Aeson.FromJSON UpdateWalletPasswordError where
-    parseJSON = Aeson.genericParseJSON Aeson.defaultOptions
+instance Aeson.ToJSON UpdateWalletPasswordError
+instance Aeson.FromJSON UpdateWalletPasswordError
 
 instance Arbitrary UpdateWalletPasswordError where
     arbitrary = oneof [ UpdateWalletPasswordOldPasswordMismatch <$> arbitrary

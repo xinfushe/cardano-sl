@@ -125,11 +125,8 @@ data NewPendingError =
   | NewPendingFailed Spec.NewPendingFailed
   deriving (Generic, Eq)
 
-instance Aeson.ToJSON NewPendingError where
-    toJSON = Aeson.genericToJSON Aeson.defaultOptions
-
-instance Aeson.FromJSON  NewPendingError where
-    parseJSON = Aeson.genericParseJSON Aeson.defaultOptions
+instance Aeson.ToJSON NewPendingError
+instance Aeson.FromJSON  NewPendingError
 
 -- | Errors thrown by 'newForeign'
 data NewForeignError =
@@ -140,11 +137,8 @@ data NewForeignError =
   | NewForeignFailed Spec.NewForeignFailed
   deriving (Generic, Eq)
 
-instance Aeson.ToJSON NewForeignError where
-    toJSON = Aeson.genericToJSON Aeson.defaultOptions
-
-instance Aeson.FromJSON NewForeignError where
-    parseJSON = Aeson.genericParseJSON Aeson.defaultOptions
+instance Aeson.ToJSON NewForeignError
+instance Aeson.FromJSON NewForeignError
 
 instance Arbitrary NewForeignError where
     arbitrary = oneof [ NewForeignUnknown <$> arbitrary

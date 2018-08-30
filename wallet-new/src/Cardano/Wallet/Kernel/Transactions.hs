@@ -86,11 +86,8 @@ data NewTransactionError =
   | NewTransactionInvalidTxIn
   deriving (Generic, Eq, Show)
 
-instance Aeson.ToJSON NewTransactionError where
-    toJSON = Aeson.genericToJSON Aeson.defaultOptions
-
-instance Aeson.FromJSON NewTransactionError where
-    parseJSON = Aeson.genericParseJSON Aeson.defaultOptions
+instance Aeson.ToJSON NewTransactionError
+instance Aeson.FromJSON NewTransactionError
 
 instance Buildable NewTransactionError where
     build (NewTransactionUnknownAccount err) =
@@ -121,11 +118,8 @@ data PaymentError = PaymentNewTransactionError NewTransactionError
                   -- of retries/max time allocated for the operation.
                   deriving (Generic, Eq)
 
-instance Aeson.ToJSON PaymentError where
-    toJSON = Aeson.genericToJSON Aeson.defaultOptions
-
-instance Aeson.FromJSON PaymentError where
-    parseJSON = Aeson.genericParseJSON Aeson.defaultOptions
+instance Aeson.ToJSON PaymentError
+instance Aeson.FromJSON PaymentError
 
 instance Buildable PaymentError where
     build (PaymentNewTransactionError txErr) =
@@ -345,11 +339,8 @@ instance MonadRandom PayMonad where
 data EstimateFeesError = EstFeesTxCreationFailed NewTransactionError
     deriving (Generic, Eq)
 
-instance Aeson.ToJSON EstimateFeesError where
-    toJSON = Aeson.genericToJSON Aeson.defaultOptions
-
-instance Aeson.FromJSON EstimateFeesError where
-    parseJSON = Aeson.genericParseJSON Aeson.defaultOptions
+instance Aeson.ToJSON EstimateFeesError
+instance Aeson.FromJSON EstimateFeesError
 
 instance Buildable EstimateFeesError where
     build (EstFeesTxCreationFailed newTxErr) =
@@ -404,11 +395,8 @@ data SignTransactionError =
   | SignTransactionErrorNotOwned Address
   deriving (Generic, Eq, Show)
 
-instance Aeson.ToJSON SignTransactionError where
-    toJSON = Aeson.genericToJSON Aeson.defaultOptions
-
-instance Aeson.FromJSON SignTransactionError where
-    parseJSON = Aeson.genericParseJSON Aeson.defaultOptions
+instance Aeson.ToJSON SignTransactionError
+instance Aeson.FromJSON SignTransactionError
 
 instance Buildable SignTransactionError where
     build (SignTransactionMissingKey addr) =
@@ -496,11 +484,8 @@ data RedeemAdaError =
   | RedeemAdaNewForeignFailed NewForeignError
   deriving (Generic, Eq)
 
-instance Aeson.ToJSON RedeemAdaError where
-    toJSON = Aeson.genericToJSON Aeson.defaultOptions
-
-instance Aeson.FromJSON RedeemAdaError where
-    parseJSON = Aeson.genericParseJSON Aeson.defaultOptions
+instance Aeson.ToJSON RedeemAdaError
+instance Aeson.FromJSON RedeemAdaError
 
 instance Buildable RedeemAdaError where
     build (RedeemAdaUnknownAccountId err) =

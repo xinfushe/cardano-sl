@@ -50,11 +50,8 @@ data CreateAccountError =
       -- to find another random index would be too expensive.
     deriving (Generic, Eq)
 
-instance Aeson.ToJSON CreateAccountError where
-    toJSON = Aeson.genericToJSON Aeson.defaultOptions
-
-instance Aeson.FromJSON CreateAccountError where
-    parseJSON = Aeson.genericParseJSON Aeson.defaultOptions
+instance Aeson.ToJSON CreateAccountError
+instance Aeson.FromJSON CreateAccountError
 
 instance Arbitrary CreateAccountError where
     arbitrary = oneof [ CreateAccountUnknownHdRoot <$> arbitrary

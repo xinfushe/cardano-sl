@@ -54,11 +54,8 @@ data CreateAddressError =
       -- to find another random index would be too expensive
     deriving (Generic, Eq)
 
-instance Aeson.ToJSON CreateAddressError where
-    toJSON = Aeson.genericToJSON Aeson.defaultOptions
-
-instance Aeson.FromJSON CreateAddressError where
-    parseJSON = Aeson.genericParseJSON Aeson.defaultOptions
+instance Aeson.ToJSON CreateAddressError
+instance Aeson.FromJSON CreateAddressError
 
 instance Arbitrary CreateAddressError where
     arbitrary = oneof [ CreateAddressUnknownHdAccount <$> arbitrary

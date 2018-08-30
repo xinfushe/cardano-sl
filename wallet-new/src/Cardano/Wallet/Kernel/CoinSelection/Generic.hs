@@ -308,11 +308,8 @@ data CoinSelHardErr =
   | CoinSelHardErrUtxoDepleted
   deriving (Generic, Eq, Show)
 
-instance Aeson.ToJSON CoinSelHardErr where
-    toJSON = Aeson.genericToJSON Aeson.defaultOptions
-
-instance Aeson.FromJSON CoinSelHardErr where
-    parseJSON = Aeson.genericParseJSON Aeson.defaultOptions
+instance Aeson.ToJSON CoinSelHardErr
+instance Aeson.FromJSON CoinSelHardErr
 
 instance Arbitrary CoinSelHardErr where
     arbitrary = pure CoinSelHardErrUtxoDepleted
