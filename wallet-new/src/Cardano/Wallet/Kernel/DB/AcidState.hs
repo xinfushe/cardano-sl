@@ -138,6 +138,9 @@ data SwitchToForkError =
     -- | Apply block failed
   | ApplyBlockFailed Spec.ApplyBlockFailed
 
+    -- | There were not a sufficient number of new blocks provided.
+  | NotEnoughBlocks
+
 deriveSafeCopy 1 'base ''NewPendingError
 deriveSafeCopy 1 'base ''NewForeignError
 deriveSafeCopy 1 'base ''SwitchToForkError

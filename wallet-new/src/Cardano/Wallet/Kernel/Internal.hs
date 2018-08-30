@@ -9,7 +9,6 @@
 module Cardano.Wallet.Kernel.Internal (
     -- * Passive wallet
     PassiveWallet(..)
-  , WalletRestorationInfo(..)
     -- ** Lenses
   , walletKeystore
   , walletMeta
@@ -18,12 +17,21 @@ module Cardano.Wallet.Kernel.Internal (
   , walletNode
   , walletSubmission
   , walletRestorationTask
+    -- * Active wallet
+  , ActiveWallet(..)
+    -- * Restoration data
+  , WalletRestorationInfo(..)
+  , WalletRestorationPosition(..)
+    -- ** Lenses
   , wriCurrentSlot
   , wriTargetSlot
   , wriThroughput
   , wriCancel
-    -- * Active wallet
-  , ActiveWallet(..)
+  , wriPause
+  , wriUnpause
+  , wrpTargetHeaderHash
+  , wrpTargetSlotId
+  , wrpNextHistorical
   ) where
 
 import           Universum hiding (State)
@@ -31,7 +39,8 @@ import           Universum hiding (State)
 import           Control.Lens.TH
 import           Data.Acid (AcidState)
 
-import           Pos.Core (BlockCount, FlatSlotId, ProtocolMagic)
+import           Pos.Chain.Block (HeaderHash)
+import           Pos.Core (BlockCount, FlatSlotId, ProtocolMagic, SlotId)
 import           Pos.Util.Wlog (Severity (..))
 
 import           Cardano.Wallet.API.Types.UnitOfMeasure (MeasuredIn (..),
@@ -64,7 +73,24 @@ data WalletRestorationInfo = WalletRestorationInfo
     -- ^ Speed of restoration.
   , _wriCancel      :: IO ()
     -- ^ The action that can be used to cancel the restoration task.
+  , _wriPause       :: IO WalletRestorationPosition
+    -- ^ Pause the restoration task, returning the current position.
+  , _wriUnpause     :: WalletRestorationPosition -> IO ()
+    -- ^ Unpause the restoration task and set a new position.
   }
+
+-- | Data about the restoration target block and the next
+-- historical block to process.
+data WalletRestorationPosition = WalletRestorationPosition
+  { _wrpTargetHeaderHash :: HeaderHash
+    -- ^ The header hash of the target block.
+  , _wrpTargetSlotId     :: SlotId
+    -- ^ The slot id of the target block.
+  , _wrpNextHistorical   :: Maybe HeaderHash
+    -- ^ The header hash of the next block to process, or Nothing
+    -- to begin at successor of the genesis block.
+  }
+
 
 {-------------------------------------------------------------------------------
   Passive wallet
@@ -128,6 +154,7 @@ data PassiveWallet = PassiveWallet {
 
 makeLenses ''PassiveWallet
 makeLenses ''WalletRestorationInfo
+makeLenses ''WalletRestorationPosition
 
 {-------------------------------------------------------------------------------
   Active wallet

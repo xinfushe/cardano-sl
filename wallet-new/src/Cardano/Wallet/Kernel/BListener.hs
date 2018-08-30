@@ -9,7 +9,7 @@ module Cardano.Wallet.Kernel.BListener (
 
 import           Universum hiding (State)
 
-import           Control.Concurrent.MVar (modifyMVar_)
+import           Control.Concurrent.MVar (modifyMVar_, withMVar)
 import           Data.Acid.Advanced (update')
 
 import           Pos.Crypto (EncryptedSecretKey)
@@ -19,6 +19,7 @@ import           Cardano.Wallet.Kernel.DB.AcidState (ApplyBlock (..),
                      SwitchToForkError (..))
 import           Cardano.Wallet.Kernel.DB.BlockContext
 import           Cardano.Wallet.Kernel.DB.HdWallet
+import           Cardano.Wallet.Kernel.DB.InDb (fromDb)
 import           Cardano.Wallet.Kernel.DB.Resolved (ResolvedBlock, rbContext)
 import           Cardano.Wallet.Kernel.DB.Spec.Update (ApplyBlockFailed)
 import           Cardano.Wallet.Kernel.DB.TxMeta.Types
@@ -73,19 +74,37 @@ switchToFork :: PassiveWallet
              -> Int             -- ^ Number of blocks to roll back
              -> [ResolvedBlock] -- ^ Blocks in the new fork
              -> IO (Either SwitchToForkError ())
-switchToFork pw@PassiveWallet{..} n bs = do
+switchToFork _ _ [] = return (Left NotEnoughBlocks)
+switchToFork pw@PassiveWallet{..} n bs@(oldestBlock:_) = do
     k <- Node.getSecurityParameter _walletNode
     blocksAndMeta <- mapM (prefilterBlock' pw) bs
     let (blockssByAccount, metas) = unzip blocksAndMeta
-    res <- update' _wallets $ SwitchToFork k n blockssByAccount
-    case res of
-      Left  err     -> return $ Left err
-      Right changes -> do mapM_ (putTxMeta _walletMeta) $ concat metas
-                          modifyMVar_ _walletSubmission $
-                            return . Submission.addPendings (fst <$> changes)
-                          modifyMVar_ _walletSubmission $
-                            return . Submission.remPending (snd <$> changes)
-                          return $ Right ()
+
+    -- Prevent new wallet restorations from starting while we
+    -- switch to the new fork.
+    withMVar _walletRestorationTask $ \restoreInfo -> do
+        -- Pause all of the current restorations.
+        mapM_ (view wriPause) restoreInfo
+        -- Switch to the new fork.
+        res <- update' _wallets $ SwitchToFork k n blockssByAccount
+        -- Unpause all of the current restorations, setting the new
+        -- restoration target.
+        let wrp = WalletRestorationPosition
+              { _wrpTargetHeaderHash = oldestBlock ^. rbContext . bcHash   . fromDb
+              , _wrpTargetSlotId     = oldestBlock ^. rbContext . bcSlotId . fromDb
+              , _wrpNextHistorical   = Nothing -- start from genesis block
+              }
+        mapM_ (($ wrp) . view wriUnpause) restoreInfo
+
+        case res of
+            Left  err     -> return $ Left err
+            Right changes -> do
+                mapM_ (putTxMeta _walletMeta) $ concat metas
+                modifyMVar_ _walletSubmission $
+                  return . Submission.addPendings (fst <$> changes)
+                modifyMVar_ _walletSubmission $
+                  return . Submission.remPending (snd <$> changes)
+                return $ Right ()
 
 -- | Observable rollback
 --

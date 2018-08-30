@@ -8,7 +8,7 @@ module Cardano.Wallet.Kernel.Restore
 import           Universum
 
 import           Control.Concurrent.Async (async, cancel)
-import           Control.Concurrent.MVar (modifyMVar_)
+import           Control.Concurrent.MVar (modifyMVar, modifyMVar_)
 import           Data.Acid (update)
 import qualified Data.Map.Merge.Strict as M
 import qualified Data.Map.Strict as M
@@ -33,8 +33,10 @@ import           Cardano.Wallet.Kernel.DB.TxMeta.Types
 import           Cardano.Wallet.Kernel.Decrypt (WalletDecrCredentialsKey (..),
                      decryptAddress, keyToWalletDecrCredentials)
 import           Cardano.Wallet.Kernel.Internal (WalletRestorationInfo (..),
-                     walletMeta, walletNode, walletRestorationTask, wallets,
-                     wriCancel, wriCurrentSlot, wriTargetSlot, wriThroughput)
+                     WalletRestorationPosition (..), walletMeta, walletNode,
+                     walletRestorationTask, wallets, wriCancel, wriCurrentSlot,
+                     wriTargetSlot, wriThroughput, wrpNextHistorical,
+                     wrpTargetHeaderHash, wrpTargetSlotId)
 import           Cardano.Wallet.Kernel.NodeStateAdaptor (Lock, LockContext (..),
                      NodeConstraints, WithNodeState, filterUtxo,
                      getSecurityParameter, getSlotCount, mostRecentMainBlock,
@@ -89,6 +91,13 @@ restoreWallet pw spendingPass name assurance esk prefilter = do
         case mRoot of
           Left  err  -> return (Left err)
           Right root -> do
+            -- Create a MVar holding the initial restoration position.
+            wrp <- newMVar $ WalletRestorationPosition
+                               { _wrpTargetHeaderHash = tgtTip
+                               , _wrpTargetSlotId     = tgtSlot
+                               , _wrpNextHistorical   = Nothing
+                               }
+
             -- Set the wallet's restoration information
             slotCount <- getSlotCount (pw ^. walletNode)
             let restoreInfo = WalletRestorationInfo
@@ -96,6 +105,8 @@ restoreWallet pw spendingPass name assurance esk prefilter = do
                   , _wriTargetSlot  = flattenSlotId slotCount tgtSlot
                   , _wriThroughput  = MeasuredIn 0
                   , _wriCancel      = return ()
+                  , _wriPause       = takeMVar wrp
+                  , _wriUnpause     = putMVar  wrp
                   }
             modifyMVar_ (pw ^. walletRestorationTask) (pure . M.insert wId restoreInfo)
 
@@ -106,8 +117,11 @@ restoreWallet pw spendingPass name assurance esk prefilter = do
               -- is pointless, because that thread will probably be long gone if
               -- an exception ever happens in the restoration worker. Therefore
               -- we just log any errors.
-              catch (restoreWalletHistoryAsync pw (root ^. HD.hdRootId) tgtTip tgtSlot prefilter) $ \(e :: SomeException) ->
-                (pw ^. walletLogMessage) Error ("Exception during restoration: " <> show e)
+              catch (restoreWalletHistoryAsync pw
+                                               (root ^. HD.hdRootId)
+                                               prefilter
+                                               wrp) $ \(e :: SomeException) ->
+                    (pw ^. walletLogMessage) Error ("Exception during restoration: " <> show e)
 
             -- Set up the cancellation action
             updateRestorationInfo pw wId (wriCancel .~ cancel restoreTask)
@@ -191,27 +205,47 @@ getWalletInitInfo wKey@(wId, wdc) lock = do
         let addrId = toHdAddressId wId wam
         return (addrId ^. HD.hdAddressIdParent, M.singleton inp (out, addrId))
 
+data RestorationStepResult
+    = ReachedTargetHash
+    | CannotReachTarget HeaderHash HeaderHash
+    | ContinueWith      TimingData
+
 -- | Restore a wallet's transaction history.
 --
 -- TODO: Think about what we should do if a 'RestorationException' is thrown.
 restoreWalletHistoryAsync :: Kernel.PassiveWallet
                           -> HD.HdRootId
-                          -> HeaderHash
-                          -> SlotId
                           -> (Blund -> IO (Map HD.HdAccountId PrefilteredBlock, [TxMeta]))
+                          -> MVar WalletRestorationPosition
                           -> IO ()
-restoreWalletHistoryAsync wallet rootId target tgtSlot prefilter = do
-    -- 'getFirstGenesisBlockHash' is confusingly named: it returns the hash of
-    -- the first block /after/ the genesis block.
-    startingPoint <- withNode $ getFirstGenesisBlockHash
-    restore startingPoint NoTimingData
+restoreWalletHistoryAsync wallet rootId prefilter pos = restore NoTimingData
   where
     wId :: WalletId
     wId = WalletIdHdRnd rootId
 
     -- Process the restoration of the block with the given 'HeaderHash'.
-    restore :: HeaderHash -> TimingData -> IO ()
-    restore hh timing = do
+    restore :: TimingData -> IO ()
+    restore timing =
+        modifyMVar pos (stepRestore timing) >>= \case
+            ReachedTargetHash        -> finish
+            CannotReachTarget tgt hh -> throwM (RestorationFinishUnreachable tgt hh)
+            ContinueWith timing'     -> restore timing'
+
+
+    stepRestore :: TimingData
+                -> WalletRestorationPosition
+                -> IO (WalletRestorationPosition, RestorationStepResult)
+    stepRestore timing wrp = do
+
+        let tgtHash = wrp ^. wrpTargetHeaderHash
+            tgtSlot = wrp ^. wrpTargetSlotId
+
+        -- Get the header hash of the next historical block we need to process.
+        -- If the wrpNextHistorical is Nothing, that means we're starting at the
+        -- genesis block. Use 'getFirstGenesisBlockHash' to get the header hash
+        -- of the genesis block's /successor/ (despite the name!)
+        hh <- maybe (withNode getFirstGenesisBlockHash) pure (wrp ^. wrpNextHistorical)
+
         -- Updating the average rate every 5 blocks.
         (rate, timing') <- tickTiming 5 timing
 
@@ -220,39 +254,37 @@ restoreWalletHistoryAsync wallet rootId target tgtSlot prefilter = do
 
         -- Skip EBBs
         whenRight block $ \mb -> do
-          -- Filter the blocks by account
-          blund <- (Right mb, ) <$> getUndoOrThrow hh
-          (prefilteredBlocks, txMetas) <- prefilter blund
+            -- Filter the blocks by account
+            blund <- (Right mb, ) <$> getUndoOrThrow hh
+            (prefilteredBlocks, txMetas) <- prefilter blund
 
-          -- Apply the block
-          k    <- getSecurityParameter (wallet ^. walletNode)
-          ctxt <- withNode $ mainBlockContext mb
-          mErr <- update (wallet ^. wallets) $
-                    ApplyHistoricalBlock k ctxt prefilteredBlocks
-          case mErr of
-            Left err -> throwM $ RestorationApplyHistoricalBlockFailed err
-            Right () -> return ()
+            -- Apply the block
+            k    <- getSecurityParameter (wallet ^. walletNode)
+            ctxt <- withNode $ mainBlockContext mb
+            mErr <- update (wallet ^. wallets) $
+                   ApplyHistoricalBlock k ctxt prefilteredBlocks
+            case mErr of
+                Left err -> throwM $ RestorationApplyHistoricalBlockFailed err
+                Right () -> return ()
 
-          -- Update our progress
-          slotCount <- getSlotCount (wallet ^. walletNode)
-          let flat             = flattenSlotId slotCount
-              blockPerSec      = MeasuredIn . BlockCount . perSecond <$> rate
-              throughputUpdate = maybe identity (set wriThroughput) blockPerSec
-              slotId           = mb ^. mainBlockSlot
-          updateRestorationInfo wallet wId ( (wriCurrentSlot .~ flat slotId)
-                                           . (wriTargetSlot  .~ flat tgtSlot)
-                                           . throughputUpdate )
+            -- Update our progress
+            slotCount <- getSlotCount (wallet ^. walletNode)
+            let flat             = flattenSlotIdExplicit slotCount
+                blockPerSec      = MeasuredIn . BlockCount . perSecond <$> rate
+                throughputUpdate = maybe identity (set wriThroughput) blockPerSec
+                slotId           = mb ^. mainBlockSlot
+            updateRestorationInfo wallet wId ( (wriCurrentSlot .~ flat slotId)
+                                             . (wriTargetSlot  .~ flat tgtSlot)
+                                             . throughputUpdate )
+            -- Store the TxMetas
+            forM_ txMetas (putTxMeta (wallet ^. walletMeta))
 
-          -- Store the TxMetas
-          forM_ txMetas (putTxMeta (wallet ^. walletMeta))
-
-        -- Get the next block from the node and recurse.
-        if target == hh then
-          finish
-        else
-          nextBlock hh >>= \case
-            Nothing      -> throwM $ RestorationFinishUnreachable target hh
-            Just header' -> restore header' timing'
+        -- Decide how to proceed.
+        if tgtHash == hh then
+            return (wrp, ReachedTargetHash)
+          else nextHistoricalHash hh <&> \case
+            Nothing  -> (wrp, CannotReachTarget tgtHash hh)
+            Just hh' -> (wrp & wrpNextHistorical .~ Just hh', ContinueWith timing')
 
     -- TODO (@mn): probably should use some kind of bracket to ensure this cleanup happens.
     finish :: IO ()
@@ -262,8 +294,8 @@ restoreWalletHistoryAsync wallet rootId target tgtSlot prefilter = do
         modifyMVar_ (wallet ^. walletRestorationTask) (pure . M.delete wId)
 
     -- Step forward to the successor of the given block.
-    nextBlock :: HeaderHash -> IO (Maybe HeaderHash)
-    nextBlock hh = withNode (resolveForwardLink hh)
+    nextHistoricalHash :: HeaderHash -> IO (Maybe HeaderHash)
+    nextHistoricalHash hh = withNode $ resolveForwardLink hh
 
     -- Get a block
     getBlockOrThrow :: HeaderHash -> IO Block
@@ -285,13 +317,25 @@ restoreWalletHistoryAsync wallet rootId target tgtSlot prefilter = do
     withNode :: forall a. (NodeConstraints => WithNodeState IO a) -> IO a
     withNode action = withNodeState (wallet ^. walletNode) (\_lock -> action)
 
--- Update the restoration information for a wallet.
+-- Update the restoration information for a wallet. If somebody else is holding
+-- the 'walletRestorationTask' MVar, we'll just skip this; the worst that can
+-- happen is the restoration's progress information is not quite up-to-date.
+--
+-- The idea is that the WalletRestorationPosition MVars should be thought of
+-- as properly nested inside the WalletRestorationInfo's MVar. So to avoid
+-- deadlock, we can't grab the WalletRestorationInfo MVar unconditionally here.
+--
+-- Under normal circumstances, there should not be much contention for the
+-- WalletRestorationInfo MVar, and we expect this function to succeed.
 updateRestorationInfo :: Kernel.PassiveWallet
                       -> WalletId
                       -> (WalletRestorationInfo -> WalletRestorationInfo)
                       -> IO ()
 updateRestorationInfo wallet wId upd =
-  modifyMVar_ (wallet ^. walletRestorationTask) (pure . M.adjust upd wId)
+    tryTakeMVar wrt >>= \case
+        Nothing   -> return ()
+        Just info -> void $ tryPutMVar wrt (M.adjust upd wId info)
+  where wrt = wallet ^. walletRestorationTask
 
 {-------------------------------------------------------------------------------
   Timing information (for throughput calculations)
