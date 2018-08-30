@@ -32,7 +32,6 @@ import qualified Formatting.Buildable
 import           Generics.SOP.TH (deriveGeneric)
 import qualified Prelude
 import           Servant (err400, err404)
-import           Test.QuickCheck (Arbitrary (..), oneof)
 
 import           Pos.Chain.Block (Blund)
 import           Pos.Chain.Txp (Utxo)
@@ -100,11 +99,6 @@ instance ToJSON CreateWalletError where
 
 instance FromJSON CreateWalletError where
     parseJSON = jsendErrorGenericParseJSON
-
-instance Arbitrary CreateWalletError where
-    arbitrary = oneof [ CreateWalletError <$> arbitrary
-                      , CreateWalletFirstAccountCreationFailed <$> arbitrary
-                      ]
 
 instance Buildable CreateWalletError where
     build (CreateWalletError kernelError) =
@@ -363,11 +357,6 @@ instance ToJSON CreateAddressError where
 
 instance FromJSON CreateAddressError where
     parseJSON = jsendErrorGenericParseJSON
-
-instance Arbitrary CreateAddressError where
-    arbitrary = oneof [ CreateAddressError <$> arbitrary
-                      , pure (CreateAddressAddressDecodingFailed "Ae2tdPwUPEZ18ZjTLnLVr9CEvUEUX4eW1LBHbxxx")
-                      ]
 
 instance Buildable CreateAddressError where
     build (CreateAddressError kernelError) =
@@ -685,14 +674,6 @@ instance Exception GetTxError where
     toException   = walletExceptionToException
     fromException = walletExceptionFromException
 
-
-instance Arbitrary GetTxError where
-    arbitrary = oneof [ pure GetTxMissingWalletIdError
-                      , pure (GetTxAddressDecodingFailed "by_amount")
-                      , pure (GetTxInvalidSortingOperaration "123")
-                      , GetTxUnknownHdAccount <$> arbitrary
-                      ]
-
 ------------------------------------------------------------
 -- Active wallet errors
 ------------------------------------------------------------
@@ -746,9 +727,6 @@ instance Buildable NewPaymentError where
     build (NewPaymentUnknownAccountId err) =
         bprint ("NewPaymentUnknownAccountId " % build) err
 
-instance Arbitrary NewPaymentError where
-    arbitrary = oneof [ NewPaymentWalletIdDecodingFailed <$> arbitrary ]
-
 data EstimateFeesError =
       EstimateFeesError Kernel.EstimateFeesError
     | EstimateFeesTimeLimitReached TimeExecutionLimit
@@ -792,11 +770,6 @@ instance Buildable EstimateFeesError where
         bprint ("EstimateFeesTimeLimitReached " % build) ter
     build (EstimateFeesWalletIdDecodingFailed txt) =
         bprint ("EstimateFeesWalletIdDecodingFailed " % build) txt
-
-instance Arbitrary EstimateFeesError where
-    arbitrary = oneof [ EstimateFeesError <$> arbitrary
-                      , EstimateFeesTimeLimitReached <$> arbitrary
-                      ]
 
 data RedeemAdaError =
     RedeemAdaError Kernel.RedeemAdaError

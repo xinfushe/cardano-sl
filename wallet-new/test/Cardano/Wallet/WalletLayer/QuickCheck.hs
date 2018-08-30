@@ -12,10 +12,12 @@ import           Cardano.Wallet.Kernel.Diffusion (WalletDiffusion (..))
 import qualified Cardano.Wallet.Kernel.Transactions ()
 import           Cardano.Wallet.Orphans.Arbitrary ()
 import           Cardano.Wallet.WalletLayer (ActiveWalletLayer (..),
-                     CreateAccountError (..), DeleteAccountError (..),
-                     DeleteWalletError (..), GetAccountError (..),
-                     GetAccountsError (..), GetUtxosError (..),
-                     GetWalletError (..), PassiveWalletLayer (..),
+                     CreateAccountError (..), CreateAddressError (..),
+                     CreateWalletError (..), DeleteAccountError (..),
+                     DeleteWalletError (..), EstimateFeesError (..),
+                     GetAccountError (..), GetAccountsError (..),
+                     GetTxError (..), GetUtxosError (..), GetWalletError (..),
+                     NewPaymentError (..), PassiveWalletLayer (..),
                      RedeemAdaError (..), UpdateAccountError (..),
                      UpdateWalletError (..), UpdateWalletPasswordError (..),
                      ValidateAddressError (..))
@@ -162,4 +164,29 @@ instance Arbitrary RedeemAdaError where
     arbitrary = oneof [ RedeemAdaError <$> arbitrary
                       , pure (RedeemAdaWalletIdDecodingFailed "foobar")
                       , RedeemAdaInvalidRedemptionCode <$> arbitrary
+                      ]
+
+instance Arbitrary CreateWalletError where
+    arbitrary = oneof [ CreateWalletError <$> arbitrary
+                      , CreateWalletFirstAccountCreationFailed <$> arbitrary
+                      ]
+
+instance Arbitrary CreateAddressError where
+    arbitrary = oneof [ CreateAddressError <$> arbitrary
+                      , pure (CreateAddressAddressDecodingFailed "Ae2tdPwUPEZ18ZjTLnLVr9CEvUEUX4eW1LBHbxxx")
+                      ]
+
+instance Arbitrary GetTxError where
+    arbitrary = oneof [ pure GetTxMissingWalletIdError
+                      , pure (GetTxAddressDecodingFailed "by_amount")
+                      , pure (GetTxInvalidSortingOperaration "123")
+                      , GetTxUnknownHdAccount <$> arbitrary
+                      ]
+
+instance Arbitrary NewPaymentError where
+    arbitrary = oneof [ NewPaymentWalletIdDecodingFailed <$> arbitrary ]
+
+instance Arbitrary EstimateFeesError where
+    arbitrary = oneof [ EstimateFeesError <$> arbitrary
+                      , EstimateFeesTimeLimitReached <$> arbitrary
                       ]
