@@ -57,6 +57,7 @@ import           Pos.Core.Constants (sharedSeedLength)
 import           Pos.Core.Delegation (HeavyDlgIndex (..), LightDlgIndices (..))
 import qualified Pos.Core.Genesis as G
 import           Pos.Core.Merkle (MerkleTree, mkMerkleTree)
+import           Pos.Core.NetworkMagic (NetworkMagic (..))
 import           Pos.Core.ProtocolConstants (ProtocolConstants (..),
                      VssMaxTTL (..), VssMinTTL (..), pcEpochSlots)
 import           Pos.Core.Ssc (VssCertificate, mkVssCertificate,
@@ -64,7 +65,8 @@ import           Pos.Core.Ssc (VssCertificate, mkVssCertificate,
 import           Pos.Core.Update (ApplicationName (..), BlockVersion (..),
                      BlockVersionData (..), SoftforkRule (..),
                      SoftwareVersion (..), applicationNameMaxLength)
-import           Pos.Crypto (ProtocolMagic, createPsk, toPublic)
+import           Pos.Crypto (ProtocolMagic, RequiresNetworkMagic (..),
+                     createPsk, toPublic)
 import           Pos.Util.Util (leftToPanic)
 
 import           Test.Pos.Core.Dummy (dummyProtocolConstants)
@@ -260,6 +262,9 @@ instance Arbitrary AddrStakeDistribution where
                     portion <-
                         CoinPortion <$> choose (1, max 1 (limit - 1))
                     genPortions (n - 1) (portion : res)
+
+instance Arbitrary NetworkMagic where
+    arbitrary = oneof [pure NMNothing, NMJust <$> arbitrary]
 
 instance Arbitrary AddrAttributes where
     arbitrary = genericArbitrary
@@ -565,6 +570,7 @@ instance Arbitrary G.GenesisProtocolConstants where
     arbitrary = flip G.genesisProtocolConstantsFromProtocolConstants
                      dummyProtocolMagic
                  <$> arbitrary
+                 <*> arbitrary
 
 instance Arbitrary G.GenesisData where
     arbitrary = G.GenesisData

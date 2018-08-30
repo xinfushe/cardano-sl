@@ -36,6 +36,7 @@ import           Pos.Core.Common (Address, Coin, IsBootstrapEraAddr (..),
                      makePubKeyAddressBoot, mkCoin, sumCoins,
                      unsafeIntegerToCoin)
 import           Pos.Core.Delegation (HeavyDlgIndex (..), ProxySKHeavy)
+import           Pos.Core.NetworkMagic (makeNetworkMagic)
 import           Pos.Core.ProtocolConstants (ProtocolConstants, vssMaxTTL,
                      vssMinTTL)
 import           Pos.Core.Ssc (VssCertificate, mkVssCertificate,
@@ -176,19 +177,24 @@ generateGenesisData pm pc (GenesisInitializer{..}) realAvvmBalances = determinis
     let toVss = mkVssCertificatesMap
         vssCerts = GenesisVssCertificatesMap $ toVss vssCertsList
 
+    let nm = flip fromMaybe (makeNetworkMagic pm)
+                            (error "impossible: `ProtocolMagic` from config \
+                                   \contained `NMUndefined`")
+
     -- Non AVVM balances
     ---- Addresses
     let createAddressRich :: SecretKey -> Address
-        createAddressRich (toPublic -> pk) = makePubKeyAddressBoot pk
+        createAddressRich (toPublic -> pk) = makePubKeyAddressBoot nm pk
     let createAddressPoor :: PoorSecret -> Address
         createAddressPoor (PoorEncryptedSecret hdwSk) =
             fst $
             fromMaybe (error "generateGenesisData: pass mismatch") $
             deriveFirstHDAddress
+                nm
                 (IsBootstrapEraAddr True)
                 emptyPassphrase
                 hdwSk
-        createAddressPoor (PoorSecret secret) = makePubKeyAddressBoot (toPublic secret)
+        createAddressPoor (PoorSecret secret) = makePubKeyAddressBoot nm (toPublic secret)
     let richAddresses = map (createAddressRich . rsPrimaryKey) richmenSecrets
         poorAddresses = map createAddressPoor poorsSecrets
 

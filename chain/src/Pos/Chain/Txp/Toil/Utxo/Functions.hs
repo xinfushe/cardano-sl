@@ -28,10 +28,11 @@ import           Pos.Chain.Txp.Toil.Monad (UtxoM, utxoDel, utxoGet, utxoPut)
 import           Pos.Chain.Txp.Toil.Types (TxFee (..))
 import           Pos.Core (AddrType (..), Address (..), integerToCoin,
                      isRedeemAddress, isUnknownAddressType, sumCoins)
-import           Pos.Core.Attributes (Attributes (attrRemain),
+import           Pos.Core.Attributes (Attributes (attrData, attrRemain),
                      areAttributesKnown)
-import           Pos.Core.Common (checkPubKeyAddress, checkRedeemAddress,
-                     checkScriptAddress)
+import           Pos.Core.Common (AddrAttributes (..), checkPubKeyAddress,
+                     checkRedeemAddress, checkScriptAddress)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Core.Txp (Tx (..), TxAttributes, TxAux (..), TxIn (..),
                      TxInWitness (..), TxOut (..), TxOutAux (..),
                      TxSigData (..), TxUndo, TxWitness, isTxInUnknown)
@@ -55,6 +56,7 @@ data VTxContext = VTxContext
       vtcVerifyAllIsKnown :: !Bool
 --    , vtcSlotId   :: !SlotId         -- ^ Slot id of block transaction is checked in
 --    , vtcLeaderId :: !StakeholderId  -- ^ Leader id of block transaction is checked in
+    , vtcNetworkMagic     :: !NetworkMagic
     }
 
 -- | Result of successful 'Tx' verification based on Utxo.
@@ -191,6 +193,11 @@ verifyOutputs VTxContext {..} (TxAux UnsafeTx {..} _) =
             throwError $ ToilInvalidOutput i (TxOutUnknownAddressType addr)
         when (isRedeemAddress addr) $
             throwError $ ToilInvalidOutput i (TxOutRedeemAddressProhibited addr)
+        unless (addressHasValidMagic (attrData addrAttributes)) $
+            throwError $ ToilInvalidOutput i (TxOutAddressBadNetworkMagic addr)
+
+    addressHasValidMagic :: AddrAttributes -> Bool
+    addressHasValidMagic addrAttrs = vtcNetworkMagic == (aaNetworkMagic addrAttrs)
 
 -- Verify inputs of a transaction after they have been resolved
 -- (implies that they are known).

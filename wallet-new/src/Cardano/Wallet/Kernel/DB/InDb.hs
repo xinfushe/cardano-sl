@@ -763,8 +763,9 @@ instance SC.SafeCopy (InDb Core.ProtocolMagic) where
     getCopy = SC.contain $ do
         InDb . Core.ProtocolMagic <$> SC.safeGet
 
-    putCopy (InDb (Core.ProtocolMagic i)) = SC.contain $ do
+    putCopy (InDb (Core.ProtocolMagic i rnm)) = SC.contain $ do
         SC.safePut i
+        SC.safePut rnm
 
 instance SC.SafeCopy (InDb Core.GenesisProof) where
     getCopy = SC.contain $ do
