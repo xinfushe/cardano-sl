@@ -317,10 +317,6 @@ restoreWalletHistoryAsync wallet rootId prefilter (tgtHash, tgtSlot) =
 -- the 'walletRestorationTask' MVar, we'll just skip this; the worst that can
 -- happen is the restoration's progress information is not quite up-to-date.
 --
--- The idea is that the wallet restoration should be thought of
--- as properly nested inside the WalletRestorationInfo's MVar. So to avoid
--- deadlock, we can't grab the WalletRestorationInfo MVar unconditionally here.
---
 -- Under normal circumstances, there should not be much contention for the
 -- WalletRestorationInfo MVar, and we expect this function to succeed.
 updateRestorationInfo :: Kernel.PassiveWallet
