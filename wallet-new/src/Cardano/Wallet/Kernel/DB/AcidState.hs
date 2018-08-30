@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveGeneric   #-}
 {-# LANGUAGE RankNTypes      #-}
 {-# LANGUAGE TemplateHaskell #-}
 
@@ -49,6 +50,7 @@ import           Universum
 import           Control.Lens.TH (makeLenses)
 import           Control.Monad.Except (MonadError, catchError)
 import           Data.Acid (Query, Update, makeAcidic)
+import qualified Data.Aeson as Aeson
 import qualified Data.Map.Strict as Map
 import           Data.SafeCopy (base, deriveSafeCopy)
 import           Formatting (bprint, build, (%))
@@ -121,6 +123,13 @@ data NewPendingError =
 
     -- | Some inputs are not in the wallet utxo
   | NewPendingFailed Spec.NewPendingFailed
+  deriving (Generic, Eq)
+
+instance Aeson.ToJSON NewPendingError where
+    toJSON = Aeson.genericToJSON Aeson.defaultOptions
+
+instance Aeson.FromJSON  NewPendingError where
+    parseJSON = Aeson.genericParseJSON Aeson.defaultOptions
 
 -- | Errors thrown by 'newForeign'
 data NewForeignError =
@@ -129,6 +138,13 @@ data NewForeignError =
 
     -- | Some inputs are not in the wallet utxo
   | NewForeignFailed Spec.NewForeignFailed
+  deriving (Generic, Eq)
+
+instance Aeson.ToJSON NewForeignError where
+    toJSON = Aeson.genericToJSON Aeson.defaultOptions
+
+instance Aeson.FromJSON NewForeignError where
+    parseJSON = Aeson.genericParseJSON Aeson.defaultOptions
 
 -- | Errors thrown by 'SwitchToFork'
 data SwitchToForkError =

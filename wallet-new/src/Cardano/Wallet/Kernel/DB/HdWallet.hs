@@ -1,4 +1,5 @@
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE RankNTypes    #-}
 -- TODO: Not sure about the best way to avoid the orphan instances here
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
@@ -91,6 +92,9 @@ import           Universum hiding ((:|))
 
 import           Control.Lens (at, (+~), _Wrapped)
 import           Control.Lens.TH (makeLenses)
+import           Data.Aeson (FromJSON (..), ToJSON (..), genericParseJSON,
+                     genericToJSON)
+import qualified Data.Aeson as Aeson
 import qualified Data.ByteString as BS
 import qualified Data.IxSet.Typed as IxSet (Indexable (..))
 import           Data.SafeCopy (base, deriveSafeCopy)
@@ -105,7 +109,7 @@ import qualified Pos.Core as Core
 import           Pos.Core.Chrono (NewestFirst (..))
 import qualified Pos.Crypto as Core
 
-import           Cardano.Wallet.API.V1.Types (V1 (..))
+import           Cardano.Wallet.API.V1.Types (V1 (..), unV1)
 import           Cardano.Wallet.Kernel.DB.BlockContext
 import           Cardano.Wallet.Kernel.DB.InDb
 import           Cardano.Wallet.Kernel.DB.Spec
@@ -130,7 +134,13 @@ newtype AccountName = AccountName { getAccountName :: Text }
 
 -- | Account index
 newtype HdAccountIx = HdAccountIx { getHdAccountIx :: Word32 }
-  deriving (Eq, Ord)
+  deriving (Generic, Eq, Ord)
+
+instance ToJSON HdAccountIx where
+    toJSON = genericToJSON Aeson.defaultOptions
+
+instance FromJSON HdAccountIx where
+    parseJSON = genericParseJSON Aeson.defaultOptions
 
 -- NOTE(adn) if we need to generate only @hardened@ account indexes, we
 -- need to extend this arbitrary instance accordingly.
@@ -139,7 +149,13 @@ instance Arbitrary HdAccountIx where
 
 -- | Address index
 newtype HdAddressIx = HdAddressIx { getHdAddressIx :: Word32 }
-  deriving (Eq, Ord)
+  deriving (Generic, Eq, Ord)
+
+instance Aeson.ToJSON HdAddressIx where
+    toJSON = Aeson.genericToJSON Aeson.defaultOptions
+
+instance Aeson.FromJSON HdAddressIx where
+    parseJSON = Aeson.genericParseJSON Aeson.defaultOptions
 
 instance Arbitrary HdAddressIx where
     arbitrary = HdAddressIx <$> arbitrary
@@ -210,7 +226,7 @@ eskToHdRootId = HdRootId . InDb . Core.makePubKeyAddressBoot . Core.encToPublic
 -- as a primary key. This however is a slightly larger refactoring we don't
 -- currently have time for.
 newtype HdRootId = HdRootId { getHdRootId :: InDb Core.Address }
-  deriving (Eq, Ord)
+  deriving (Generic, Eq, Ord)
 
 instance Arbitrary HdRootId where
   arbitrary = do
@@ -218,12 +234,18 @@ instance Arbitrary HdRootId where
                                                <*> pure mempty
       pure (eskToHdRootId esk)
 
+instance ToJSON HdRootId where
+    toJSON = genericToJSON Aeson.defaultOptions
+
+instance FromJSON HdRootId where
+    parseJSON = genericParseJSON Aeson.defaultOptions
+
 -- | HD wallet account ID
 data HdAccountId = HdAccountId {
       _hdAccountIdParent :: !HdRootId
     , _hdAccountIdIx     :: !HdAccountIx
     }
-  deriving (Eq)
+  deriving (Generic, Eq)
 
 -- | We make sure to compare the account index first to avoid doing an
 -- unnecessary comparison of the root ID
@@ -235,12 +257,24 @@ instance Ord HdAccountId where
 instance Arbitrary HdAccountId where
   arbitrary = HdAccountId <$> arbitrary <*> arbitrary
 
+instance ToJSON HdAccountId where
+    toJSON = genericToJSON Aeson.defaultOptions
+
+instance FromJSON HdAccountId where
+    parseJSON = genericParseJSON Aeson.defaultOptions
+
 -- | HD wallet address ID
 data HdAddressId = HdAddressId {
       _hdAddressIdParent :: !HdAccountId
     , _hdAddressIdIx     :: !HdAddressIx
     }
-  deriving (Eq)
+  deriving (Generic, Eq)
+
+instance Aeson.ToJSON HdAddressId where
+    toJSON = Aeson.genericToJSON Aeson.defaultOptions
+
+instance Aeson.FromJSON HdAddressId where
+    parseJSON = Aeson.genericParseJSON Aeson.defaultOptions
 
 -- | We make sure to compare the address index first to avoid doing an
 -- unnecessary comparison of the account ID
@@ -447,7 +481,19 @@ hdAccountStateCurrent f (HdAccountStateIncomplete st) =
 data UnknownHdRoot =
     -- | Unknown root ID
     UnknownHdRoot HdRootId
-    deriving Eq
+    deriving (Generic, Eq)
+
+instance Aeson.ToJSON (V1 UnknownHdRoot) where
+    toJSON = Aeson.genericToJSON Aeson.defaultOptions . unV1
+
+instance Aeson.FromJSON (V1 UnknownHdRoot) where
+    parseJSON = fmap V1 . Aeson.genericParseJSON Aeson.defaultOptions
+
+instance Aeson.ToJSON UnknownHdRoot where
+    toJSON = Aeson.genericToJSON Aeson.defaultOptions
+
+instance Aeson.FromJSON UnknownHdRoot where
+    parseJSON = Aeson.genericParseJSON Aeson.defaultOptions
 
 instance Arbitrary UnknownHdRoot where
     arbitrary = oneof [ UnknownHdRoot <$> arbitrary
@@ -460,12 +506,27 @@ data UnknownHdAccount =
 
     -- | Unknown account (implies the root is known)
   | UnknownHdAccount HdAccountId
-  deriving Eq
+  deriving (Generic, Eq)
+
 
 instance Arbitrary UnknownHdAccount where
     arbitrary = oneof [ UnknownHdAccountRoot <$> arbitrary
                       , UnknownHdAccount <$> arbitrary
                       ]
+
+instance ToJSON (V1 UnknownHdAccount) where
+    toJSON = genericToJSON Aeson.defaultOptions . unV1
+
+instance FromJSON (V1 UnknownHdAccount) where
+    parseJSON = fmap V1 . genericParseJSON Aeson.defaultOptions
+
+instance ToJSON UnknownHdAccount where
+    toJSON = genericToJSON Aeson.defaultOptions
+
+instance FromJSON UnknownHdAccount where
+    parseJSON = genericParseJSON Aeson.defaultOptions
+
+
 
 -- | Unknown address
 data UnknownHdAddress =

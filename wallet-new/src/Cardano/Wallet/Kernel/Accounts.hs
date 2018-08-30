@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveGeneric #-}
+
 module Cardano.Wallet.Kernel.Accounts (
       createAccount
     , deleteAccount
@@ -6,15 +8,15 @@ module Cardano.Wallet.Kernel.Accounts (
     , CreateAccountError(..)
     ) where
 
-import qualified Prelude
 import           Universum
 
-import           Formatting (bprint, build, formatToString, (%))
+import           Formatting (bprint, (%))
 import qualified Formatting as F
 import qualified Formatting.Buildable
 import           System.Random.MWC (GenIO, createSystemRandom, uniformR)
 
 import           Data.Acid (update)
+import qualified Data.Aeson as Aeson
 
 import           Pos.Crypto (EncryptedSecretKey, PassPhrase)
 
@@ -46,7 +48,13 @@ data CreateAccountError =
     | CreateAccountHdRndAccountSpaceSaturated HdRootId
       -- ^ The available number of HD accounts in use is such that trying
       -- to find another random index would be too expensive.
-    deriving Eq
+    deriving (Generic, Eq)
+
+instance Aeson.ToJSON CreateAccountError where
+    toJSON = Aeson.genericToJSON Aeson.defaultOptions
+
+instance Aeson.FromJSON CreateAccountError where
+    parseJSON = Aeson.genericParseJSON Aeson.defaultOptions
 
 instance Arbitrary CreateAccountError where
     arbitrary = oneof []
@@ -59,10 +67,6 @@ instance Buildable CreateAccountError where
     build (CreateAccountHdRndAccountSpaceSaturated hdAcc) =
         bprint ("CreateAccountHdRndAccountSpaceSaturated " % F.build) hdAcc
 
-instance Show CreateAccountError where
-    show = formatToString build
-
-instance Exception CreateAccountError
 
 -- | Creates a new 'Account' for the input wallet.
 -- Note: @it does not@ generate a new 'Address' to go in tandem with this

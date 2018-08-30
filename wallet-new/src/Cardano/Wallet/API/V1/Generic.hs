@@ -5,6 +5,7 @@ module Cardano.Wallet.API.V1.Generic
     , jsendErrorGenericParseJSON
     , gconsNames
     , gconsName
+    , GDiagnosticToJSON
     ) where
 
 import           Universum hiding (All, Generic)

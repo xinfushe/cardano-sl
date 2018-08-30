@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveGeneric #-}
+
 module Cardano.Wallet.Kernel.Types (
     -- * Input resolution
     -- ** Raw types
@@ -20,6 +22,7 @@ module Cardano.Wallet.Kernel.Types (
 
 import           Universum
 
+import qualified Data.Aeson as Aeson
 import qualified Data.List.NonEmpty as NE
 import           Formatting.Buildable (Buildable (..))
 
@@ -56,7 +59,13 @@ data WalletId =
     | WalletIdExt ...
     -}
 
-    deriving (Eq, Ord)
+    deriving (Generic, Eq, Ord)
+
+instance Aeson.ToJSON WalletId where
+    toJSON = Aeson.genericToJSON Aeson.defaultOptions
+
+instance Aeson.FromJSON WalletId where
+    parseJSON = Aeson.genericParseJSON Aeson.defaultOptions
 
 instance Buildable WalletId where
     build (WalletIdHdRnd rootId) =
@@ -73,7 +82,13 @@ accountToWalletId accountId
 data AccountId =
     -- | HD wallet with randomly generated (hardened) index.
     AccountIdHdRnd HD.HdAccountId
-    deriving (Eq, Ord)
+    deriving (Generic, Eq, Ord)
+
+instance Aeson.ToJSON AccountId where
+    toJSON = Aeson.genericToJSON Aeson.defaultOptions
+
+instance Aeson.FromJSON AccountId where
+    parseJSON = Aeson.genericParseJSON Aeson.defaultOptions
 
 instance Buildable AccountId where
     build (AccountIdHdRnd accountId) =

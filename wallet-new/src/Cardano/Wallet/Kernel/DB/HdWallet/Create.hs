@@ -1,4 +1,5 @@
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE RankNTypes    #-}
 
 -- | CREATE operations on HD wallets
 module Cardano.Wallet.Kernel.DB.HdWallet.Create (
@@ -19,6 +20,8 @@ module Cardano.Wallet.Kernel.DB.HdWallet.Create (
 import           Universum
 
 import           Control.Lens (at, (+~), (.=))
+import           Data.Aeson (FromJSON (..), ToJSON (..), defaultOptions,
+                     genericParseJSON, genericToJSON)
 import           Data.SafeCopy (base, deriveSafeCopy)
 
 import           Formatting (bprint, build, sformat, (%))
@@ -41,6 +44,13 @@ import qualified Cardano.Wallet.Kernel.DB.Util.IxSet as IxSet
 data CreateHdRootError =
     -- | We already have a wallet with the specified ID
     CreateHdRootExists HdRootId
+    deriving (Generic, Eq)
+
+instance ToJSON CreateHdRootError where
+    toJSON = genericToJSON defaultOptions
+
+instance FromJSON CreateHdRootError where
+    parseJSON = genericParseJSON defaultOptions
 
 -- | Errors thrown by 'createHdAccount'
 data CreateHdAccountError =
@@ -49,6 +59,7 @@ data CreateHdAccountError =
 
     -- | Account already exists
   | CreateHdAccountExists HdAccountId
+      deriving (Generic, Eq)
 
 -- | Errors thrown by 'createHdAddress'
 data CreateHdAddressError =

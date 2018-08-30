@@ -1,4 +1,8 @@
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE DeriveGeneric      #-}
+{-# LANGUAGE LambdaCase         #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# LANGUAGE StandaloneDeriving #-}
+
 -- | Convert to and from V1 types
 module Cardano.Wallet.WalletLayer.Kernel.Conv (
     -- * From V1 to kernel types
@@ -30,7 +34,7 @@ import qualified Prelude
 
 import           Control.Lens (to)
 import           Control.Monad.Except
-import           Crypto.Error (CryptoError)
+import           Data.Aeson as Aeson
 import           Data.ByteString.Base58 (bitcoinAlphabet, decodeBase58)
 import           Formatting (bprint, build, formatToString, sformat, shown, (%))
 import qualified Formatting.Buildable
@@ -56,7 +60,8 @@ import           Cardano.Wallet.Kernel.Internal (WalletRestorationInfo,
                      wriCurrentSlot, wriTargetSlot, wriThroughput)
 import qualified Cardano.Wallet.Kernel.Read as Kernel
 import           Cardano.Wallet.Kernel.Util (exceptT)
--- import           Cardano.Wallet.WalletLayer (InvalidRedemptionCode (..))
+
+import           Test.QuickCheck (Arbitrary (..), arbitrary, oneof)
 
 {-------------------------------------------------------------------------------
   From V1 to kernel types
@@ -112,7 +117,7 @@ fromRedemptionCodePaper (V1.ShieldedRedemptionCode pvSeed)
                         (V1.RedemptionMnemonic pvBackupPhrase) = do
     encBS <- exceptT $ maybe (Left $ InvalidRedemptionCodeInvalidBase58 pvSeed) Right $
                decodeBase58 bitcoinAlphabet $ encodeUtf8 pvSeed
-    decBS <- withExceptT InvalidRedemptionCodeCryptoError $ exceptT $
+    decBS <- withExceptT (InvalidRedemptionCodeCryptoError . show) $ exceptT $
                aesDecrypt encBS aesKey
     exceptT $ maybe (Left $ InvalidRedemptionCodeNot32Bytes pvSeed) (Right . snd) $
       redeemDeterministicKeyGen decBS
@@ -208,13 +213,20 @@ data InvalidRedemptionCode =
   | InvalidRedemptionCodeInvalidBase58 Text
 
     -- | AES decryption error (for paper wallets)
-  | InvalidRedemptionCodeCryptoError CryptoError
+  | InvalidRedemptionCodeCryptoError Text
 
     -- | Seed is not 32-bytes long (for either paper or non-paper wallets)
     --
     -- NOTE: For paper wallets the seed is actually AES encrypted so the
     -- length would be hard to verify simply by inspecting this text.
   | InvalidRedemptionCodeNot32Bytes Text
+  deriving (Generic, Eq)
+
+instance Aeson.ToJSON InvalidRedemptionCode where
+    toJSON = Aeson.genericToJSON Aeson.defaultOptions
+
+instance Aeson.FromJSON InvalidRedemptionCode where
+    parseJSON = Aeson.genericParseJSON Aeson.defaultOptions
 
 instance Buildable InvalidRedemptionCode where
     build (InvalidRedemptionCodeInvalidBase64 txt) =
@@ -228,6 +240,11 @@ instance Buildable InvalidRedemptionCode where
 
 instance Show InvalidRedemptionCode where
     show = formatToString build
+
+instance Arbitrary InvalidRedemptionCode where
+    arbitrary = oneof [ InvalidRedemptionCodeInvalidBase64 <$> arbitrary
+                      , InvalidRedemptionCodeCryptoError <$> arbitrary
+                      ]
 
 -- | Calculate the 'SyncState' from data about the wallet's restoration.
 toSyncState :: Maybe WalletRestorationInfo -> V1.SyncState

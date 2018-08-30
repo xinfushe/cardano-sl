@@ -1,4 +1,6 @@
+{-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+
 module Cardano.Wallet.Kernel.Transactions (
       pay
     , estimateFees
@@ -22,6 +24,7 @@ import           Control.Monad.Except (MonadError (..), withExceptT)
 import           Control.Retry (RetryPolicyM, RetryStatus, applyPolicy,
                      fullJitterBackoff, limitRetries, retrying)
 import           Crypto.Random (MonadRandom (..))
+import qualified Data.Aeson as Aeson
 import qualified Data.ByteArray as ByteArray
 import qualified Data.ByteString as B
 import qualified Data.List.NonEmpty as NonEmpty
@@ -82,6 +85,15 @@ data NewTransactionError =
   | NewTransactionErrorSignTxFailed SignTransactionError
   | NewTransactionInvalidTxIn
 
+instance Eq NewTransactionError where
+    (==) = error ""
+
+instance Aeson.ToJSON NewTransactionError where
+    toJSON = error ""
+
+instance Aeson.FromJSON NewTransactionError where
+    parseJSON = error ""
+
 instance Buildable NewTransactionError where
     build (NewTransactionUnknownAccount err) =
         bprint ("NewTransactionUnknownAccount " % build) err
@@ -109,6 +121,13 @@ data PaymentError = PaymentNewTransactionError NewTransactionError
                   -- ^ When trying to send the newly-created transaction via
                   -- 'newPending' and the submission layer, we hit the number
                   -- of retries/max time allocated for the operation.
+                  deriving (Generic, Eq)
+
+instance Aeson.ToJSON PaymentError where
+    toJSON = Aeson.genericToJSON Aeson.defaultOptions
+
+instance Aeson.FromJSON PaymentError where
+    parseJSON = Aeson.genericParseJSON Aeson.defaultOptions
 
 instance Buildable PaymentError where
     build (PaymentNewTransactionError txErr) =
@@ -326,6 +345,13 @@ instance MonadRandom PayMonad where
 -------------------------------------------------------------------------------}
 
 data EstimateFeesError = EstFeesTxCreationFailed NewTransactionError
+    deriving (Generic, Eq)
+
+instance Aeson.ToJSON EstimateFeesError where
+    toJSON = Aeson.genericToJSON Aeson.defaultOptions
+
+instance Aeson.FromJSON EstimateFeesError where
+    parseJSON = Aeson.genericParseJSON Aeson.defaultOptions
 
 instance Buildable EstimateFeesError where
     build (EstFeesTxCreationFailed newTxErr) =
@@ -460,6 +486,13 @@ data RedeemAdaError =
     --
     -- If this error happens, it almost certainly indicates a bug.
   | RedeemAdaNewForeignFailed NewForeignError
+  deriving (Generic, Eq)
+
+instance Aeson.ToJSON RedeemAdaError where
+    toJSON = Aeson.genericToJSON Aeson.defaultOptions
+
+instance Aeson.FromJSON RedeemAdaError where
+    parseJSON = Aeson.genericParseJSON Aeson.defaultOptions
 
 instance Buildable RedeemAdaError where
     build (RedeemAdaUnknownAccountId err) =
@@ -472,6 +505,9 @@ instance Buildable RedeemAdaError where
       bprint ("RedeemAdaMultipleOutputs " % build) addr
     build (RedeemAdaNewForeignFailed err) =
       bprint ("RedeemAdaNewForeignFailed " % build) err
+
+instance Arbitrary RedeemAdaError where
+    arbitrary = oneof []
 
 -- | Redeem Ada voucher
 --

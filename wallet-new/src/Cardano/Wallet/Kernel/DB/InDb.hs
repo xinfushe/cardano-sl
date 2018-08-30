@@ -13,6 +13,7 @@ import           Control.Lens.TH (makeLenses)
 import           Crypto.Error (CryptoFailable (..))
 import           Crypto.Hash (Digest, digestFromByteString)
 import qualified Crypto.PubKey.Ed25519 as Ed25519
+import           Data.Aeson (FromJSON (..), ToJSON (..))
 import qualified Data.ByteArray as BA
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
@@ -77,6 +78,12 @@ instance Applicative InDb where
 
 instance (Arbitrary a) => Arbitrary (InDb a) where
     arbitrary = InDb <$> arbitrary
+
+instance ToJSON a => ToJSON (InDb a) where
+    toJSON = toJSON . _fromDb
+
+instance FromJSON a => FromJSON (InDb a) where
+    parseJSON = fmap InDb . parseJSON
 
 makeLenses ''InDb
 
