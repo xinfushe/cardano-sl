@@ -14,19 +14,24 @@ module Cardano.Wallet.Server.Plugins
 
 import           Universum
 
-import           Network.Wai (Application, Middleware)
-import           Network.Wai.Handler.Warp (defaultSettings)
+import           Network.HTTP.Types.Status (badRequest400)
+import           Network.Wai (Application, Middleware, Response, responseLBS)
+import           Network.Wai.Handler.Warp (defaultSettings,
+                     setOnExceptionResponse)
 import           Network.Wai.Middleware.Cors (cors, corsMethods,
                      corsRequestHeaders, simpleCorsResourcePolicy,
                      simpleMethods)
 
 import           Cardano.NodeIPC (startNodeJsIPC)
 import           Cardano.Wallet.API as API
+import           Cardano.Wallet.API.V1.Headers (applicationJson)
+import qualified Cardano.Wallet.API.V1.Types as V1
 import           Cardano.Wallet.Kernel (PassiveWallet)
 import           Cardano.Wallet.Server.CLI (NewWalletBackendParams (..),
                      RunMode, WalletBackendParams (..), isDebugMode)
 import           Cardano.Wallet.WalletLayer (ActiveWalletLayer,
                      PassiveWalletLayer)
+import           Cardano.Wallet.WalletLayer.Exception (WalletException (..))
 import           Pos.Crypto (ProtocolMagic)
 import           Pos.Infra.Diffusion.Types (Diffusion (..))
 import           Pos.Infra.Shutdown (HasShutdownContext (shutdownContext),
@@ -41,6 +46,7 @@ import qualified Cardano.Wallet.Kernel.Diffusion as Kernel
 import qualified Cardano.Wallet.Kernel.Mode as Kernel
 import qualified Cardano.Wallet.Server as Server
 import qualified Cardano.Wallet.WalletLayer.Kernel as WalletLayer.Kernel
+import           Data.Aeson (encode)
 import qualified Data.ByteString.Char8 as BS8
 import qualified Servant
 
@@ -69,7 +75,7 @@ apiServer protocolMagic (NewWalletBackendParams WalletBackendParams{..}) (passiv
             (BS8.unpack ip)
             port
             (if isDebugMode walletRunMode then Nothing else walletTLSParams)
-            Nothing
+            (Just $ setOnExceptionResponse handleException defaultSettings)
             (Just $ portCallback ctx)
   where
     (ip, port) = walletAddress
@@ -82,6 +88,23 @@ apiServer protocolMagic (NewWalletBackendParams WalletBackendParams{..}) (passiv
 
     lower :: env -> ReaderT env IO a -> IO a
     lower env m = runReaderT m env
+
+    handleException :: SomeException -> Response
+    handleException e = case fromException e of
+                            Just we -> handleWalletException we
+                            Nothing -> handleGenericError e
+
+    handleWalletException :: WalletException -> Response
+    handleWalletException (WalletException e) =
+          responseLBS (V1.toHttpErrorStatus e) [applicationJson] . encode $ e
+
+    -- Handles any generic error, trying to prevent internal exceptions from leak outside.
+    handleGenericError :: SomeException -> Response
+    handleGenericError _ =
+        let
+            unknownV1Error = V1.UnknownError "Something went wrong."
+        in
+            responseLBS badRequest400 [applicationJson] $ encode unknownV1Error
 
     portCallback :: ShutdownContext -> Word16 -> IO ()
     portCallback ctx =
