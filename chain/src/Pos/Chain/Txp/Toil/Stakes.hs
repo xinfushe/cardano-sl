@@ -11,8 +11,10 @@ module Pos.Chain.Txp.Toil.Stakes
 
 import           Universum
 
+import           Control.Monad.Trans.Writer (tell)
 import qualified Data.HashMap.Strict as HM
 import qualified Data.HashSet as HS
+import           Data.Sequence (singleton)
 import           Formatting (sformat, (%))
 import           Serokell.Util.Text (listJson)
 
@@ -23,7 +25,7 @@ import           Pos.Core (HasGenesisData, StakesList, coinToInteger,
                      genesisData, mkCoin, sumCoins, unsafeIntegerToCoin)
 import           Pos.Core.Genesis (GenesisData (..))
 import           Pos.Core.Txp (Tx (..), TxAux (..), TxOutAux (..), TxUndo)
-import           Pos.Util.Wlog (logDebug)
+import           Pos.Util.Wlog (LogEvent (..), Severity (Debug))
 
 -- | Apply transactions to stakes.
 applyTxsToStakes :: HasGenesisData => [(TxAux, TxUndo)] -> GlobalToilM ()
@@ -57,7 +59,7 @@ recomputeStakes plusDistr minusDistr = do
     let resolvedStakes = map fst resolvedStakesRaw
     let createdStakes = concatMap snd resolvedStakesRaw
     unless (null createdStakes) $
-        logDebug $ sformat ("Stakes for "%listJson%" will be created in StakesDB") createdStakes
+        lift $ lift $ tell $ singleton $ LogEvent "--TODO loggerName" Debug $ sformat ("Stakes for "%listJson%" will be created in StakesDB") createdStakes
     totalStake <- getTotalStake
     let (positiveDelta, negativeDelta) = (sumCoins plusCoins, sumCoins minusCoins)
         newTotalStake = unsafeIntegerToCoin $

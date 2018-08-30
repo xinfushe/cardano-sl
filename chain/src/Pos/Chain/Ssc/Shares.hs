@@ -9,8 +9,10 @@ module Pos.Chain.Ssc.Shares
 
 import           Universum hiding (id)
 
+import           Control.Monad.Trans.Writer.Lazy (runWriterT, tell)
 import           Crypto.Random (drgNewSeed, seedNew, withDRG)
 import qualified Data.HashMap.Strict as HM
+import           Data.Sequence (singleton)
 import           Formatting (build, sformat, (%))
 
 import           Pos.Binary.Class (AsBinary, asBinary, fromBinary)
@@ -21,7 +23,8 @@ import           Pos.Core.Common (StakeholderId, addressHash)
 import           Pos.Core.Ssc (Commitment (..), getCommitmentsMap)
 import           Pos.Crypto (DecShare, EncShare, VssKeyPair, VssPublicKey,
                      decryptShare, toVssPublicKey)
-import           Pos.Util.Wlog (WithLogger, launchNamedPureLog, logWarning)
+import           Pos.Util.Wlog (LogEvent (..), Severity (Warning), WithLogger,
+                     dispatchEvents)
 
 -- | Decrypt shares (in commitments) that are intended for us and that we can
 -- decrypt.
@@ -33,15 +36,17 @@ getOurShares ourKey = do
     let ourPK = asBinary $ toVssPublicKey ourKey
     encSharesM <- sscRunGlobalQuery (decryptOurShares ourPK)
     let drg = drgNewSeed randSeed
-    res <- launchNamedPureLog (return . fst . withDRG drg) $
+    (res, logEvents) <- (return . fst . withDRG drg) $ runWriterT $
            forM (HM.toList encSharesM) $ \(id, lEncSh) -> do
               let mEncSh = traverse (rightToMaybe . fromBinary) lEncSh
               case mEncSh of
                 Just encShares ->
                     lift $ Just . (id,) <$> mapM (decryptShare ourKey) encShares
                 _             -> do
-                    logWarning $ sformat ("Failed to deserialize share for " % build) id
+                    tell $ singleton $ LogEvent "--TODO" Warning $ sformat ("Failed to deserialize share for " % build) id
+                    --TODO extract LoggerName maybe from StateT (Seq LogEvent, LoggerName)
                     return Nothing
+    dispatchEvents $ toList logEvents
     return $ HM.fromList . catMaybes $ res
 
 -- | Decrypt shares (in commitments) that we can decrypt.

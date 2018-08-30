@@ -55,6 +55,7 @@ import           Control.Lens (at, magnify, makeLenses, zoom, (%=), (+=), (.=))
 import           Control.Monad.Free.Church (F (..), foldF)
 import           Control.Monad.Reader (mapReaderT)
 import           Control.Monad.State.Strict (mapStateT)
+import           Control.Monad.Trans.Writer.Lazy (WriterT, runWriterT)
 import           Data.Default (def)
 import           Fmt ((+|), (|+))
 
@@ -65,7 +66,8 @@ import           Pos.Core.Common (Coin, StakeholderId)
 import           Pos.Core.Txp (TxAux, TxId, TxIn, TxOutAux, TxUndo)
 import           Pos.Util (type (~>))
 import qualified Pos.Util.Modifier as MM
-import           Pos.Util.Wlog (NamedPureLogger, WithLogger, launchNamedPureLog)
+import           Pos.Util.Wlog (HasLoggerName (..), LogEvent, WithLogger,
+                     dispatchEvents)
 
 ----------------------------------------------------------------------------
 -- Monadic actions with Utxo.
@@ -149,12 +151,12 @@ memPoolSize = use $ ltsMemPool . mpSize
 type ExtendedLocalToilM extraEnv extraState =
     ReaderT (UtxoLookup, extraEnv) (
         StateT (LocalToilState, extraState) (
-            NamedPureLogger Identity
+            Identity --TODO replace StateT sth Identity with State
     ))
 
 -- | Natural transformation from 'LocalToilM to 'ExtendedLocalToilM'.
 extendLocalToilM :: LocalToilM a -> ExtendedLocalToilM extraEnv extraState a
-extendLocalToilM = mapReaderT (mapStateT lift . zoom _1) . magnify _1
+extendLocalToilM = mapReaderT (mapStateT identity . zoom _1) . magnify _1
 
 ----------------------------------------------------------------------------
 -- Monad used for global Toil and some actions.
@@ -188,7 +190,11 @@ data GlobalToilEnv = GlobalToilEnv
 makeLenses ''GlobalToilEnv
 
 -- | Base monad in which global Toil happens.
-type GlobalToilMBase = NamedPureLogger (F StakesLookupF)
+type GlobalToilMBase =  WriterT (Seq LogEvent) (F StakesLookupF)
+
+instance HasLoggerName (F StakesLookupF) where
+    askLoggerName = pure "F_StakesLookupFLoggerName"
+    modifyLoggerName = flip const
 
 -- | Monad in which global Toil happens.
 type GlobalToilM
@@ -201,7 +207,10 @@ runGlobalToilMBase ::
     => (StakeholderId -> m (Maybe Coin))
     -> GlobalToilMBase a
     -> m a
-runGlobalToilMBase stakeGetter = launchNamedPureLog foldF'
+runGlobalToilMBase stakeGetter action = do
+    (a, logEvents) <- foldF' $ runWriterT action
+    dispatchEvents $ toList logEvents
+    pure a
   where
     foldF' :: forall x. F StakesLookupF x -> m x
     foldF' =
@@ -268,5 +277,5 @@ utxoMToGlobalToilM :: UtxoM ~> GlobalToilM
 utxoMToGlobalToilM = mapReaderT f . magnify gteUtxo
   where
     f :: State UtxoModifier
-      ~> StateT GlobalToilState (NamedPureLogger (F StakesLookupF))
+      ~> StateT GlobalToilState (WriterT (Seq LogEvent) (F StakesLookupF))
     f = state . runState . zoom gtsUtxoModifier

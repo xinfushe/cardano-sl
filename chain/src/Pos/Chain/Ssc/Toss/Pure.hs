@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+
 -- | Pure Toss.
 
 module Pos.Chain.Ssc.Toss.Pure
@@ -15,7 +17,9 @@ module Pos.Chain.Ssc.Toss.Pure
 import           Universum hiding (id)
 
 import           Control.Lens (at, uses, (%=), (.=))
+import           Control.Monad.Trans.Writer.Lazy (WriterT, runWriterT, tell)
 import qualified Crypto.Random as Rand
+import           Data.Sequence (singleton)
 
 import           Pos.Chain.Lrc (RichmenSet, RichmenStakes)
 import           Pos.Chain.Ssc.Base (deleteSignedCommitment,
@@ -28,9 +32,8 @@ import qualified Pos.Chain.Ssc.VssCertData as VCD
 import           Pos.Core (EpochIndex, HasGenesisData, crucialSlot,
                      genesisVssCerts)
 import           Pos.Core.Update (BlockVersionData)
-import           Pos.Util.Wlog (CanLog, HasLoggerName (..), LogEvent,
-                     NamedPureLogger (..), WithLogger, dispatchEvents,
-                     runNamedPureLog)
+import           Pos.Util.Wlog (CanLog (..), HasLoggerName (..), LogEvent (..),
+                     WithLogger, dispatchEvents)
 
 type MultiRichmenStakes = HashMap EpochIndex RichmenStakes
 type MultiRichmenSet   = HashMap EpochIndex RichmenSet
@@ -40,10 +43,13 @@ type MultiRichmenSet   = HashMap EpochIndex RichmenSet
 -- them with the same seed every time is insecure and must not be done.
 newtype PureToss a = PureToss
     { getPureToss :: StateT SscGlobalState (
-                     NamedPureLogger (
+                     WriterT (Seq LogEvent) (
                      Rand.MonadPseudoRandom Rand.ChaChaDRG)) a
     } deriving (Functor, Applicative, Monad,
                 CanLog, HasLoggerName, Rand.MonadRandom)
+
+instance Monad m => CanLog (WriterT (Seq LogEvent) m) where
+    dispatchMessage name sev msg = tell (singleton (LogEvent name sev msg))
 
 newtype PureTossWithEnv a = PureTossWithEnv
     { getPureTossWithEnv ::
@@ -90,12 +96,12 @@ runPureToss
     :: Rand.MonadRandom m
     => SscGlobalState
     -> PureToss a
-    -> m (a, SscGlobalState, [LogEvent])
+    -> m (a, SscGlobalState, Seq LogEvent)
 runPureToss gs (PureToss act) = do
     seed <- Rand.drgNew
     let ((res, newGS), events) =
             fst . Rand.withDRG seed $    -- run MonadRandom
-            runNamedPureLog $            -- run NamedPureLogger
+            runWriterT $                 -- run Writer of Seq LogEvent
             runStateT act gs             -- run State
     pure (res, newGS, events)
 
@@ -106,7 +112,7 @@ runPureTossWithLogger
     -> m (a, SscGlobalState)
 runPureTossWithLogger gs act = do
     (res, newGS, events) <- runPureToss gs act
-    (res, newGS) <$ dispatchEvents events
+    (res, newGS) <$ (dispatchEvents $ toList events)
 
 evalPureTossWithLogger
     :: (WithLogger m, Rand.MonadRandom m)

@@ -27,12 +27,13 @@ module Pos.Chain.Ssc.Mem
 import           Universum
 
 import           Control.Monad.Morph (hoist)
+import           Control.Monad.Trans.Writer.Lazy (WriterT, runWriterT)
 import qualified Crypto.Random as Rand
 
 import           Pos.Chain.Ssc.Types (SscGlobalState, SscLocalData, SscState,
                      sscGlobal, sscLocal)
 import           Pos.Util.Util (HasLens (..))
-import           Pos.Util.Wlog (NamedPureLogger, WithLogger, launchNamedPureLog)
+import           Pos.Util.Wlog (LogEvent (..), WithLogger, dispatchEvents)
 
 ----------------------------------------------------------------------------
 -- MonadSscMem
@@ -48,12 +49,12 @@ askSscMem = view (lensOf @SscMemTag)
 -- | Applies state changes to given var.
 syncingStateWith
     :: TVar s
-    -> StateT s (NamedPureLogger STM) a
-    -> NamedPureLogger STM a
+    -> StateT s STM a
+    -> STM a
 syncingStateWith var action = do
-    oldV <- lift $ readTVar var
+    oldV <- readTVar var
     (res, newV) <- runStateT action oldV
-    lift $ writeTVar var newV
+    writeTVar var newV
     return res
 
 ----------------------------------------------------------------------------
@@ -64,7 +65,8 @@ type SscLocalQuery a =
     forall m . (MonadReader SscLocalData m, WithLogger m) => m a
 
 type SscLocalUpdate a =
-    forall m . (MonadState SscLocalData m, WithLogger m, Rand.MonadRandom m) => m a
+    forall m . (MonadState SscLocalData m, WithLogger m, Rand.MonadRandom m)
+        => WriterT (Seq LogEvent) m a
 
 -- | Run something that reads 'SscLocalData' in 'MonadSscMem'.
 -- 'MonadIO' is also needed to use stm.
@@ -81,10 +83,12 @@ sscRunLocalQuery action = do
 sscRunLocalSTM
     :: forall ctx m a.
        (MonadSscMem ctx m, MonadIO m, WithLogger m)
-    => StateT SscLocalData (NamedPureLogger STM) a -> m a
+    => WriterT (Seq LogEvent) (StateT SscLocalData STM) a -> m a
 sscRunLocalSTM action = do
     localVar <- sscLocal <$> askSscMem
-    launchNamedPureLog atomically $ syncingStateWith localVar action
+    (a, logEvents) <- atomically $ syncingStateWith localVar $ runWriterT action
+    dispatchEvents $ toList logEvents
+    pure a
 
 ----------------------------------------------------------------------------
 -- Global
@@ -108,15 +112,17 @@ sscRunGlobalQuery action = do
 
 sscRunGlobalUpdate
     :: (MonadSscMem ctx m, Rand.MonadRandom m, WithLogger m, MonadIO m)
-    => StateT SscGlobalState
-       (NamedPureLogger (Rand.MonadPseudoRandom Rand.ChaChaDRG)) a
+    => WriterT (Seq LogEvent) (StateT SscGlobalState (Rand.MonadPseudoRandom Rand.ChaChaDRG)) a
     -> m a
 sscRunGlobalUpdate action = do
     globalVar <- sscGlobal <$> askSscMem
     seed <- Rand.drgNew
-    launchNamedPureLog atomically $
+    (a, logEvents) <- atomically $
         syncingStateWith globalVar $
+        runWriterT $
         executeMonadBaseRandom seed action
+    dispatchEvents $ toList logEvents
+    pure a
   where
     -- (... MonadPseudoRandom) a -> (... n) a
     executeMonadBaseRandom seed =
