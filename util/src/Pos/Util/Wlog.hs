@@ -16,7 +16,7 @@ module Pos.Util.Wlog
         , logWarning
         , logMessage
           -- * LoggerName
-        , LoggerName (..)
+        , LoggerName
         , LoggerNameBox (..)
         , HasLoggerName (..)
         , usingLoggerName
@@ -66,20 +66,21 @@ module Pos.Util.Wlog
         , LogHandlerTag (HandlerFilelike)
         ) where
 
-import           System.Wlog (CanLog (..), HandlerWrap (..), HasLoggerName (..),
-                     LogEvent (..), LoggerConfig (..), LoggerName (..),
-                     LoggerNameBox (..), NamedPureLogger (..), Severity (..),
+import           System.Wlog (CanLog (..), HandlerWrap (..), LogEvent (..),
+                     LoggerConfig (..), NamedPureLogger (..), Severity (..),
                      WithLogger, consoleActionB, debugPlus,
                      defaultHandleAction, dispatchEvents, errorPlus,
                      fromScratch, hwFilePath, infoPlus, launchNamedPureLog,
                      lcLogsDirectory, lcTermSeverityOut, lcTree, logDebug,
                      logError, logInfo, logMCond, logMessage, logNotice,
                      logWarning, ltFiles, ltSeverity, ltSubloggers,
-                     maybeLogsDirB, modifyLoggerName, noticePlus,
-                     parseLoggerConfig, productionB, removeAllHandlers,
-                     retrieveLogContent, runNamedPureLog, setLevel,
-                     setupLogging, showTidB, termSeveritiesOutB,
-                     updateGlobalLogger, usingLoggerName, warningPlus,
-                     zoomLogger)
+                     maybeLogsDirB, noticePlus, parseLoggerConfig, productionB,
+                     removeAllHandlers, retrieveLogContent, runNamedPureLog,
+                     setLevel, setupLogging, showTidB, termSeveritiesOutB,
+                     updateGlobalLogger, warningPlus, zoomLogger)
 import           System.Wlog.Formatter (centiUtcTimeF)
 import           System.Wlog.LogHandler (LogHandlerTag (HandlerFilelike))
+
+import           Pos.Util.Log (LoggerName)
+import           Pos.Util.Wlog.Compatibility (HasLoggerName (..),
+                     LoggerNameBox (..), usingLoggerName)

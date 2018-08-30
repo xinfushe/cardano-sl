@@ -52,6 +52,7 @@ library
                        Pos.Util.Trace.Named
                        Pos.Util.Util
                        Pos.Util.Wlog
+                       Pos.Util.Wlog.Compatibility
 
   other-modules:
                        Pos.Util.CompileInfoGit
@@ -81,6 +82,7 @@ library
                      , log-warper >= 1.0.3
                      , lrucache
                      , megaparsec
+                     , mmorph
                      , mtl
                      , optparse-applicative
                      , parsec
@@ -96,6 +98,7 @@ library
                      , time
                      , time-units
                      , transformers
+                     , transformers-base
                      , transformers-lift
                      , universum
                      , unliftio-core
