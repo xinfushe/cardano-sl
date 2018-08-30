@@ -129,7 +129,7 @@ beginRestoration pw wId prefilter root (tgtTip, tgtSlot) restart = do
     slotCount <- getSlotCount (pw ^. walletNode)
     let restoreInfo = WalletRestorationInfo
                       { _wriCurrentSlot = 0
-                      , _wriTargetSlot  = flattenSlotIdExplicit slotCount tgtSlot
+                      , _wriTargetSlot  = flattenSlotId slotCount tgtSlot
                       , _wriThroughput  = MeasuredIn 0
                       , _wriCancel      = return ()
                       , _wriRestart     = restart
