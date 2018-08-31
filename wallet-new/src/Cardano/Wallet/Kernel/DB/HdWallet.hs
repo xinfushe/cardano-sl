@@ -96,7 +96,6 @@ import           Universum hiding ((:|))
 import           Control.Lens (at, (+~), _Wrapped)
 import           Control.Lens.TH (makeLenses)
 import           Data.Aeson (FromJSON (..), ToJSON (..))
-import qualified Data.Aeson as Aeson
 import qualified Data.ByteString as BS
 import qualified Data.IxSet.Typed as IxSet (Indexable (..))
 import           Data.SafeCopy (base, deriveSafeCopy)
@@ -150,8 +149,8 @@ instance Arbitrary HdAccountIx where
 newtype HdAddressIx = HdAddressIx { getHdAddressIx :: Word32 }
   deriving (Generic, Eq, Ord, Show)
 
-instance Aeson.ToJSON HdAddressIx
-instance Aeson.FromJSON HdAddressIx
+instance ToJSON HdAddressIx
+instance FromJSON HdAddressIx
 
 instance Arbitrary HdAddressIx where
     arbitrary = HdAddressIx <$> arbitrary
@@ -260,8 +259,8 @@ data HdAddressId = HdAddressId {
     }
   deriving (Generic, Eq)
 
-instance Aeson.ToJSON HdAddressId
-instance Aeson.FromJSON HdAddressId
+instance ToJSON HdAddressId
+instance FromJSON HdAddressId
 
 -- | We make sure to compare the address index first to avoid doing an
 -- unnecessary comparison of the account ID
@@ -470,10 +469,10 @@ data UnknownHdRoot =
     UnknownHdRoot HdRootId
     deriving (Generic, Eq, Show)
 
-deriving newtype instance Aeson.ToJSON (V1 UnknownHdRoot)
-deriving newtype instance Aeson.FromJSON (V1 UnknownHdRoot)
-instance Aeson.ToJSON UnknownHdRoot
-instance Aeson.FromJSON UnknownHdRoot
+deriving newtype instance ToJSON (V1 UnknownHdRoot)
+deriving newtype instance FromJSON (V1 UnknownHdRoot)
+instance ToJSON UnknownHdRoot
+instance FromJSON UnknownHdRoot
 
 instance Arbitrary UnknownHdRoot where
     arbitrary = oneof [ UnknownHdRoot <$> arbitrary
