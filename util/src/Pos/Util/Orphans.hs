@@ -52,7 +52,13 @@ import           Formatting.Buildable (build)
 import qualified Language.Haskell.TH.Syntax as TH
 import           Serokell.Data.Memory.Units (Byte, fromBytes, toBytes)
 
-import           Pos.Util.Wlog (CanLog, HasLoggerName (..), LoggerNameBox (..))
+import           Pos.Util.Wlog (CanLog, HasLoggerName (..))
+
+import qualified Katip as K
+import qualified Katip.Monadic as KM
+
+import           Data.Time.Clock.POSIX (getCurrentTime)
+
 
 ----------------------------------------------------------------------------
 -- Orphan miscellaneous instances
@@ -74,7 +80,7 @@ instance ToJSON Byte where
     toJSON = toJSON . toBytes
 
 instance Rand.DRG drg => HasLoggerName (Rand.MonadPseudoRandom drg) where
-    askLoggerName = pure "MonadPseudoRandom"
+    askLoggerName = pure $ KM.KatipContextTState (K.LogEnv "dummy" 0 (K.Namespace ["RandDRG"]) (K.Environment "cardano") getCurrentTime mempty) mempty $ K.Namespace ["MonadPseudoRandom"]
     modifyLoggerName = flip const
 
 instance {-# OVERLAPPABLE #-}
@@ -171,7 +177,7 @@ instance
     askLoggerName = lift askLoggerName
     modifyLoggerName = liftLocal askLoggerName modifyLoggerName
 
-deriving instance LiftLocal LoggerNameBox
+-- deriving instance LiftLocal LoggerNameBox
 
 instance MonadUnliftIO (t m) => MonadUnliftIO (Ether.TaggedTrans tag t m) where
     {-# INLINE askUnliftIO #-}

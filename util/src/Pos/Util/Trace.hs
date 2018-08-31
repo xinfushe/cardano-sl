@@ -25,7 +25,8 @@ module Pos.Util.Trace
 import           Data.Functor.Contravariant (Contravariant (..), Op (..))
 import qualified Data.Text.IO as TIO
 import qualified Pos.Util.Log as Log
-import qualified Pos.Util.Wlog as Wlog
+import qualified System.Wlog as Wlog
+--TODO remove it completely
 import           Universum hiding (trace)
 
 -- | Abstracts logging.

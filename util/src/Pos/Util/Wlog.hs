@@ -17,7 +17,7 @@ module Pos.Util.Wlog
         , logMessage
           -- * LoggerName
         , LoggerName
-        , LoggerNameBox (..)
+        , LoggerNameBox
         , HasLoggerName (..)
         , usingLoggerName
           -- * LoggerConfig
@@ -68,19 +68,19 @@ module Pos.Util.Wlog
 
 import           System.Wlog (CanLog (..), HandlerWrap (..), LogEvent (..),
                      LoggerConfig (..), NamedPureLogger (..), Severity (..),
-                     WithLogger, consoleActionB, debugPlus,
-                     defaultHandleAction, dispatchEvents, errorPlus,
-                     fromScratch, hwFilePath, infoPlus, launchNamedPureLog,
-                     lcLogsDirectory, lcTermSeverityOut, lcTree, logDebug,
-                     logError, logInfo, logMCond, logMessage, logNotice,
-                     logWarning, ltFiles, ltSeverity, ltSubloggers,
-                     maybeLogsDirB, noticePlus, parseLoggerConfig, productionB,
-                     removeAllHandlers, retrieveLogContent, runNamedPureLog,
-                     setLevel, setupLogging, showTidB, termSeveritiesOutB,
+                     consoleActionB, debugPlus, defaultHandleAction,
+                     dispatchEvents, errorPlus, fromScratch, hwFilePath,
+                     infoPlus, launchNamedPureLog, lcLogsDirectory,
+                     lcTermSeverityOut, lcTree, logMCond, ltFiles, ltSeverity,
+                     ltSubloggers, maybeLogsDirB, noticePlus,
+                     parseLoggerConfig, productionB, removeAllHandlers,
+                     retrieveLogContent, runNamedPureLog, setLevel,
+                     setupLogging, showTidB, termSeveritiesOutB,
                      updateGlobalLogger, warningPlus, zoomLogger)
 import           System.Wlog.Formatter (centiUtcTimeF)
 import           System.Wlog.LogHandler (LogHandlerTag (HandlerFilelike))
 
-import           Pos.Util.Log (LoggerName)
-import           Pos.Util.Wlog.Compatibility (HasLoggerName (..),
-                     LoggerNameBox (..), usingLoggerName)
+import           Pos.Util.Log (logDebug, logError, logInfo, logMessage,
+                     logNotice, logWarning)
+import           Pos.Util.Wlog.Compatibility (HasLoggerName (..), LoggerName,
+                     LoggerNameBox, WithLogger, usingLoggerName)

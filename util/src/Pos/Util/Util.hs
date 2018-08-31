@@ -443,7 +443,7 @@ tMeasureLog label = fmap fst . tMeasure logDebug label
 tMeasureIO :: (MonadIO m) => Text -> m a -> m a
 tMeasureIO label = fmap fst . tMeasure putText label
 
-timed :: (MonadIO m, WithLogger m) => Text -> m a -> m (a, Microsecond)
+timed :: (WithLogger m) => Text -> m a -> m (a, Microsecond)
 timed = tMeasure logDebug
 
 -- | Takes the first time sample, executes action (forcing its
