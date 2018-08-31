@@ -25,7 +25,7 @@ import           System.Info (arch, os)
 
 import           Paths_cardano_sl_infra (version)
 import           Pos.Core.Reporting ()
-import           Pos.Crypto (ProtocolMagic (..))
+import           Pos.Crypto (ProtocolMagic (..), getProtocolMagic)
 import           Pos.Infra.Reporting.Exceptions (ReportingError (..))
 import           Pos.Util.CompileInfo (CompileTimeInfo)
 import           Pos.Util.Trace (Severity (..), Trace, traceWith)

@@ -59,6 +59,7 @@ import           Pos.Binary.Class (Bi (..), Cons (..), Field (..), decodeFull',
                      deriveSimpleBi, encodeListLen, enforceSize, serialize')
 import           Pos.Core (Address, accountGenesisIndex, addressF,
                      makeRootPubKeyAddress, wAddressGenesisIndex)
+import           Pos.Core.NetworkMagic (NetworkMagic (..))
 import           Pos.Crypto (EncryptedSecretKey, SecretKey, VssKeyPair,
                      encToPublic)
 import           Pos.Util.UserKeyError (KeyError (..), UserKeyError (..),
@@ -95,7 +96,9 @@ instance Buildable WalletUserSecret where
     build WalletUserSecret{..} =
         bprint ("{ root = "%addressF%", set name = "%build%
                 ", wallets = "%pairsF%", accounts = "%pairsF%" }")
-        (makeRootPubKeyAddress $ encToPublic _wusRootKey)
+        -- TODO @intricate: Will probably have to add NetworkMagic to WalletUserSecret
+        -- instead of using NMNothing here :/
+        (makeRootPubKeyAddress NMNothing $ encToPublic _wusRootKey)
         _wusWalletName
         _wusAccounts
         _wusAddrs

@@ -26,6 +26,7 @@ import           Pos.Core.Configuration (genesisBlockVersionData, genesisData)
 import           Pos.Core.Genesis (FakeAvvmOptions (..), GenesisData (..),
                      GenesisInitializer (..), GenesisProtocolConstants (..),
                      TestnetBalanceOptions (..), gsSecretKeys)
+import           Pos.Core.NetworkMagic (makeNetworkMagic)
 import           Pos.Core.Slotting (Timestamp (..))
 import           Pos.Crypto (SecretKey)
 import           Pos.DB.Block (rollbackBlocks, verifyAndApplyBlocks,
@@ -76,9 +77,10 @@ generateBlocks :: HasConfigurations
                -> BlockTestMode (OldestFirst NE Block)
 generateBlocks coreConfig secretKeys txpConfig bCount = do
     g <- liftIO $ newStdGen
+    let nm = makeNetworkMagic (configProtocolMagic coreConfig)
     bs <- flip evalRandT g $ genBlocks coreConfig txpConfig
             (BlockGenParams
-                { _bgpSecrets = mkAllSecretsSimple secretKeys
+                { _bgpSecrets = mkAllSecretsSimple nm secretKeys
                 , _bgpBlockCount = bCount
                 , _bgpTxGenParams = TxGenParams
                     { _tgpTxCountRange = (0, 2)

@@ -24,8 +24,8 @@ import qualified Hedgehog as H
 
 import           Pos.Binary.Class (Bi)
 import           Pos.Crypto (AbstractHash, EncShare, PassPhrase,
-                     ProtocolMagic (..), ProxyCert, ProxySecretKey,
-                     PublicKey (..), RedeemSignature,
+                     ProtocolMagic (..), ProtocolMagicId (..), ProxyCert,
+                     ProxySecretKey, PublicKey (..), RedeemSignature,
                      RequiresNetworkMagic (..), SafeSigner (FakeSigner),
                      Secret, SecretKey (..), SecretProof,
                      SignTag (SignForTestingOnly), Signature, VssKeyPair,
@@ -399,7 +399,7 @@ constantByteString
     \7nZqcXdoi4XGTCgSGcGp8N0SDVhvkVh0QF1RVpWPnOMyYISJvuaHfo1zXMdq9tEdtJfID"
 
 exampleProtocolMagic :: ProtocolMagic
-exampleProtocolMagic = ProtocolMagic 0 NMMustBeNothing
+exampleProtocolMagic = ProtocolMagic (ProtocolMagicId 0) NMMustBeNothing
 
 --------------------------------------------------------------------------------
 

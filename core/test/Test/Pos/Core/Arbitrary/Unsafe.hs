@@ -12,6 +12,7 @@ import           Pos.Core (AddrAttributes (..), AddrStakeDistribution (..),
                      AddrType (..), Address (..), Coin, EpochIndex (..),
                      LocalSlotIndex, SharedSeed (..), SlotId (..), mkCoin)
 import           Pos.Core.Attributes (mkAttributes)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 
 import           Test.Pos.Core.Arbitrary ()
 import           Test.Pos.Crypto.Arbitrary ()
@@ -28,14 +29,18 @@ instance ArbitraryUnsafe Coin where
 instance ArbitraryUnsafe Address where
     arbitraryUnsafe = do
         addrRoot <- arbitraryUnsafe
+        aaNM <- arbitraryUnsafe
         let addrAttributes =
                 mkAttributes $
                 AddrAttributes
                 { aaPkDerivationPath = Nothing
                 , aaStakeDistribution = BootstrapEraDistr
+                , aaNetworkMagic = aaNM
                 }
         let addrType = ATPubKey
         return Address {..}
 
 instance ArbitraryUnsafe SlotId where
     arbitraryUnsafe = SlotId <$> arbitraryUnsafe <*> arbitraryUnsafe
+
+instance ArbitraryUnsafe NetworkMagic

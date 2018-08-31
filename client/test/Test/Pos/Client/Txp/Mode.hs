@@ -55,8 +55,8 @@ instance MonadGState TxpTestMode where
 
 instance MonadAddresses TxpTestMode where
     type AddrData TxpTestMode = ()
-    getNewAddress _ _ = pure fakeAddressForMonadAddresses
-    getFakeChangeAddress _ = pure fakeAddressForMonadAddresses
+    getNewAddress _ _ _ = pure fakeAddressForMonadAddresses
+    getFakeChangeAddress _ _ = pure fakeAddressForMonadAddresses
 
 fakeAddressForMonadAddresses :: Address
 fakeAddressForMonadAddresses = address

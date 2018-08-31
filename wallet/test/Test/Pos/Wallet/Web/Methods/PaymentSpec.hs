@@ -65,7 +65,7 @@ spec = withCompileInfo $
        withDefConfigurations $ \_ txpConfig _ ->
        describe "Wallet.Web.Methods.Payment" $ modifyMaxSuccess (const 10) $ do
     describe "newPaymentBatch" $ do
-        describe "Submitting a payment when restoring" (rejectPaymentIfRestoringSpec txpConfig)
+        describe "Submitting a payment when restoring" (rejectPaymentIfRestoringSpec nm txpConfig)
         describe "One payment" (oneNewPaymentBatchSpec txpConfig)
 
 data PaymentFixture = PaymentFixture {
@@ -81,15 +81,15 @@ data PaymentFixture = PaymentFixture {
 }
 
 -- | Generic block of code to be reused across all the different payment specs.
-newPaymentFixture :: HasConfigurations => WalletProperty PaymentFixture
-newPaymentFixture = do
+newPaymentFixture :: HasConfigurations => NetworkMagic -> WalletProperty PaymentFixture
+newPaymentFixture nm = do
     passphrases <- importSomeWallets mostlyEmptyPassphrases
     let l = length passphrases
     destLen <- pick $ choose (1, l)
     -- FIXME: we are sending to at most dstLen (which is small) because
     -- deriveRandomAddress is an expensive operation so it might
     -- take a longer time for test to complete for a longer lists
-    (dstCAddrs, dstWalIds) <- fmap unzip $ replicateM destLen $ deriveRandomAddress passphrases
+    (dstCAddrs, dstWalIds) <- fmap unzip $ replicateM destLen $ deriveRandomAddress nm passphrases
     rootsWIds <- lift myRootAddresses
     idx <- pick $ choose (0, l - 1)
     let walId = rootsWIds !! idx
@@ -120,8 +120,8 @@ newPaymentFixture = do
 
 -- | Assess that if we try to submit a payment when the wallet is restoring,
 -- the backend prevents us from doing that.
-rejectPaymentIfRestoringSpec :: HasConfigurations => TxpConfiguration -> Spec
-rejectPaymentIfRestoringSpec txpConfig = walletPropertySpec "should fail with 403" $ do
+rejectPaymentIfRestoringSpec :: HasConfigurations => NetworkMagic -> TxpConfiguration -> Spec
+rejectPaymentIfRestoringSpec nm txpConfig = walletPropertySpec "should fail with 403" $ do
     PaymentFixture{..} <- newPaymentFixture
     res <- lift $ try (newPaymentBatch dummyConfig txpConfig submitTxTestMode pswd batch)
     liftIO $ shouldBe res (Left (err403 { errReasonPhrase = "Transaction creation is disabled when the wallet is restoring." }))

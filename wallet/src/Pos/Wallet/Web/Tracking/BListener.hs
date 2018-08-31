@@ -81,8 +81,8 @@ onApplyBlocksWebWallet
     , MonadReporting m
     , CanLogInParallel m
     )
-    => OldestFirst NE Blund -> m SomeBatchOp
-onApplyBlocksWebWallet blunds = setLogger . reportTimeouts "apply" $ do
+    => NetworkMagic -> OldestFirst NE Blund -> m SomeBatchOp
+onApplyBlocksWebWallet nm blunds = setLogger . reportTimeouts "apply" $ do
     db <- WS.askWalletDB
     ws <- WS.getWalletSnapshot db
     let oldestFirst = getOldestFirst blunds
@@ -106,7 +106,7 @@ onApplyBlocksWebWallet blunds = setLogger . reportTimeouts "apply" $ do
         -> m ()
     syncWallet db ws curTip newTipH blkTxsWUndo wAddr = walletGuard ws curTip wAddr $ do
         blkHeaderTs <- blkHeaderTsGetter
-        credentials <- keyToWalletDecrCredentials <$> getKeyById wAddr
+        credentials <- keyToWalletDecrCredentials <$> getKeyById wAddr nm
 
         let dbUsed = WS.getCustomAddresses ws WS.UsedAddr
         let applyBlockWith trackingOp = do
@@ -131,10 +131,11 @@ onRollbackBlocksWebWallet
        , MonadReporting m
        , CanLogInParallel m
        )
-    => ProtocolConstants
+    => NetworkMagic
+    -> ProtocolConstants
     -> NewestFirst NE Blund
     -> m SomeBatchOp
-onRollbackBlocksWebWallet pc blunds = setLogger . reportTimeouts "rollback" $ do
+onRollbackBlocksWebWallet nm pc blunds = setLogger . reportTimeouts "rollback" $ do
     db <- WS.askWalletDB
     ws <- WS.getWalletSnapshot db
     let newestFirst = getNewestFirst blunds

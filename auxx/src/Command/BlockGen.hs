@@ -17,6 +17,7 @@ import           Pos.Chain.Txp (TxpConfiguration)
 import           Pos.Client.KeyStorage (getSecretKeysPlain)
 import           Pos.Core as Core (Config (..), genesisData)
 import           Pos.Core.Genesis (gdBootStakeholders)
+import           Pos.Core.NetworkMagic (makeNetworkMagic)
 import           Pos.Crypto (encToSecret)
 import           Pos.DB.Txp (txpGlobalSettings)
 import           Pos.Generator.Block (BlockGenParams (..), genBlocks,
@@ -38,7 +39,8 @@ generateBlocks coreConfig txpConfig GenBlocksParams{..} = withStateLock HighPrio
     seed <- liftIO $ maybe randomIO pure bgoSeed
     logInfo $ "Generating with seed " <> show seed
 
-    allSecrets <- mkAllSecretsSimple . map encToSecret <$> getSecretKeysPlain
+    let nm = makeNetworkMagic (configProtocolMagic coreConfig)
+    allSecrets <- mkAllSecretsSimple nm . map encToSecret <$> getSecretKeysPlain
 
     let bgenParams =
             BlockGenParams

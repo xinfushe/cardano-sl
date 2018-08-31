@@ -17,7 +17,7 @@ module Pos.Chain.Block.Blockchain
 
        -- * Lenses
        -- ** Header
-       , gbhProtocolMagic
+       , gbhProtocolMagicId
        , gbhPrevBlock
        , gbhBodyProof
        , gbhConsensus
@@ -40,7 +40,7 @@ import           Data.SafeCopy (SafeCopy (..), contain, safeGet, safePut)
 import           Formatting (build, sformat, (%))
 
 import           Pos.Binary.Class (Bi (..), encodeListLen, enforceSize)
-import           Pos.Crypto (ProtocolMagic (..), RequiresNetworkMagic (..))
+import           Pos.Crypto (ProtocolMagic (..), ProtocolMagicId (..))
 
 ----------------------------------------------------------------------------
 -- Blockchain class
@@ -98,15 +98,15 @@ class Blockchain p where
 -- general there may be some invariants which must hold for the
 -- contents of header.
 data GenericBlockHeader b = UnsafeGenericBlockHeader
-    { _gbhProtocolMagic :: !ProtocolMagic
+    { _gbhProtocolMagicId :: !ProtocolMagicId
       -- | Pointer to the header of the previous block.
-    , _gbhPrevBlock     :: !(BHeaderHash b)
+    , _gbhPrevBlock       :: !(BHeaderHash b)
     , -- | Proof of body.
-      _gbhBodyProof     :: !(BodyProof b)
+      _gbhBodyProof       :: !(BodyProof b)
     , -- | Consensus data to verify consensus algorithm.
-      _gbhConsensus     :: !(ConsensusData b)
+      _gbhConsensus       :: !(ConsensusData b)
     , -- | Any extra data.
-      _gbhExtra         :: !(ExtraHeaderData b)
+      _gbhExtra           :: !(ExtraHeaderData b)
     } deriving (Generic)
 
 deriving instance
@@ -131,16 +131,15 @@ instance ( Typeable b
          ) =>
          Bi (GenericBlockHeader b) where
     encode bh =  encodeListLen 5
-              <> encode (getProtocolMagic (_gbhProtocolMagic bh))
+              <> encode (unProtocolMagicId (_gbhProtocolMagicId bh))
               <> encode (_gbhPrevBlock bh)
               <> encode (_gbhBodyProof bh)
               <> encode (_gbhConsensus bh)
               <> encode (_gbhExtra bh)
     decode = do
         enforceSize "GenericBlockHeader b" 5
-        _gbhProtocolMagic <-
-            ProtocolMagic <$> decode
-                          <*> pure NMUndefined
+        _gbhProtocolMagicId <-
+            ProtocolMagicId <$> decode
         _gbhPrevBlock <- decode
         _gbhBodyProof <- decode
         _gbhConsensus <- decode
@@ -162,7 +161,7 @@ instance ( SafeCopy (BHeaderHash b)
          SafeCopy (GenericBlockHeader b) where
     getCopy =
         contain $
-        do _gbhProtocolMagic <- safeGet
+        do _gbhProtocolMagicId <- safeGet
            _gbhPrevBlock <- safeGet
            _gbhBodyProof <- safeGet
            _gbhConsensus <- safeGet
@@ -170,7 +169,7 @@ instance ( SafeCopy (BHeaderHash b)
            return $! UnsafeGenericBlockHeader {..}
     putCopy UnsafeGenericBlockHeader {..} =
         contain $
-        do safePut _gbhProtocolMagic
+        do safePut _gbhProtocolMagicId
            safePut _gbhPrevBlock
            safePut _gbhBodyProof
            safePut _gbhConsensus
@@ -267,8 +266,9 @@ mkGenericHeader
     -> ExtraHeaderData b
     -> GenericBlockHeader b
 mkGenericHeader pm hashPrev body consensus extra =
-    UnsafeGenericBlockHeader pm hashPrev proof (consensus proof) extra
+    UnsafeGenericBlockHeader pmId hashPrev proof (consensus proof) extra
   where
+    pmId = getProtocolMagicId pm
     proof = mkBodyProof @b body
 
 -- | Smart constructor for 'GenericBlock'.

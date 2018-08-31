@@ -38,7 +38,7 @@ module Pos.Chain.Block.Union.Types
        , HasPrevBlock (..)
 
        , blockHeaderHash
-       , blockHeaderProtocolMagic
+       , blockHeaderProtocolMagicId
 
        -- * IsHeader classes
        , IsHeader
@@ -138,7 +138,7 @@ import           Pos.Core.Txp (Tx, TxPayload, TxWitness, mkTxProof, txpTxs,
 import           Pos.Core.Update (BlockVersion, HasBlockVersion (..),
                      HasSoftwareVersion (..), SoftwareVersion, UpdatePayload,
                      mkUpdateProof)
-import           Pos.Crypto (Hash, ProtocolMagic, PublicKey, Signature, hash,
+import           Pos.Crypto (Hash, ProtocolMagicId, PublicKey, Signature, hash,
                      hashHexF, unsafeHash)
 import           Pos.Util.Some (Some, applySome, liftLensSome)
 import           Pos.Util.Util (cborError, cerealError)
@@ -521,9 +521,9 @@ instance HasPrevBlock BlockHeader where
 
 
 -- | The 'ProtocolMagic' in a 'BlockHeader'.
-blockHeaderProtocolMagic :: BlockHeader -> ProtocolMagic
-blockHeaderProtocolMagic (BlockHeaderGenesis gbh) = _gbhProtocolMagic gbh
-blockHeaderProtocolMagic (BlockHeaderMain mbh)    = _gbhProtocolMagic mbh
+blockHeaderProtocolMagicId :: BlockHeader -> ProtocolMagicId
+blockHeaderProtocolMagicId (BlockHeaderGenesis gbh) = _gbhProtocolMagicId gbh
+blockHeaderProtocolMagicId (BlockHeaderMain mbh)    = _gbhProtocolMagicId mbh
 
 ----------------------------------------------------------------------------
 -- IsHeader

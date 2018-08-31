@@ -63,7 +63,6 @@ data ToilVerFailure
     | ToilNonBootstrapDistr !(NonEmpty Address)
     | ToilRepeatedInput
     | ToilEmptyAfterFilter
-    | ToilNetworkMagicUndefined
     deriving (Show, Eq)
 
 instance TypeError (DisallowException ToilVerFailure) =>
@@ -132,10 +131,6 @@ instance Buildable ToilVerFailure where
 
     build ToilEmptyAfterFilter =
        "transaction list is empty after filtering out asset-locked source addresses"
-    build ToilNetworkMagicUndefined =
-        "impossible: requiresNetworkMagic was undefined in `ProtocolMagic`. This should \
-        \only occur when `ProtocolMagic` is read from a block, and values obtained that \
-        \way should never have their requiresNetworkMagic field used"
 
 ----------------------------------------------------------------------------
 -- WitnessVerFailure

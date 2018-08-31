@@ -331,13 +331,13 @@ instance MonadBListener m => MonadBListener (BlockGenMode ext m) where
 
 instance Monad m => MonadAddresses (BlockGenMode ext m) where
     type AddrData (BlockGenMode ext m) = Address
-    getNewAddress _ = pure
+    getNewAddress _ _ = pure
     -- It must be consistent with the way we construct address in
     -- block-gen. If it's changed, tests will fail, so we will notice
     -- it.
     -- N.B. Currently block-gen uses only PubKey addresses with BootstrapEra
     -- distribution.
-    getFakeChangeAddress _ = pure largestPubKeyAddressBoot
+    getFakeChangeAddress nm _ = pure (largestPubKeyAddressBoot nm)
 
 type instance MempoolExt (BlockGenMode ext m) = ext
 

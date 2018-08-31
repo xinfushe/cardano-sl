@@ -3,7 +3,9 @@
 
 module Pos.Crypto.Configuration
        ( ProtocolMagic (..)
+       , ProtocolMagicId (..)
        , RequiresNetworkMagic (..)
+       , getProtocolMagic
        ) where
 
 import           Universum
@@ -30,7 +32,6 @@ import           Pos.Util.Util (toAesonError)
 data RequiresNetworkMagic
     = NMMustBeNothing
     | NMMustBeJust
-    | NMUndefined
     deriving (Show, Eq, Generic)
 
 -- TODO mhueschen : grok NFData
@@ -43,7 +44,6 @@ instance NFData RequiresNetworkMagic
 instance A.ToJSON RequiresNetworkMagic where
     toJSON NMMustBeNothing = A.String "NMMustBeNothing"
     toJSON NMMustBeJust    = A.String "NMMustBeJust"
-    toJSON NMUndefined     = A.Null
 
 instance A.FromJSON RequiresNetworkMagic where
     parseJSON = A.withText "requiresNetworkMagic" $ toAesonError . \case
@@ -56,7 +56,6 @@ instance A.FromJSON RequiresNetworkMagic where
 instance Monad m => ToJSON m RequiresNetworkMagic where
     toJSON NMMustBeNothing = pure (JSString "NMMustBeNothing")
     toJSON NMMustBeJust    = pure (JSString "NMMustBeJust")
-    toJSON NMUndefined     = pure JSNull
 
 instance ReportSchemaErrors m => FromJSON m RequiresNetworkMagic where
     fromJSON = \case
@@ -70,46 +69,54 @@ instance ReportSchemaErrors m => FromJSON m RequiresNetworkMagic where
 -- ProtocolMagic
 --------------------------------------------------------------------------------
 
+newtype ProtocolMagicId = ProtocolMagicId
+    { unProtocolMagicId :: Int32
+    } deriving (Show, Eq, NFData)
+
 -- | Magic number which should differ for different clusters. It's
 -- defined here, because it's used for signing. It also used for other
 -- things (e. g. it's part of a serialized block).
 --
--- mhueschen: For historical reasons, I am leaving `getProtocolMagic`
--- as the name of the "identifier" field. As part of CO-353 I am adding
+-- As part of CO-353 I am adding
 -- `getRequiresNetworkMagic` in order to pipe configuration to functions
 -- which must generate & verify Addresses (which now must be aware of
 -- `NetworkMagic`).
 data ProtocolMagic = ProtocolMagic
-    { getProtocolMagic        :: !Int32
+    { getProtocolMagicId      :: !ProtocolMagicId
     , getRequiresNetworkMagic :: !RequiresNetworkMagic
     } deriving (Show, Generic)
 
+-- mhueschen: For backwards-compatibility reasons, I redefine this function
+-- in terms of the two record accessors.
+getProtocolMagic :: ProtocolMagic -> Int32
+getProtocolMagic = unProtocolMagicId . getProtocolMagicId
+
 -- Since ProtocolMagic is widely used and we want to maintain backwards
 -- compatibility of equality checks between the Int32 identifier, we only
--- compare Eq on `getProtocolMagic`.
+-- compare Eq on `getProtocolMagicId`.
 instance Eq ProtocolMagic where
-    (==) = (==) `on` getProtocolMagic
+    (==) = (==) `on` getProtocolMagicId
 
 instance NFData ProtocolMagic
 
 instance A.ToJSON ProtocolMagic where
-    toJSON (ProtocolMagic ident rnm) =
+    toJSON (ProtocolMagic (ProtocolMagicId ident) rnm) =
         A.object ["pm" .= ident, "requiresNetworkMagic" .= rnm]
 
 -- Here we default to `NMMustBeJust` (what testnets use) if only
 -- a ProtocolMagic identifier is provided.
 instance A.FromJSON ProtocolMagic where
     parseJSON v@(A.Number _) = ProtocolMagic
-        <$> A.parseJSON v
+        <$> (ProtocolMagicId <$> A.parseJSON v)
         <*> pure NMMustBeJust
     parseJSON (A.Object o) = ProtocolMagic
-        <$> o .: "pm"
+        <$> (ProtocolMagicId <$> o .: "pm")
         <*> o .: "requiresNetworkMagic"
     parseJSON invalid = typeMismatch "Coord" invalid
 
 -- Canonical JSON instances
 instance Monad m => ToJSON m ProtocolMagic where
-    toJSON (ProtocolMagic ident rnm) = do
+    toJSON (ProtocolMagic (ProtocolMagicId ident) rnm) = do
         (\jsIdent jsRNM -> JSObject
             [ ("pm", jsIdent)
             , ("requiresNetworkMagic", jsRNM) ])
@@ -120,9 +127,10 @@ instance Monad m => ToJSON m ProtocolMagic where
 -- a ProtocolMagic identifier is provided.
 instance ReportSchemaErrors m => FromJSON m ProtocolMagic where
     fromJSON = \case
-        (JSNum n) -> pure (ProtocolMagic (fromIntegral n) NMMustBeJust)
+        (JSNum n) -> pure (ProtocolMagic (ProtocolMagicId (fromIntegral n))
+                                         NMMustBeJust)
         (JSObject dict) -> ProtocolMagic
-            <$> expectLookup "pm: <int>" "pm" dict
+            <$> (ProtocolMagicId <$> expectLookup "pm: <int>" "pm" dict)
             <*> expectLookup "requiresNetworkMagic: <NMMustBeNothing | \
                              \NMMustBeJust>"
                              "requiresNetworkMagic"
@@ -155,4 +163,5 @@ protocolMagic:
 -}
 
 deriveSafeCopySimple 0 'base ''RequiresNetworkMagic
+deriveSafeCopySimple 0 'base ''ProtocolMagicId
 deriveSafeCopySimple 0 'base ''ProtocolMagic

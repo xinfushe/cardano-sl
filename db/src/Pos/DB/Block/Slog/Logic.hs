@@ -43,6 +43,7 @@ import           Pos.Core as Core (BlockCount, Config (..), FlatSlotId,
 import           Pos.Core.Chrono (NE, NewestFirst (getNewestFirst),
                      OldestFirst (..), toOldestFirst, _OldestFirst)
 import           Pos.Core.Exception (assertionFailed, reportFatalError)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Core.Slotting (MonadSlots, SlotId)
 import           Pos.Core.Update (BlockVersion (..))
 import           Pos.DB (SomeBatchOp (..))
@@ -312,12 +313,12 @@ slogRollbackBlocks pc (BypassSecurityCheck bypassSecurity) (ShouldCallBListener 
             -- no underflow from subtraction
             maxSeenDifficulty >= resultingDifficulty &&
             -- no rollback further than k blocks
-            maxSeenDifficulty - resultingDifficulty <= fromIntegral (pcBlkSecurityParam pc)
+            maxSeenDifficulty - resultingDifficulty <= fromIntegral blkSecurityParam
     unless (bypassSecurity || secure) $
         reportFatalError "slogRollbackBlocks: the attempted rollback would \
                          \lead to a more than 'k' distance between tip and \
                          \last seen block, which is a security risk. Aborting."
-    bListenerBatch <- if callBListener then onRollbackBlocks pc blunds
+    bListenerBatch <- if callBListener then onRollbackBlocks nm blunds
                       else pure mempty
     let putTip =
             SomeBatchOp $ GS.PutTip $

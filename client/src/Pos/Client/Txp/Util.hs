@@ -77,6 +77,7 @@ import           Pos.Core as Core (Address, Coin, Config (..), SlotCount,
                      txSizeLinearMinValue, unsafeIntegerToCoin, unsafeSubCoin)
 import           Pos.Core.Attributes (mkAttributes)
 import           Pos.Core.Configuration (HasConfiguration)
+import           Pos.Core.NetworkMagic (NetworkMagic, makeNetworkMagic)
 import           Pos.Core.Update (bvdTxFeePolicy)
 import           Pos.Crypto (ProtocolMagic, RedeemSecretKey, SafeSigner,
                      SignTag (SignRedeemTx, SignTx), deterministicKeyGen,
@@ -529,14 +530,15 @@ prepareTxRaw pendingTx utxo outputs fee = do
 -- Returns set of tx outputs including change output (if it's necessary)
 mkOutputsWithRem
     :: TxCreateMode m
-    => SlotCount
+    => NetworkMagic
+    -> SlotCount
     -> AddrData m
     -> TxRaw
     -> TxCreator m TxOutputs
-mkOutputsWithRem epochSlots addrData TxRaw {..}
+mkOutputsWithRem nm epochSlots addrData TxRaw {..}
     | trRemainingMoney == mkCoin 0 = pure trOutputs
     | otherwise = do
-        changeAddr <- lift . lift $ getNewAddress epochSlots addrData
+        changeAddr <- lift . lift $ getNewAddress nm epochSlots addrData
         let txOut = TxOut changeAddr trRemainingMoney
         pure $ TxOutAux txOut :| toList trOutputs
 
@@ -563,8 +565,9 @@ prepareInpsOuts
     -> TxCreator m (TxOwnedInputs TxOut, TxOutputs)
 prepareInpsOuts coreConfig pendingTx utxo outputs addrData = do
     txRaw@TxRaw {..} <- prepareTxWithFee coreConfig pendingTx utxo outputs
+    let nm = makeNetworkMagic (configProtocolMagic coreConfig)
     outputsWithRem <-
-        mkOutputsWithRem (configEpochSlots coreConfig) addrData txRaw
+        mkOutputsWithRem nm (configEpochSlots coreConfig) addrData txRaw
     pure (trInputs, outputsWithRem)
 
 prepareInpsOutsForUnsignedTx
@@ -819,6 +822,7 @@ stabilizeTxFee coreConfig pendingTx linearPolicy utxo outputs = do
   where
     firstStageAttempts = 2 * length utxo + 5
     secondStageAttempts = 10
+    nm = makeNetworkMagic (configProtocolMagic coreConfig)
 
     stabilizeTxFeeDo :: (Bool, Int)
                      -> TxFee
@@ -826,7 +830,7 @@ stabilizeTxFee coreConfig pendingTx linearPolicy utxo outputs = do
     stabilizeTxFeeDo (_, 0) _ = pure Nothing
     stabilizeTxFeeDo (isSecondStage, attempt) expectedFee = do
         txRaw <- prepareTxRaw pendingTx utxo outputs expectedFee
-        fakeChangeAddr <- lift . lift $ getFakeChangeAddress $ configEpochSlots
+        fakeChangeAddr <- lift . lift $ getFakeChangeAddress nm $ configEpochSlots
             coreConfig
         txMinFee <- txToLinearFee linearPolicy $ createFakeTxFromRawTx
             (configProtocolMagic coreConfig)

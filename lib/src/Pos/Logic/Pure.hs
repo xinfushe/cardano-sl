@@ -36,7 +36,7 @@ import           Pos.Core.Update (ApplicationName (..), BlockVersion (..),
                      BlockVersionData (..), SoftforkRule (..),
                      SoftwareVersion (..), UpdatePayload (..), UpdateProof)
 import           Pos.Crypto.Configuration (ProtocolMagic (..),
-                     RequiresNetworkMagic (..))
+                     ProtocolMagicId (..), RequiresNetworkMagic (..))
 import           Pos.Crypto.Hashing (Hash, unsafeMkAbstractHash)
 import           Pos.Crypto.Signing (PublicKey (..), SecretKey (..),
                      Signature (..), deterministicKeyGen, signRaw)
@@ -187,7 +187,7 @@ blockHeader = BlockHeaderMain mainBlockHeader
 
 mainBlockHeader :: MainBlockHeader
 mainBlockHeader = UnsafeGenericBlockHeader
-    { _gbhProtocolMagic = protocolMagic
+    { _gbhProtocolMagicId = protocolMagicId
     , _gbhPrevBlock = mainBlockHeaderHash
     , _gbhBodyProof = bodyProof
     , _gbhConsensus = consensusData
@@ -249,8 +249,11 @@ chainDifficulty = ChainDifficulty
 blockSignature :: BlockSignature
 blockSignature = BlockSignature (coerce (signRaw protocolMagic Nothing secretKey mempty))
 
+protocolMagicId :: ProtocolMagicId
+protocolMagicId = ProtocolMagicId 0
+
 protocolMagic :: ProtocolMagic
-protocolMagic = ProtocolMagic 0 NMUndefined
+protocolMagic = ProtocolMagic protocolMagicId NMMustBeNothing
 
 extraHeaderData :: ExtraHeaderData MainBlockchain
 extraHeaderData = MainExtraHeaderData

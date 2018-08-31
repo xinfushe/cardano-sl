@@ -38,12 +38,13 @@ import           Pos.Client.KeyStorage (getSecretKeysPlain)
 import           Pos.Client.Txp.Balances (getOwnUtxoForPk)
 import           Pos.Client.Txp.Network (prepareMTx, submitTxRaw)
 import           Pos.Client.Txp.Util (createTx)
-import           Pos.Core as Core (Config, IsBootstrapEraAddr (..),
+import           Pos.Core as Core (Config (..), IsBootstrapEraAddr (..),
                      Timestamp (..), configEpochSlots, deriveFirstHDAddress,
                      makePubKeyAddress, mkCoin)
 import           Pos.Core.Conc (concurrently, currentTime, delay,
                      forConcurrently, modifySharedAtomic, newSharedAtomic)
 import           Pos.Core.Configuration (genesisBlockVersionData)
+import           Pos.Core.NetworkMagic (makeNetworkMagic)
 import           Pos.Core.Txp (TxAux (..), TxIn (TxInUtxo), TxOut (..),
                      TxOutAux (..), txaF)
 import           Pos.Core.Update (BlockVersionData (..))
@@ -111,12 +112,13 @@ sendToAllGenesis coreConfig keysToSend diffusion (SendToAllGenesisParams genesis
         logInfo $ sformat ("Found "%shown%" keys in the genesis block.") (length keysToSend)
         startAtTxt <- liftIO $ lookupEnv "AUXX_START_AT"
         let startAt = fromMaybe 0 . readMaybe . fromMaybe "" $ startAtTxt :: Int
+        let nm = makeNetworkMagic (configProtocolMagic coreConfig)
         -- construct a transaction, and add it to the queue
         let addTx secretKey = do
                 let signer = fakeSigner secretKey
                     publicKey = toPublic secretKey
                 -- construct transaction output
-                outAddr <- makePubKeyAddressAuxx
+                outAddr <- makePubKeyAddressAuxx nm
                     (configEpochSlots coreConfig)
                     publicKey
                 let txOut1 = TxOut {
@@ -124,7 +126,7 @@ sendToAllGenesis coreConfig keysToSend diffusion (SendToAllGenesisParams genesis
                     txOutValue = mkCoin 1
                     }
                     txOuts = TxOutAux txOut1 :| []
-                utxo <- getOwnUtxoForPk $ safeToPublic signer
+                utxo <- getOwnUtxoForPk nm $ safeToPublic signer
                 etx <- createTx coreConfig mempty utxo signer txOuts publicKey
                 case etx of
                     Left err -> logError (sformat ("Error: "%build%" while trying to contruct tx") err)
@@ -231,11 +233,12 @@ send
     -> m ()
 send coreConfig diffusion idx outputs = do
     skey <- takeSecret
+    let nm = makeNetworkMagic (configProtocolMagic coreConfig)
     let curPk = encToPublic skey
-    let plainAddresses = map (flip makePubKeyAddress curPk . IsBootstrapEraAddr) [False, True]
+    let plainAddresses = map (flip (makePubKeyAddress nm) curPk . IsBootstrapEraAddr) [False, True]
     let (hdAddresses, hdSecrets) = unzip $ map
             (\ibea -> fromMaybe (error "send: pass mismatch") $
-                    deriveFirstHDAddress (IsBootstrapEraAddr ibea) emptyPassphrase skey) [False, True]
+                    deriveFirstHDAddress nm (IsBootstrapEraAddr ibea) emptyPassphrase skey) [False, True]
     let allAddresses = hdAddresses ++ plainAddresses
     let allSecrets = hdSecrets ++ [skey, skey]
     etx <- withSafeSigners allSecrets (pure emptyPassphrase) $ \signers -> runExceptT @AuxxException $ do

@@ -27,6 +27,7 @@ import           Pos.Core.Common (AddrAttributes (..), AddrSpendingData (..),
                      makeAddress)
 import           Pos.Core.Delegation (HeavyDlgIndex (..))
 import           Pos.Core.Genesis (gsSecretKeys)
+import           Pos.Core.NetworkMagic (makeNetworkMagic)
 import           Pos.Core.Txp (TxOut (..))
 import           Pos.Core.Update (SoftwareVersion (..))
 import           Pos.Crypto (PublicKey, emptyPassphrase, encToPublic,
@@ -136,7 +137,8 @@ createCommandProcs mCoreConfig mTxpConfig hasAuxxMode printAction mDiffusion = r
         sk <- evaluateWHNF (sks !! i) -- WHNF is sufficient to force possible errors
                                       -- from using (!!). I'd use NF but there's no
                                       -- NFData instance for secret keys.
-        addrHD <- deriveHDAddressAuxx (configEpochSlots coreConfig) sk
+        let nm = makeNetworkMagic (configProtocolMagic coreConfig)
+        addrHD <- deriveHDAddressAuxx nm (configEpochSlots coreConfig) sk
         return $ ValueAddress addrHD
     , cpHelp = "address of the HD wallet for the specified public key"
     },

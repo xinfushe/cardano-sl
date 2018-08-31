@@ -45,6 +45,7 @@ import           Pos.Core (Address, BlockCount, Coin, HasConfiguration)
 import           Pos.Core.Chrono (OldestFirst (..))
 import           Pos.Core.Common (IsBootstrapEraAddr (..), deriveLvl2KeyPair)
 import           Pos.Core.Genesis (poorSecretToEncKey)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Core.Txp (TxIn, TxOut (..), TxOutAux (..))
 import           Pos.Crypto (EncryptedSecretKey, PassPhrase,
                      ShouldCheckPassphrase (..), emptyPassphrase,
@@ -145,14 +146,14 @@ mostlyEmptyPassphrases =
 -- | Take passphrases of our wallets
 -- and return some address from one of our wallets and id of this wallet.
 -- BE CAREFUL: this functions might take long time b/c it uses @deriveLvl2KeyPair@
-deriveRandomAddress :: [PassPhrase] -> WalletProperty (CId Addr, CId Wal)
-deriveRandomAddress passphrases = do
+deriveRandomAddress :: NetworkMagic -> [PassPhrase] -> WalletProperty (CId Addr, CId Wal)
+deriveRandomAddress nm passphrases = do
     skeys <- lift getSecretKeysPlain
     let l = length skeys
     assert (l > 0)
     walletIdx <- pick $ choose (0, l - 1)
     let sk = skeys !! walletIdx
-    let walId = encToCId sk
+    let walId = encToCId nm sk
     let psw = passphrases !! walletIdx
     addressMB <- pick $ genWalletAddress sk psw
     address <- maybeStopProperty "deriveRandomAddress: couldn't derive HD address" addressMB

@@ -101,13 +101,14 @@ verifyBlocksBenchmark !coreConfig !secretKeys !tp !ctx =
             $ \ ~(curSlot, blocks) -> bench "verifyBlocksPrefix" (verifyBlocksPrefixB curSlot blocks)
         ]
     where
+    nm = makeNetworkMagic (configProtocolMagic coreConfig)
     genEnv :: BlockCount -> BlockTestMode (Maybe SlotId, OldestFirst NE Block)
     genEnv bCount = do
         initNodeDBs coreConfig
         g <- liftIO $ newStdGen
         bs <- flip evalRandT g $ genBlocks coreConfig (_tpTxpConfiguration tp)
                 (BlockGenParams
-                    { _bgpSecrets = mkAllSecretsSimple secretKeys
+                    { _bgpSecrets = mkAllSecretsSimple nm secretKeys
                     , _bgpBlockCount = bCount
                     , _bgpTxGenParams = TxGenParams
                         { _tgpTxCountRange = (0, 2)
@@ -169,6 +170,7 @@ verifyHeaderBenchmark !coreConfig !secretKeys !tp = env (runBlockTestMode tp sec
 
     where
     pm = configProtocolMagic coreConfig
+    nm = makeNetworkMagic (configProtocolMagic coreConfig)
     genEnv :: BlockTestMode (Block, VerifyBlockParams)
     genEnv = do
         initNodeDBs coreConfig
@@ -176,7 +178,7 @@ verifyHeaderBenchmark !coreConfig !secretKeys !tp = env (runBlockTestMode tp sec
         eos <- getEpochOrSlot <$> getTipHeader
         let epoch = eos ^. epochIndexL
         let blockGenParams = BlockGenParams
-                { _bgpSecrets = mkAllSecretsSimple secretKeys
+                { _bgpSecrets = mkAllSecretsSimple nm secretKeys
                 , _bgpBlockCount = BlockCount 1
                 , _bgpTxGenParams = TxGenParams
                     { _tgpTxCountRange = (0, 2)

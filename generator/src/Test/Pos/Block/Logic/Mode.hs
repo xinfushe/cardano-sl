@@ -72,6 +72,7 @@ import           Pos.Core.Configuration (HasGenesisBlockVersionData,
                      withGenesisBlockVersionData)
 import           Pos.Core.Genesis (GenesisInitializer (..), GenesisSpec (..),
                      gsSecretKeys)
+import           Pos.Core.NetworkMagic (makeNetworkMagic)
 import           Pos.Core.Reporting (HasMisbehaviorMetrics (..),
                      MonadReporting (..))
 import           Pos.Core.Slotting (MonadSlotsData)
@@ -289,7 +290,9 @@ initBlockTestContext tp@TestParams {..} genesisSecretKeys callback = do
             let btcGState = GS.GStateContext {_gscDB = DB.PureDB dbPureVar, ..}
             btcDelegation <- mkDelegationVar
             btcPureDBSnapshots <- PureDBSnapshotsVar <$> newIORef Map.empty
-            let btcAllSecrets = mkAllSecretsSimple genesisSecretKeys
+            -- TODO mhueschen : we may want to test both sides.
+            let nm = makeNetworkMagic dummyProtocolMagic
+            let btcAllSecrets = mkAllSecretsSimple nm genesisSecretKeys
             let btCtx = BlockTestContext {btcSystemStart = systemStart, btcSSlottingStateVar = slottingState, ..}
             liftIO $ flip runReaderT clockVar $ unEmulation $ callback btCtx
     sudoLiftIO $ runTestInitMode initCtx $ initBlockTestContextDo

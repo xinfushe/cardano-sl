@@ -177,9 +177,7 @@ generateGenesisData pm pc (GenesisInitializer{..}) realAvvmBalances = determinis
     let toVss = mkVssCertificatesMap
         vssCerts = GenesisVssCertificatesMap $ toVss vssCertsList
 
-    let nm = flip fromMaybe (makeNetworkMagic pm)
-                            (error "impossible: `ProtocolMagic` from config \
-                                   \contained `NMUndefined`")
+    let nm = makeNetworkMagic pm
 
     -- Non AVVM balances
     ---- Addresses

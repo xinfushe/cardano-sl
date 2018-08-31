@@ -117,6 +117,7 @@ import           Pos.Core.Genesis (FakeAvvmOptions (..),
                      GenesisInitializer (..), GenesisProtocolConstants (..),
                      GenesisSpec (..), TestnetBalanceOptions (..))
 import           Pos.Core.Merkle (mkMerkleTree, mtRoot)
+import           Pos.Core.NetworkMagic (NetworkMagic (..), makeNetworkMagic)
 import           Pos.Core.ProtocolConstants (ProtocolConstants, VssMaxTTL (..),
                      VssMinTTL (..), pcEpochSlots)
 import           Pos.Core.Slotting (EpochIndex (..), FlatSlotId,
@@ -141,7 +142,7 @@ import           Pos.Core.Update (ApplicationName (..), BlockVersion (..),
                      mkUpdateProposalWSign, mkUpdateVoteSafe)
 import           Pos.Crypto (AbstractHash (..), EncShare (..),
                      HDAddressPayload (..), Hash, ProtocolMagic (..),
-                     RedeemPublicKey, RedeemSignature,
+                     ProtocolMagicId (..), RedeemPublicKey, RedeemSignature,
                      RequiresNetworkMagic (..), SafeSigner (..), Secret (..),
                      SecretKey (..), SecretProof (..), SignTag (..),
                      VssKeyPair, VssPublicKey (..), abstractHash, decryptShare,
@@ -423,7 +424,10 @@ exampleTxInUtxo :: TxIn
 exampleTxInUtxo = TxInUtxo exampleHashTx 47 -- TODO: loop here
 
 exampleTxOut :: TxOut
-exampleTxOut = TxOut (makePubKeyAddress (IsBootstrapEraAddr True) pkey) (Coin 47)
+exampleTxOut = TxOut (makePubKeyAddress exampleNetworkMagic
+                                        (IsBootstrapEraAddr True)
+                                        pkey)
+                     (Coin 47)
     where
         Right pkey = PublicKey <$> CC.xpub (getBytes 0 64)
 
@@ -527,7 +531,9 @@ staticHeavyDlgIndexes :: [HeavyDlgIndex]
 staticHeavyDlgIndexes = map (HeavyDlgIndex . EpochIndex) [5,1,3,27,99,247]
 
 staticProtocolMagics :: [ProtocolMagic]
-staticProtocolMagics = zipWith ProtocolMagic [0..5] (cycle [NMMustBeJust, NMMustBeNothing])
+staticProtocolMagics = zipWith ProtocolMagic
+                               (map ProtocolMagicId [0..5])
+                               (cycle [NMMustBeJust, NMMustBeNothing])
 
 staticProxySKHeavys :: [ProxySKHeavy]
 staticProxySKHeavys = zipWith4 safeCreatePsk
@@ -578,7 +584,7 @@ exampleLightDlgIndices = LightDlgIndices (EpochIndex 7, EpochIndex 88)
 exampleAddress :: Address
 exampleAddress = makeAddress exampleAddrSpendingData_PubKey attrs
   where
-    attrs = AddrAttributes hap BootstrapEraDistr
+    attrs = AddrAttributes hap BootstrapEraDistr NMNothing
     hap = Just (HDAddressPayload (getBytes 32 32))
 
 exampleAddress1 :: Address
@@ -586,14 +592,14 @@ exampleAddress1 = makeAddress easd attrs
   where
     easd = PubKeyASD pk
     [pk] = examplePublicKeys 24 1
-    attrs = AddrAttributes hap BootstrapEraDistr
+    attrs = AddrAttributes hap BootstrapEraDistr NMNothing
     hap = Nothing
 
 exampleAddress2 :: Address
 exampleAddress2 = makeAddress easd attrs
   where
     easd = RedeemASD exampleRedeemPublicKey
-    attrs = AddrAttributes hap asd
+    attrs = AddrAttributes hap asd NMNothing
     hap = Just (HDAddressPayload (getBytes 15 32))
     asd = SingleKeyDistr exampleStakeholderId
 
@@ -601,14 +607,14 @@ exampleAddress3 :: Address
 exampleAddress3 = makeAddress easd attrs
   where
     easd = ScriptASD exampleScript
-    attrs = AddrAttributes hap exampleMultiKeyDistr
+    attrs = AddrAttributes hap exampleMultiKeyDistr NMNothing
     hap = Just (HDAddressPayload (getBytes 17 32))
 
 exampleAddress4 :: Address
 exampleAddress4 = makeAddress easd attrs
   where
     easd = UnknownASD 7 "test value"
-    attrs = AddrAttributes Nothing (SingleKeyDistr sId)
+    attrs = AddrAttributes Nothing (SingleKeyDistr sId) NMNothing
     [sId] = exampleStakeholderIds 7 1
 
 exampleMultiKeyDistr :: AddrStakeDistribution
@@ -688,11 +694,16 @@ exampleGenesisDelegation = UnsafeGenesisDelegation (HM.fromList
     pskDelChainCode = CC.ChainCode (hexToBS "55163b178e999b9fd50637b2edab8c85\
                                             \8a879ac3c4bd3e610095419a19696573")
 
+exampleNetworkMagic :: NetworkMagic
+exampleNetworkMagic = makeNetworkMagic exampleProtocolMagic'
+
+exampleProtocolMagic' :: ProtocolMagic
+exampleProtocolMagic' = ProtocolMagic (ProtocolMagicId 1783847074) NMMustBeNothing
+
 exampleProtocolConstants :: GenesisProtocolConstants
 exampleProtocolConstants = GenesisProtocolConstants
     { gpcK = 37
-    , gpcProtocolMagic = ProtocolMagic { getProtocolMagic = 1783847074
-                                       , getRequiresNetworkMagic = NMMustBeNothing }
+    , gpcProtocolMagic = exampleProtocolMagic'
     , gpcVssMaxTTL = VssMaxTTL {getVssMaxTTL = 1477558317}
     , gpcVssMinTTL = VssMinTTL {getVssMinTTL = 744040476}}
 

@@ -65,8 +65,7 @@ import           Pos.Core.Ssc (VssCertificate, mkVssCertificate,
 import           Pos.Core.Update (ApplicationName (..), BlockVersion (..),
                      BlockVersionData (..), SoftforkRule (..),
                      SoftwareVersion (..), applicationNameMaxLength)
-import           Pos.Crypto (ProtocolMagic, RequiresNetworkMagic (..),
-                     createPsk, toPublic)
+import           Pos.Crypto (ProtocolMagic, createPsk, toPublic)
 import           Pos.Util.Util (leftToPanic)
 
 import           Test.Pos.Core.Dummy (dummyProtocolConstants)
@@ -570,7 +569,6 @@ instance Arbitrary G.GenesisProtocolConstants where
     arbitrary = flip G.genesisProtocolConstantsFromProtocolConstants
                      dummyProtocolMagic
                  <$> arbitrary
-                 <*> arbitrary
 
 instance Arbitrary G.GenesisData where
     arbitrary = G.GenesisData

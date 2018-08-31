@@ -23,7 +23,7 @@ import           Test.QuickCheck.Arbitrary.Generic (genericArbitrary,
 
 import           Pos.Binary.Class (AsBinary (..), AsBinaryClass (..), Bi, Raw)
 import           Pos.Crypto.Configuration (ProtocolMagic (..),
-                     RequiresNetworkMagic (..))
+                     ProtocolMagicId (..), RequiresNetworkMagic (..))
 import           Pos.Crypto.Hashing (AHash (..), AbstractHash (..),
                      HashAlgorithm, WithHash (..), unsafeCheatingHashCoerce,
                      withHash)
@@ -51,6 +51,9 @@ import           Test.Pos.Util.QuickCheck.Arbitrary (Nonrepeating (..),
 instance Arbitrary ProtocolMagic where
     arbitrary = ProtocolMagic <$> arbitrary
                               <*> arbitrary
+
+instance Arbitrary ProtocolMagicId where
+    arbitrary = ProtocolMagicId <$> arbitrary
 
 instance Arbitrary RequiresNetworkMagic where
     arbitrary = elements [NMMustBeNothing, NMMustBeJust]

@@ -2,6 +2,7 @@ module Test.Pos.Crypto.Gen
         (
         -- Protocol Magic Generator
           genProtocolMagic
+        , genProtocolMagicId
 
         -- Sign Tag Generator
         , genSignTag
@@ -65,7 +66,7 @@ import qualified Hedgehog.Range as Range
 import           Pos.Binary.Class (Bi)
 import           Pos.Crypto (PassPhrase)
 import           Pos.Crypto.Configuration (ProtocolMagic (..),
-                     RequiresNetworkMagic (..))
+                     ProtocolMagicId (..), RequiresNetworkMagic (..))
 import           Pos.Crypto.Hashing (AbstractHash (..), HashAlgorithm, WithHash,
                      abstractHash, withHash)
 import           Pos.Crypto.HD (HDAddressPayload (..), HDPassphrase (..))
@@ -87,8 +88,11 @@ import           Pos.Crypto.Signing.Redeem (RedeemPublicKey, RedeemSecretKey,
 ----------------------------------------------------------------------------
 
 genProtocolMagic :: Gen ProtocolMagic
-genProtocolMagic = ProtocolMagic <$> (Gen.int32 Range.constantBounded)
+genProtocolMagic = ProtocolMagic <$> genProtocolMagicId
                                  <*> genRequiresNetworkMagic
+
+genProtocolMagicId :: Gen ProtocolMagicId
+genProtocolMagicId = ProtocolMagicId <$> Gen.int32 Range.constantBounded
 
 genRequiresNetworkMagic :: Gen RequiresNetworkMagic
 genRequiresNetworkMagic = Gen.element [NMMustBeNothing, NMMustBeJust]

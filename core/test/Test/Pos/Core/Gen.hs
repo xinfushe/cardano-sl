@@ -171,8 +171,7 @@ import           Pos.Core.Genesis (FakeAvvmOptions (..),
 import           Pos.Core.JsonLog.LogEvents (InvReqDataFlowLog (..))
 import           Pos.Core.Merkle (MerkleRoot (..), MerkleTree (..),
                      mkMerkleTree, mtRoot)
-import           Pos.Core.NetworkMagic (NetworkMagic (..),
-                     RequiresNetworkMagic (..))
+import           Pos.Core.NetworkMagic (NetworkMagic (..))
 import           Pos.Core.ProtocolConstants (ProtocolConstants (..),
                      VssMaxTTL (..), VssMinTTL (..))
 import           Pos.Core.Slotting (EpochIndex (..), EpochOrSlot (..),
@@ -435,10 +434,6 @@ genGenesisProtocolConstants =
         <*> genProtocolMagic
         <*> genVssMaxTTL
         <*> genVssMinTTL
-        <*> genRequiresNetworkMagic
-
-genRequiresNetworkMagic :: Gen RequiresNetworkMagic
-genRequiresNetworkMagic = Gen.element [NMMustBeNothing, NMMustBeJust]
 
 genGenesisSpec :: ProtocolMagic -> Gen GenesisSpec
 genGenesisSpec pm = mkGenSpec >>=  either (error . toText) pure

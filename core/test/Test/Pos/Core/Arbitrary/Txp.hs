@@ -35,6 +35,7 @@ import           Pos.Core.Attributes (mkAttributes)
 import           Pos.Core.Common (Coin, IsBootstrapEraAddr (..),
                      makePubKeyAddress)
 import           Pos.Core.Merkle (MerkleNode (..), MerkleRoot (..))
+import           Pos.Core.NetworkMagic (makeNetworkMagic)
 import           Pos.Core.Txp (Tx (..), TxAux (..), TxIn (..), TxInWitness (..),
                      TxOut (..), TxOutAux (..), TxPayload (..), TxProof (..),
                      TxSigData (..), mkTxPayload)
@@ -149,8 +150,9 @@ buildProperTx pm inputList (inCoin, outCoin) =
     outs = fmap (view _4) txList
     mkWitness fromSk =
         PkWitness (toPublic fromSk) (sign pm SignTx fromSk $ TxSigData newTxHash)
+    nm = makeNetworkMagic pm
     makeTxOutput s c =
-        TxOut (makePubKeyAddress (IsBootstrapEraAddr True) $ toPublic s) c
+        TxOut (makePubKeyAddress nm (IsBootstrapEraAddr True) $ toPublic s) c
 
 -- | Well-formed transaction 'Tx'.
 --

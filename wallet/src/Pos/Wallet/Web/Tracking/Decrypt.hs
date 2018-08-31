@@ -24,6 +24,7 @@ import           Pos.Client.Txp.History (TxHistoryEntry (..))
 import           Pos.Core (Address (..), ChainDifficulty, Timestamp,
                      aaPkDerivationPath, addrAttributesUnwrapped,
                      makeRootPubKeyAddress)
+import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Core.Txp (Tx (..), TxIn (..), TxOut, TxOutAux (..), TxUndo,
                      toaOut, txOutAddress)
 import           Pos.Crypto (EncryptedSecretKey, HDPassphrase, PublicKey,
@@ -84,15 +85,15 @@ data WalletDecrCredentialsKey
     deriving (Show)
 
 -- | There's a secret key for regular wallet or a public key for external wallet.
-keyToWalletDecrCredentials :: WalletDecrCredentialsKey -> WalletDecrCredentials
-keyToWalletDecrCredentials (KeyForRegular sk)  = credentialsFromPublicKey $ encToPublic sk
-keyToWalletDecrCredentials (KeyForExternal pk) = credentialsFromPublicKey pk
+keyToWalletDecrCredentials :: NetworkMagic -> WalletDecrCredentialsKey -> WalletDecrCredentials
+keyToWalletDecrCredentials nm (KeyForRegular sk)  = credentialsFromPublicKey nm $ encToPublic sk
+keyToWalletDecrCredentials nm (KeyForExternal pk) = credentialsFromPublicKey nm pk
 
-credentialsFromPublicKey :: PublicKey -> WalletDecrCredentials
-credentialsFromPublicKey publicKey = (hdPassword, walletId)
+credentialsFromPublicKey :: NetworkMagic -> PublicKey -> WalletDecrCredentials
+credentialsFromPublicKey nm publicKey = (hdPassword, walletId)
   where
     hdPassword = deriveHDPassphrase publicKey
-    walletId   = encodeCType $ makeRootPubKeyAddress publicKey
+    walletId   = encodeCType $ makeRootPubKeyAddress nm publicKey
 
 selectOwnAddresses
     :: WalletDecrCredentials

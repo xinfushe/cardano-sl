@@ -51,7 +51,7 @@ import           Pos.Core.Ssc (InnerSharesMap, Opening, SignedCommitment,
 import           Pos.Core.Txp (TxAux)
 import           Pos.Core.Update (BlockVersion, BlockVersionData (..), UpId,
                      UpdateProposal, UpdateVote)
-import           Pos.Crypto.Configuration (ProtocolMagic (..))
+import           Pos.Crypto.Configuration (ProtocolMagic (..), getProtocolMagic)
 import qualified Pos.Diffusion.Full.Block as Diffusion.Block
 import qualified Pos.Diffusion.Full.Delegation as Diffusion.Delegation
 import qualified Pos.Diffusion.Full.Ssc as Diffusion.Ssc

@@ -10,7 +10,7 @@ import           Data.SafeCopy (SafeCopy (..), contain, safeGet, safePut)
 import           Data.Serialize (getWord8, putWord8)
 
 import           Pos.Crypto.Configuration (ProtocolMagic (..),
-                     RequiresNetworkMagic (..))
+                     RequiresNetworkMagic (..), getProtocolMagic)
 import           Pos.Util.Util (cerealError)
 
 
@@ -33,13 +33,13 @@ instance SafeCopy NetworkMagic where
     putCopy NMNothing  = contain $ putWord8 0
     putCopy (NMJust x) = contain $ putWord8 1 >> safePut x
 
--- TODO mhueschen : consider adding an error Monda to `makeNetworkMagic`
-makeNetworkMagic :: ProtocolMagic -> Maybe NetworkMagic
-makeNetworkMagic (ProtocolMagic ident rnm) = case rnm of
-    NMMustBeNothing -> Just NMNothing
-    NMMustBeJust    -> Just (NMJust (convert (fromIntegral ident)))
-    NMUndefined     -> Nothing
+makeNetworkMagic :: ProtocolMagic -> NetworkMagic
+makeNetworkMagic pm = case getRequiresNetworkMagic pm of
+    NMMustBeNothing -> NMNothing
+    NMMustBeJust    -> NMJust (convert (fromIntegral ident))
   where
+    ident = getProtocolMagic pm
+    --
     convert :: Word32 -> Word8
     convert w = let b1 = fromIntegral $ shift        w     (-24)
                     b2 = fromIntegral $ shift (shift w  8) (-24)
