@@ -1,6 +1,5 @@
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE LambdaCase         #-}
-{-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE StandaloneDeriving #-}
 
 -- | Convert to and from V1 types
