@@ -15,7 +15,7 @@ import           Pos.Binary.Core.Block ()
 import           Pos.Binary.Core.Common ()
 import qualified Pos.Core.Block.Blockchain as T
 import           Pos.Core.Block.Union.Types (BlockHeader (..))
-import           Pos.Crypto.Configuration (ProtocolMagic (..))
+import           Pos.Crypto.Configuration (ProtocolMagic (..), RequiresNetworkMagic (..))
 import           Pos.Util.Util (cborError)
 
 instance ( Typeable b
@@ -33,7 +33,9 @@ instance ( Typeable b
               <> encode (T._gbhExtra bh)
     decode = do
         enforceSize "GenericBlockHeader b" 5
-        _gbhProtocolMagic <- ProtocolMagic <$> decode
+        _gbhProtocolMagic <-
+            ProtocolMagic <$> decode
+                          <*> pure NMUndefined
         _gbhPrevBlock <- decode
         _gbhBodyProof <- decode
         _gbhConsensus <- decode

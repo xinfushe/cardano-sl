@@ -19,7 +19,7 @@ import           Hedgehog (Gen, Property)
 import qualified Hedgehog as H
 
 import           Pos.Crypto (AbstractHash, EncShare, PassPhrase, ProtocolMagic (..), ProxyCert,
-                             ProxySecretKey, PublicKey (..), RedeemSignature,
+                             ProxySecretKey, PublicKey (..), RedeemSignature, RequiresNetworkMagic (..),
                              SafeSigner (FakeSigner), Secret, SecretKey (..), SecretProof,
                              SignTag (SignForTestingOnly), Signature, VssKeyPair, WithHash,
                              decryptShare, deriveHDPassphrase, deterministic,
@@ -73,7 +73,7 @@ golden_Signature :: Property
 golden_Signature = goldenTestBi sig "test/golden/Signature"
   where
     Right skey = SecretKey <$> xprv (getBytes 10 128)
-    sig        = sign (ProtocolMagic 0) SignForTestingOnly skey ()
+    sig        = sign exampleProtocolMagic SignForTestingOnly skey ()
 
 genUnitSignature :: Gen (Signature ())
 genUnitSignature = genSignature $ pure ()
@@ -92,7 +92,7 @@ golden_Signed :: Property
 golden_Signed = goldenTestBi signed "test/golden/Signed"
   where
     Right skey = SecretKey <$> xprv (getBytes 10 128)
-    signed     = mkSigned (ProtocolMagic 0) SignForTestingOnly skey ()
+    signed     = mkSigned exampleProtocolMagic SignForTestingOnly skey ()
 
 roundTripSignedBi :: Property
 roundTripSignedBi = eachOf 1000 genUnitSigned roundTripsBiShow
@@ -151,7 +151,7 @@ golden_RedeemSignature :: Property
 golden_RedeemSignature = goldenTestBi rsig "test/golden/RedeemSignature"
   where
     Just rsk = snd <$> redeemDeterministicKeyGen (getBytes 0 32)
-    rsig     = redeemSign (ProtocolMagic 0) SignForTestingOnly rsk ()
+    rsig     = redeemSign exampleProtocolMagic SignForTestingOnly rsk ()
 
 genUnitRedeemSignature :: Gen (RedeemSignature ())
 genUnitRedeemSignature = genRedeemSignature $ pure ()
@@ -184,7 +184,7 @@ golden_ProxyCert = goldenTestBi pcert "test/golden/ProxyCert"
   where
     Right pkey = PublicKey <$> xpub (getBytes 0 64)
     Right skey = SecretKey <$> xprv (getBytes 10 128)
-    pcert      = safeCreateProxyCert (ProtocolMagic 0) (FakeSigner skey) pkey ()
+    pcert      = safeCreateProxyCert exampleProtocolMagic (FakeSigner skey) pkey ()
 
 genUnitProxyCert :: Gen (ProxyCert ())
 genUnitProxyCert = genProxyCert $ pure ()
@@ -204,7 +204,7 @@ golden_ProxySecretKey = goldenTestBi psk "test/golden/ProxySecretKey"
   where
     Right pkey = PublicKey <$> xpub (getBytes 0 64)
     Right skey = SecretKey <$> xprv (getBytes 10 128)
-    psk        = safeCreatePsk (ProtocolMagic 0) (FakeSigner skey) pkey ()
+    psk        = safeCreatePsk exampleProtocolMagic (FakeSigner skey) pkey ()
 
 genUnitProxySecretKey :: Gen (ProxySecretKey ())
 genUnitProxySecretKey = genProxySecretKey $ pure ()
@@ -225,8 +225,8 @@ golden_ProxySignature :: Property
 golden_ProxySignature = goldenTestBi psig "test/golden/ProxySignature"
   where
     Right skey = SecretKey <$> xprv (getBytes 10 128)
-    psk = safeCreatePsk (ProtocolMagic 0) (FakeSigner skey) (toPublic skey) ()
-    psig = proxySign (ProtocolMagic 0) SignForTestingOnly skey psk ()
+    psk = safeCreatePsk exampleProtocolMagic (FakeSigner skey) (toPublic skey) ()
+    psig = proxySign exampleProtocolMagic SignForTestingOnly skey psk ()
 
 roundTripProxySignatureBi :: Property
 roundTripProxySignatureBi = eachOf 100
@@ -380,6 +380,9 @@ constantByteString
     \auoJOzvtAgvjHo6UFttnK6vZ3Cknpuob6uMS2MkJKmuoQsqsAYcRDWbJ2Rgw4bm2ndTM4\
     \zFfuRDKvdrL6sDkuPNPYqxMWlqnXjSbU0eLtceZuKgXLHR8cdvsEvywt4JaZUQhnbq3Vl\
     \7nZqcXdoi4XGTCgSGcGp8N0SDVhvkVh0QF1RVpWPnOMyYISJvuaHfo1zXMdq9tEdtJfID"
+
+exampleProtocolMagic :: ProtocolMagic
+exampleProtocolMagic = ProtocolMagic 0 NMMustBeNothing
 
 --------------------------------------------------------------------------------
 

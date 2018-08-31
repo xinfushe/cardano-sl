@@ -42,7 +42,6 @@ import           Pos.Crypto (ProxyCert, ProxySecretKey (..), PublicKey, RedeemPu
                              decodeAbstractHash, fromAvvmPk, fullProxyCertHexF, fullPublicKeyF,
                              fullSignatureHexF, hashHexF, parseFullProxyCert, parseFullPublicKey,
                              parseFullSignature, redeemPkB64UrlF)
-import           Pos.Crypto.Configuration (ProtocolMagic (..))
 
 import           Pos.Core.Genesis.AvvmBalances (GenesisAvvmBalances (..))
 import           Pos.Core.Genesis.Data (GenesisData (..))
@@ -62,9 +61,9 @@ data SchemaError = SchemaError
     } deriving (Show)
 
 instance Buildable SchemaError where
-    build SchemaError{..} = mconcat
-        [ "expected " <> Builder.fromText seExpected
-        , case seActual of
+    build se = mconcat
+        [ "expected " <> Builder.fromText (seExpected se)
+        , case seActual se of
             Nothing     -> mempty
             Just actual -> " but got " <> Builder.fromText actual
         ]
@@ -74,9 +73,6 @@ instance (Monad m, Applicative m, MonadError SchemaError m) => ReportSchemaError
         { seExpected = fromString expec
         , seActual = fmap fromString actual
         }
-
-instance Monad m => ToJSON m Int32 where
-    toJSON = pure . JSNum . fromIntegral
 
 instance Monad m => ToJSON m Word16 where
     toJSON = pure . JSNum . fromIntegral
@@ -211,7 +207,7 @@ instance Monad m => ToJSON m GenesisProtocolConstants where
         mkObject
             -- 'k' definitely won't exceed the limit
             [ ("k", pure . JSNum . fromIntegral $ gpcK)
-            , ("protocolMagic", toJSON (getProtocolMagic gpcProtocolMagic))
+            , ("protocolMagic", toJSON gpcProtocolMagic)
             , ("vssMaxTTL", toJSON gpcVssMaxTTL)
             , ("vssMinTTL", toJSON gpcVssMinTTL)
             ]
@@ -303,10 +299,6 @@ wrapConstructor =
 ----------------------------------------------------------------------------
 -- External
 ---------------------------------------------------------------------------
-
-instance (ReportSchemaErrors m) => FromJSON m Int32 where
-    fromJSON (JSNum i) = pure . fromIntegral $ i
-    fromJSON val       = expectedButGotValue "Int32" val
 
 instance (ReportSchemaErrors m) => FromJSON m Word16 where
     fromJSON (JSNum i) = pure . fromIntegral $ i
@@ -446,7 +438,7 @@ instance ReportSchemaErrors m => FromJSON m GenesisDelegation where
 instance ReportSchemaErrors m => FromJSON m GenesisProtocolConstants where
     fromJSON obj = do
         gpcK <- fromIntegral @Int54 <$> fromJSField obj "k"
-        gpcProtocolMagic <- ProtocolMagic <$> fromJSField obj "protocolMagic"
+        gpcProtocolMagic <- fromJSField obj "protocolMagic"
         gpcVssMaxTTL <- fromJSField obj "vssMaxTTL"
         gpcVssMinTTL <- fromJSField obj "vssMinTTL"
         return GenesisProtocolConstants {..}

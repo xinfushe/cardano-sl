@@ -14,10 +14,12 @@ import           Pos.Core (EpochOrSlot, HasConfiguration, SlotId (..), defaultCo
                            flattenSlotId, withGenesisSpec, unflattenSlotId)
 
 import           Test.Pos.Core.Arbitrary (EoSToIntOverflow (..), UnreasonableEoS (..))
+import           Test.Pos.Crypto.Dummy (dummyProtocolMagic)
 import           Test.Pos.Util.QuickCheck.Property (shouldThrowException, (.=.))
 
 spec :: Spec
-spec = withGenesisSpec 0 defaultCoreConfiguration $ \_ -> describe "Slotting" $ do
+-- TODO @intricate: Change this from dummyProtocolMagic
+spec = withGenesisSpec 0 (defaultCoreConfiguration dummyProtocolMagic) $ \_ -> describe "Slotting" $ do
     describe "SlotId" $ do
         describe "Ord" $ do
             prop "is consistent with flatten/unflatten"

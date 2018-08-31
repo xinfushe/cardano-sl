@@ -40,6 +40,8 @@ library
                        Pos.Core.Block.Union
                        Pos.Core.Block.Constructors
 
+                       Pos.Core.NetworkMagic
+
                        Pos.Core.Common
                        Pos.Core.Configuration
                        Pos.Core.Constants
@@ -189,6 +191,7 @@ library
                      , cardano-sl-networking
                      , cardano-sl-util
                      , cborg
+                     , cereal
                      , containers
                      , cryptonite
                      , data-default
@@ -207,6 +210,7 @@ library
                      , plutus-prototype
                      , random
                      , reflection
+                     , safecopy
                      , safe-exceptions
                      , serokell-util
                      , template-haskell
