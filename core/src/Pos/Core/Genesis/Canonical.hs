@@ -12,6 +12,7 @@ import           Control.Lens (_Left)
 import           Control.Monad.Except (MonadError (..))
 import           Data.Fixed (Fixed (..))
 import qualified Data.HashMap.Strict as HM
+import           Data.List (lookup)
 import qualified Data.Text.Buildable as Buildable
 import qualified Data.Text.Lazy.Builder as Builder (fromText)
 import           Data.Time.Units (Millisecond, Second, convertUnit)
@@ -42,7 +43,8 @@ import           Pos.Crypto (ProxyCert, ProxySecretKey (..), PublicKey, RedeemPu
                              decodeAbstractHash, fromAvvmPk, fullProxyCertHexF, fullPublicKeyF,
                              fullSignatureHexF, hashHexF, parseFullProxyCert, parseFullPublicKey,
                              parseFullSignature, redeemPkB64UrlF)
-import           Pos.Crypto.Configuration (ProtocolMagic (..))
+import           Pos.Crypto.Configuration (ProtocolMagic (..), ProtocolMagicId (..),
+                                           RequiresNetworkMagic (..))
 
 import           Pos.Core.Genesis.AvvmBalances (GenesisAvvmBalances (..))
 import           Pos.Core.Genesis.Data (GenesisData (..))
@@ -211,10 +213,18 @@ instance Monad m => ToJSON m GenesisProtocolConstants where
         mkObject
             -- 'k' definitely won't exceed the limit
             [ ("k", pure . JSNum . fromIntegral $ gpcK)
-            , ("protocolMagic", toJSON (getProtocolMagic gpcProtocolMagic))
+            , ("protocolMagic", toJSON gpcProtocolMagic)
             , ("vssMaxTTL", toJSON gpcVssMaxTTL)
             , ("vssMinTTL", toJSON gpcVssMinTTL)
             ]
+
+instance Monad m => ToJSON m ProtocolMagic where
+    toJSON (ProtocolMagic (ProtocolMagicId ident) rnm) = do
+        (\jsIdent jsRNM -> JSObject
+            [ ("pm", jsIdent)
+            , ("requiresNetworkMagic", jsRNM) ])
+        <$> toJSON ident
+        <*> toJSON rnm
 
 instance Monad m => ToJSON m GenesisAvvmBalances where
     toJSON = toJSON . getGenesisAvvmBalances
@@ -446,10 +456,25 @@ instance ReportSchemaErrors m => FromJSON m GenesisDelegation where
 instance ReportSchemaErrors m => FromJSON m GenesisProtocolConstants where
     fromJSON obj = do
         gpcK <- fromIntegral @Int54 <$> fromJSField obj "k"
-        gpcProtocolMagic <- ProtocolMagic <$> fromJSField obj "protocolMagic"
+        gpcProtocolMagic <- fromJSField obj "protocolMagic"
         gpcVssMaxTTL <- fromJSField obj "vssMaxTTL"
         gpcVssMinTTL <- fromJSField obj "vssMinTTL"
         return GenesisProtocolConstants {..}
+
+-- Here we default to `NMMustBeJust` (what testnets use) if only
+-- a ProtocolMagic identifier is provided.
+instance ReportSchemaErrors m => FromJSON m ProtocolMagic where
+    fromJSON = \case
+        (JSNum n) -> pure (ProtocolMagic (ProtocolMagicId (fromIntegral n))
+                                         NMMustBeJust)
+        (JSObject dict) -> ProtocolMagic
+            <$> (ProtocolMagicId <$> expectLookup "pm: <int>" "pm" dict)
+            <*> expectLookup "requiresNetworkMagic: <NMMustBeNothing | \
+                             \NMMustBeJust>"
+                             "requiresNetworkMagic"
+                             dict
+        other ->
+            expected "NMMustBeNothing | NMMustBeJust" (Just (show other))
 
 instance ReportSchemaErrors m => FromJSON m GenesisAvvmBalances where
     fromJSON = fmap GenesisAvvmBalances . fromJSON
@@ -492,3 +517,12 @@ instance (ReportSchemaErrors m) => FromJSON m GenesisData where
         gdAvvmDistr <- fromJSField obj "avvmDistr"
         gdFtsSeed <- fromJSField obj "ftsSeed"
         return GenesisData {..}
+
+
+-- Helpers
+
+expectLookup :: (ReportSchemaErrors m, FromJSON m a)
+             => String -> String -> [(String, JSValue)] -> m a
+expectLookup msg key dict = case lookup key dict of
+    Nothing -> expected msg Nothing
+    Just x  -> fromJSON x
