@@ -67,18 +67,18 @@ module Pos.Util.Wlog
         , removeAllHandlers     -- call sites: 2 lib/src/Pos/Launcher/Resource.hs,networking/test/Test/Network/Broadcast/OutboundQueueSpec.hs
         , centiUtcTimeF         -- call sites: 1 networking/bench/LogReader/Main.hs
         , setLevel              -- call sites: 1 networking/src/Network/Broadcast/OutboundQueue/Demo.hs
+        , test
         ) where
 
-import           System.Wlog (HandlerWrap (..), LoggerNameBox (..),
-                     NamedPureLogger (..), consoleActionB, debugPlus,
-                     defaultHandleAction, errorPlus, fromScratch, hwFilePath,
-                     infoPlus, launchNamedPureLog, lcLogsDirectory,
-                     lcTermSeverityOut, lcTree, logMCond, ltFiles, ltSeverity,
-                     ltSubloggers, maybeLogsDirB, noticePlus,
+import           System.Wlog (HandlerWrap (..), NamedPureLogger (..),
+                     consoleActionB, debugPlus, defaultHandleAction, errorPlus,
+                     fromScratch, hwFilePath, infoPlus, launchNamedPureLog,
+                     lcLogsDirectory, lcTermSeverityOut, lcTree, ltFiles,
+                     ltSeverity, ltSubloggers, maybeLogsDirB, noticePlus,
                      parseLoggerConfig, productionB, removeAllHandlers,
                      retrieveLogContent, runNamedPureLog, setLevel, showTidB,
-                     termSeveritiesOutB, updateGlobalLogger, usingLoggerName,
-                     warningPlus, zoomLogger)
+                     termSeveritiesOutB, updateGlobalLogger, warningPlus,
+                     zoomLogger)
 import           System.Wlog.Formatter (centiUtcTimeF)
 import           System.Wlog.LogHandler (LogHandlerTag (HandlerFilelike))
 
@@ -93,6 +93,7 @@ import           Pos.Util.Log.LoggerConfig (BackendKind (..),
                      lhMinSeverity, lhName, ltHandlers)
 import           Pos.Util.Log.Scribes (mkDevNullScribe, mkJsonFileScribe,
                      mkStderrScribe, mkStdoutScribe, mkTextFileScribe)
+import           Pos.Util.Log.WlogSafe (SelectionMode, logItemS)
 import           System.IO.Unsafe (unsafePerformIO)
 
 import           Universum
@@ -150,7 +151,7 @@ class Monad m => CanLog m where
                             -> Severity
                             -> Text
                             -> m ()
-    dispatchMessage name sev t = lift $ dispatchMessage name sev t
+    dispatchMessage name severity msg = lift $ dispatchMessage name severity msg
 
 instance CanLog m => CanLog (LoggerNameBox m)
 instance CanLog m => CanLog (ReaderT r m)
@@ -174,36 +175,23 @@ logMessage severity msg = do
     name <- askLoggerName
     dispatchMessage name severity msg
 
-{-
-type role LoggerNameBox representational nominal
-newtype LoggerNameBox (m :: * -> *) a
-  = LoggerNameBox {loggerNameBoxEntry :: ReaderT LoggerName m a}
-  	-- Defined in ‘System.Wlog.LoggerNameBox’
-instance Applicative m => Applicative (LoggerNameBox m)
-  -- Defined in ‘System.Wlog.LoggerNameBox’
-instance Functor m => Functor (LoggerNameBox m)
-  -- Defined in ‘System.Wlog.LoggerNameBox’
-instance Monad m => Monad (LoggerNameBox m)
-  -- Defined in ‘System.Wlog.LoggerNameBox’
-instance MonadIO m => MonadIO (LoggerNameBox m)
-  -- Defined in ‘System.Wlog.LoggerNameBox’
-instance MonadTrans LoggerNameBox
-  -- Defined in ‘System.Wlog.LoggerNameBox’
-instance MonadCatch m => MonadCatch (LoggerNameBox m)
-  -- Defined in ‘System.Wlog.LoggerNameBox’
-instance MonadMask m => MonadMask (LoggerNameBox m)
-  -- Defined in ‘System.Wlog.LoggerNameBox’
-instance MonadReader r m => MonadReader r (LoggerNameBox m)
-  -- Defined in ‘System.Wlog.LoggerNameBox’
-instance MonadState s m => MonadState s (LoggerNameBox m)
-  -- Defined in ‘System.Wlog.LoggerNameBox’
-instance MonadThrow m => MonadThrow (LoggerNameBox m)
-  -- Defined in ‘System.Wlog.LoggerNameBox’
-instance Monad m => HasLoggerName (LoggerNameBox m)
-  -- Defined in ‘System.Wlog.LoggerNameBox’
--}
+newtype LoggerNameBox m a = LoggerNameBox
+    {loggerNameBoxEntry :: ReaderT LoggerName m a
+    } deriving (Functor, Applicative, Monad, MonadIO, MonadTrans,
+    MonadThrow, MonadCatch, MonadMask, MonadState s)
 
+instance MonadReader r m => MonadReader r (LoggerNameBox m) where
+    ask = lift ask
+    reader = lift . reader
+    local f (LoggerNameBox m) = askLoggerName >>= lift . local f . runReaderT m
 
+instance MFunctor LoggerNameBox where
+    hoist f = LoggerNameBox . hoist f . loggerNameBoxEntry
+
+usingLoggerName :: LoggerName -> LoggerNameBox m a -> m a
+usingLoggerName name = flip runReaderT name . loggerNameBoxEntry
+
+-- HasLoggerName
 class HasLoggerName m where
 
   askLoggerName :: m LoggerName
@@ -231,8 +219,9 @@ instance HasLoggerName Identity where
   -- Defined in ‘System.Wlog.HasLoggerName’
 instance (Monad m, HasLoggerName m) => HasLoggerName (ExceptT e m)
   -- Defined in ‘System.Wlog.HasLoggerName’
--- instance Monad m => HasLoggerName (LoggerNameBox m)
---   -- Defined in ‘System.Wlog.LoggerNameBox’
+instance Monad m => HasLoggerName (LoggerNameBox m) where
+  askLoggerName = LoggerNameBox ask
+  modifyLoggerName how = LoggerNameBox . local how . loggerNameBoxEntry
 
 {-
 launchNamedPureLog ::
@@ -380,6 +369,11 @@ instance CanLog IO where
                                      Nothing
                                      (Internal.sev2klog severity)
                                      (K.logStr msg)
+
+logMCond :: MonadIO m => LoggerName -> Severity -> Text -> SelectionMode -> m ()
+logMCond name severity msg cond = do
+    let ns = K.Namespace [name]
+    logItemS lh () ns Nothing (sev2klog severity) cond $ K.logStr msg
 
 test :: IO ()
 test = do
