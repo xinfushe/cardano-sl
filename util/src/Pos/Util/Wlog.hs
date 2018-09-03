@@ -23,7 +23,7 @@ module Pos.Util.Wlog
         , logWarning
         , logMessage            -- call sites: 3  infra,wallet-new
           -- * LoggerName
-        , LoggerName (..)
+        , LoggerName
         , LoggerNameBox (..)    -- call sites: 9  core,db,infra,lib,tools,util
         , HasLoggerName (..)
         , usingLoggerName       -- call sites: 22 db,explorer,infra,lib,networking,node-ipc,tools,wallet,wallet-new
@@ -70,20 +70,30 @@ module Pos.Util.Wlog
         ) where
 
 import           System.Wlog (HandlerWrap (..), HasLoggerName (..),
-                     LoggerConfig (..), LoggerName (..), LoggerNameBox (..),
-                     Severity (..), consoleActionB, debugPlus,
-                     defaultHandleAction, errorPlus, fromScratch, hwFilePath,
-                     infoPlus, lcLogsDirectory, lcTermSeverityOut, lcTree,
-                     logMCond, ltFiles, ltSeverity, ltSubloggers,
-                     maybeLogsDirB, modifyLoggerName, noticePlus,
+                     LoggerNameBox (..), NamedPureLogger (..), consoleActionB,
+                     debugPlus, defaultHandleAction, errorPlus, fromScratch,
+                     hwFilePath, infoPlus, launchNamedPureLog, lcLogsDirectory,
+                     lcTermSeverityOut, lcTree, logMCond, ltFiles, ltSeverity,
+                     ltSubloggers, maybeLogsDirB, modifyLoggerName, noticePlus,
                      parseLoggerConfig, productionB, removeAllHandlers,
-                     retrieveLogContent, setLevel, setupLogging, showTidB,
+                     retrieveLogContent, runNamedPureLog, setLevel, showTidB,
                      termSeveritiesOutB, updateGlobalLogger, usingLoggerName,
                      warningPlus, zoomLogger)
 import           System.Wlog.Formatter (centiUtcTimeF)
 import           System.Wlog.LogHandler (LogHandlerTag (HandlerFilelike))
 
---import qualified Pos.Util.Log as Log
+import           Control.Lens (each)
+import qualified Katip as K
+import           Pos.Util.Log (LoggerConfig (..), Severity (..))
+import qualified Pos.Util.Log as Log
+import qualified Pos.Util.Log.Internal as Internal
+import           Pos.Util.Log.LoggerConfig (BackendKind (..),
+                     RotationParameters (..), defaultInteractiveConfiguration,
+                     lcBasePath, lcLoggerTree, lcRotation, lhBackend, lhFpath,
+                     lhMinSeverity, lhName, ltHandlers)
+import           Pos.Util.Log.Scribes (mkDevNullScribe, mkJsonFileScribe,
+                     mkStderrScribe, mkStdoutScribe, mkTextFileScribe)
+import           System.IO.Unsafe (unsafePerformIO)
 
 import           Universum
 
@@ -108,6 +118,8 @@ import           Data.Text (Text)
 -}
 
 {- compatibility -}
+
+type LoggerName = Text
 
 -- setupLogging will setup global shared logging state (MVar)
 -- usingLoggerName launches an action (of 'LoggerNameBox m a' ~ 'ReaderT LoggerName m a')
@@ -145,8 +157,6 @@ instance CanLog m => CanLog (ReaderT r m)
 instance CanLog m => CanLog (StateT s m)
 instance CanLog m => CanLog (StateLazy.StateT s m)
 instance CanLog m => CanLog (ExceptT s m)
-instance CanLog IO where
-    dispatchMessage ln _ t = putStrLn $ "[" ++ (show ln) ++ "] " ++ (show t)
 
 type WithLogger m = (CanLog m, HasLoggerName m)
 
@@ -224,22 +234,22 @@ launchNamedPureLog ::
   -> NamedPureLogger m a -> n b
   	-- Defined in ‘System.Wlog.PureLogging’
 -}
-launchNamedPureLog
-    :: (WithLogger n, Monad m)
-    => (forall f. Functor f => m (f a) -> n (f b))
-    -> NamedPureLogger m a
-    -> n b
-launchNamedPureLog hoist' namedPureLogger = do
-    name <- askLoggerName
-    (logs, res) <- hoist' $ swap <$> usingNamedPureLogger name namedPureLogger
-    res <$ dispatchEvents logs
+-- launchNamedPureLog
+--     :: (WithLogger n, Monad m)
+--     => (forall f. Functor f => m (f a) -> n (f b))
+--     -> NamedPureLogger m a
+--     -> n b
+-- launchNamedPureLog hoist' namedPureLogger = do
+--     name <- askLoggerName
+--     (logs, res) <- hoist' $ swap <$> usingNamedPureLogger name namedPureLogger
+--     res <$ dispatchEvents logs
 
-usingNamedPureLogger :: Functor m
-                     => LoggerName
-                     -> NamedPureLogger m a
-                     -> m (a, [LogEvent])
-usingNamedPureLogger name (NamedPureLogger action) =
-    usingLoggerName name $ runPureLog action
+-- usingNamedPureLogger :: Functor m
+--                      => LoggerName
+--                      -> NamedPureLogger m a
+--                      -> m (a, [LogEvent])
+-- usingNamedPureLogger name (NamedPureLogger action) =
+--     usingLoggerName name $ runPureLog action
 
 data LogEvent = LogEvent
     { leLoggerName :: !LoggerName
@@ -247,8 +257,8 @@ data LogEvent = LogEvent
     , leMessage    :: !Text
     } deriving (Show)
 
-runPureLog :: Functor m => PureLogger m a -> m (a, [LogEvent])
-runPureLog = fmap (second toList) . usingStateT mempty . runPureLogger
+-- runPureLog :: Functor m => PureLogger m a -> m (a, [LogEvent])
+-- runPureLog = fmap (second toList) . usingStateT mempty . runPureLogger
 
 -- |
 newtype PureLogger m a = PureLogger
@@ -262,27 +272,110 @@ instance MFunctor PureLogger where
     hoist f = PureLogger . hoist f . runPureLogger
 
 -- |
-newtype NamedPureLogger m a = NamedPureLogger
-    { runNamedPureLogger :: PureLogger (LoggerNameBox m) a
-    } deriving (Functor, Applicative, Monad, MonadState (Seq LogEvent),
-                MonadThrow, HasLoggerName)
+-- newtype NamedPureLogger m a = NamedPureLogger
+--     { runNamedPureLogger :: PureLogger (LoggerNameBox m) a
+--     } deriving (Functor, Applicative, Monad, MonadState (Seq LogEvent),
+--                 MonadThrow, HasLoggerName)
 
-instance MonadTrans NamedPureLogger where
-    lift = NamedPureLogger . lift . lift
-instance Monad m => CanLog (NamedPureLogger m) where
-    dispatchMessage name sev msg =
-        NamedPureLogger $ dispatchMessage name sev msg
-instance MFunctor NamedPureLogger where
-    hoist f = NamedPureLogger . hoist (hoist f) . runNamedPureLogger
+-- instance MonadTrans NamedPureLogger where
+--     lift = NamedPureLogger . lift . lift
+-- instance Monad m => CanLog (NamedPureLogger m) where
+--     dispatchMessage name sev msg =
+--         NamedPureLogger $ dispatchMessage name sev msg
+-- instance MFunctor NamedPureLogger where
+--     hoist f = NamedPureLogger . hoist (hoist f) . runNamedPureLogger
 
-runNamedPureLog
-    :: (Monad m, HasLoggerName m)
-    => NamedPureLogger m a -> m (a, [LogEvent])
-runNamedPureLog (NamedPureLogger action) =
-    askLoggerName >>= (`usingLoggerName` runPureLog action)
+-- runNamedPureLog
+--     :: (Monad m, HasLoggerName m)
+--     => NamedPureLogger m a -> m (a, [LogEvent])
+-- runNamedPureLog (NamedPureLogger action) =
+--     askLoggerName >>= (`usingLoggerName` runPureLog action)
 
 dispatchEvents :: CanLog m => [LogEvent] -> m ()
 dispatchEvents = mapM_ dispatchLogEvent
   where
     dispatchLogEvent (LogEvent name sev t) = dispatchMessage name sev t
 
+---
+
+{-# NOINLINE loggingHandler #-}
+loggingHandler :: MVar Log.LoggingHandler
+loggingHandler = unsafePerformIO $ do newEmptyMVar
+
+-- | setup logging according to configuration @LoggerConfig@
+--   the backends (scribes) will be registered with katip
+setupLogging :: MonadIO m => LoggerConfig -> m ()
+setupLogging lc = do
+    lh <- liftIO $ Internal.newConfig lc
+    scribes <- liftIO $ meta lh lc
+    liftIO $ Internal.registerBackends lh scribes
+    putMVar loggingHandler lh --Replace with tryPutMVar?
+      where
+        -- returns a list of: (name, Scribe, finalizer)
+        meta :: Log.LoggingHandler -> LoggerConfig -> IO [(Text, K.Scribe)]
+        meta _lh _lc = do
+            -- setup scribes according to configuration
+            let lhs = _lc ^. lcLoggerTree ^. ltHandlers ^.. each
+                basepath = _lc ^. lcBasePath
+                -- default rotation parameters: max. 24 hours, max. 10 files kept, max. size 5 MB
+                rotation = fromMaybe (RotationParameters {_rpMaxAgeHours=24,_rpKeepFilesNum=10,_rpLogLimitBytes=5*1000*1000})
+                                     (_lc ^. lcRotation)
+            forM lhs (\lh -> case (lh ^. lhBackend) of
+                    FileJsonBE -> do
+                        let bp = fromMaybe "." basepath
+                            fp = fromMaybe "node.json" $ lh ^. lhFpath
+                            fdesc = Internal.mkFileDescription bp fp
+                            nm = lh ^. lhName
+                        scribe <- mkJsonFileScribe
+                                      rotation
+                                      fdesc
+                                      (Internal.sev2klog $ fromMaybe Debug $ lh ^. lhMinSeverity)
+                                      K.V0
+                        return (nm, scribe)
+                    FileTextBE -> do
+                        let bp = fromMaybe "." basepath
+                            fp = (fromMaybe "node.log" $ lh ^. lhFpath)
+                            fdesc = Internal.mkFileDescription bp fp
+                            nm = lh ^. lhName
+                        scribe <- mkTextFileScribe
+                                      rotation
+                                      fdesc
+                                      True
+                                      (Internal.sev2klog $ fromMaybe Debug $ lh ^. lhMinSeverity)
+                                      K.V0
+                        return (nm, scribe)
+                    StdoutBE -> do
+                        scribe <- mkStdoutScribe
+                                      (Internal.sev2klog $ fromMaybe Debug $ lh ^. lhMinSeverity)
+                                      K.V0
+                        return (lh ^. lhName, scribe)
+                    StderrBE -> do
+                        scribe <- mkStderrScribe
+                                      (Internal.sev2klog $ fromMaybe Debug $ lh ^. lhMinSeverity)
+                                      K.V0
+                        return (lh ^. lhName, scribe)
+                    DevNullBE -> do
+                        scribe <- mkDevNullScribe _lh
+                                      (Internal.sev2klog $ fromMaybe Debug $ lh ^. lhMinSeverity)
+                                      K.V0
+                        return (lh ^. lhName, scribe)
+                 )
+
+instance CanLog IO where
+    dispatchMessage name severity msg = do
+        lh <- readMVar loggingHandler
+        mayEnv <- Internal.getLogEnv lh
+        case mayEnv of
+            Nothing -> error "logging not yet initialized. Abort."
+            Just env -> Log.logItem' ()
+                                     (K.Namespace [name])
+                                     env
+                                     Nothing
+                                     (Internal.sev2klog severity)
+                                     (K.logStr msg)
+
+test :: IO ()
+test = do
+    setupLogging $ defaultInteractiveConfiguration Debug
+    dispatchMessage "andreas" Info "All good!"
+    dispatchMessage "andreas" Info "All good!!"
