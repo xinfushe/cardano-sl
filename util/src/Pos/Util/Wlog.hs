@@ -69,12 +69,12 @@ module Pos.Util.Wlog
         , setLevel              -- call sites: 1 networking/src/Network/Broadcast/OutboundQueue/Demo.hs
         ) where
 
-import           System.Wlog (HandlerWrap (..), HasLoggerName (..),
-                     LoggerNameBox (..), NamedPureLogger (..), consoleActionB,
-                     debugPlus, defaultHandleAction, errorPlus, fromScratch,
-                     hwFilePath, infoPlus, launchNamedPureLog, lcLogsDirectory,
+import           System.Wlog (HandlerWrap (..), LoggerNameBox (..),
+                     NamedPureLogger (..), consoleActionB, debugPlus,
+                     defaultHandleAction, errorPlus, fromScratch, hwFilePath,
+                     infoPlus, launchNamedPureLog, lcLogsDirectory,
                      lcTermSeverityOut, lcTree, logMCond, ltFiles, ltSeverity,
-                     ltSubloggers, maybeLogsDirB, modifyLoggerName, noticePlus,
+                     ltSubloggers, maybeLogsDirB, noticePlus,
                      parseLoggerConfig, productionB, removeAllHandlers,
                      retrieveLogContent, runNamedPureLog, setLevel, showTidB,
                      termSeveritiesOutB, updateGlobalLogger, usingLoggerName,
@@ -169,8 +169,8 @@ logError _ = return ()
 logNotice _ = return ()
 logWarning _ = return ()
 
-logMessage :: (CanLog m) => Severity -> Text -> m ()
-logMessage _ _ = return ()
+logMessage :: WithLogger m => Severity -> Text -> m ()
+logMessage severity msg = return ()
 
 {-
 type role LoggerNameBox representational nominal
@@ -201,31 +201,36 @@ instance Monad m => HasLoggerName (LoggerNameBox m)
   -- Defined in ‘System.Wlog.LoggerNameBox’
 -}
 
-{-
-class HasLoggerName (m :: * -> *) where
+
+class HasLoggerName m where
+
   askLoggerName :: m LoggerName
-  default askLoggerName :: (MonadTrans t, t n ~ m, Monad n,
-                            HasLoggerName n) =>
-                           m LoggerName
   modifyLoggerName :: (LoggerName -> LoggerName) -> m a -> m a
-  default modifyLoggerName :: (mmorph-1.1.2:Control.Monad.Morph.MFunctor
-                                 t,
-                               t n ~ m, Monad n, HasLoggerName n) =>
-                              (LoggerName -> LoggerName) -> m a -> m a
-  	-- Defined in ‘System.Wlog.HasLoggerName’
-instance Monad m => HasLoggerName (NamedPureLogger m)
-  -- Defined in ‘System.Wlog.PureLogging’
+
+  default askLoggerName :: (MonadTrans t, t n ~ m, Monad n, HasLoggerName n)
+                        => m LoggerName
+  askLoggerName = lift askLoggerName
+
+  default modifyLoggerName :: (MFunctor t, t n ~ m, Monad n, HasLoggerName n)
+                           => (LoggerName -> LoggerName) -> m a -> m a
+  modifyLoggerName f = hoist (modifyLoggerName f)
+
+  -- Defined in ‘System.Wlog.HasLoggerName’
+
+-- instance Monad m => HasLoggerName (NamedPureLogger m)
+--   -- Defined in ‘System.Wlog.PureLogging’
 instance (Monad m, HasLoggerName m) => HasLoggerName (StateT a m)
   -- Defined in ‘System.Wlog.HasLoggerName’
 instance (Monad m, HasLoggerName m) => HasLoggerName (ReaderT a m)
   -- Defined in ‘System.Wlog.HasLoggerName’
-instance HasLoggerName Identity
+instance HasLoggerName Identity where
+    askLoggerName    = Identity "Identity"
+    modifyLoggerName = flip const
   -- Defined in ‘System.Wlog.HasLoggerName’
 instance (Monad m, HasLoggerName m) => HasLoggerName (ExceptT e m)
   -- Defined in ‘System.Wlog.HasLoggerName’
-instance Monad m => HasLoggerName (LoggerNameBox m)
-  -- Defined in ‘System.Wlog.LoggerNameBox’
--}
+-- instance Monad m => HasLoggerName (LoggerNameBox m)
+--   -- Defined in ‘System.Wlog.LoggerNameBox’
 
 {-
 launchNamedPureLog ::
