@@ -160,17 +160,19 @@ instance CanLog m => CanLog (ExceptT s m)
 
 type WithLogger m = (CanLog m, HasLoggerName m)
 
-{- dummies for now -}
-logDebug, logError, logInfo, logNotice, logWarning
-  :: (CanLog m) => Text -> m ()
-logDebug _ = return ()
-logInfo _ = return ()
-logError _ = return ()
-logNotice _ = return ()
-logWarning _ = return ()
+logDebug, logInfo, logNotice, logWarning, logError
+  :: WithLogger m
+  => Text -> m ()
+logDebug   = logMessage Debug
+logInfo    = logMessage Info
+logNotice  = logMessage Notice
+logWarning = logMessage Warning
+logError   = logMessage Error
 
 logMessage :: WithLogger m => Severity -> Text -> m ()
-logMessage severity msg = return ()
+logMessage severity msg = do
+    name <- askLoggerName
+    dispatchMessage name severity msg
 
 {-
 type role LoggerNameBox representational nominal
