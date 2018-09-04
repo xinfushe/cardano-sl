@@ -61,8 +61,9 @@ module Pos.Util.Wlog
         , defaultHandleAction   -- call sites: 2 generator/app/VerificationBench.hs,lib/src/Pos/Launcher/Resource.hs
           -- * Logging messages with a condition
         , logMCond              -- call sites: 1 core/src/Pos/Core/Util/LogSafe.hs
-          -- * LogHandler
-        , LogHandlerTag (HandlerFilelike)  -- call sites: 1 core/src/Pos/Core/Util/LogSafe.hs
+        --   -- * LogHandler
+        -- , LogHandlerTag (HandlerFilelike)  -- call sites: 1 core/src/Pos/Core/Util/LogSafe.hs
+        -- changed definition of secure/public log files
           -- * Utility functions
         , removeAllHandlers     -- call sites: 2 lib/src/Pos/Launcher/Resource.hs,networking/test/Test/Network/Broadcast/OutboundQueueSpec.hs
         , centiUtcTimeF         -- call sites: 1 networking/bench/LogReader/Main.hs
@@ -79,14 +80,13 @@ import           System.Wlog (HandlerWrap (..), NamedPureLogger (..),
                      termSeveritiesOutB, updateGlobalLogger, warningPlus,
                      zoomLogger)
 import           System.Wlog.Formatter (centiUtcTimeF)
-import           System.Wlog.LogHandler (LogHandlerTag (HandlerFilelike))
 
 import           Pos.Util.Wlog.Compatibility (CanLog (..), HasLoggerName (..),
                      LogEvent (..), LoggerConfig (..), LoggerName,
                      LoggerNameBox (..), Severity (..), WithLogger,
-                     dispatchEvents, logDebug, logError, logInfo, logMessage,
-                     logNotice, logWarning, setupLogging, usingLoggerName)
-import           Pos.Util.Wlog.LogSafe (logMCond)
+                     dispatchEvents, logDebug, logError, logInfo, logMCond,
+                     logMessage, logNotice, logWarning, setupLogging,
+                     usingLoggerName)
 
 {-
   attempt for reducing complexity:

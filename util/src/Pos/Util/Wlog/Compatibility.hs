@@ -19,30 +19,38 @@ module Pos.Util.Wlog.Compatibility
          , usingLoggerName
          , LoggerConfig (..)
          , Severity (..)
+           -- * Safe logging
+         , SelectionMode
+         ,logMCond
 
          , loggingHandler
          , test
          ) where
 
+import           Control.Concurrent (myThreadId)
 import           Control.Lens (each)
-import qualified Katip as K
-import           Pos.Util.Log (LoggerConfig (..), Severity (..))
+import           Control.Monad.Morph (MFunctor (..))
+import qualified Control.Monad.State.Lazy as StateLazy
+import           Data.Map.Strict (lookup)
+import           Data.Sequence ((|>))
+import qualified Language.Haskell.TH as TH
+
+import           Pos.Util.Log (LoggerConfig (..), LoggingHandler, Severity (..))
 import qualified Pos.Util.Log as Log
 import qualified Pos.Util.Log.Internal as Internal
-import           Pos.Util.Log.LoggerConfig (BackendKind (..),
-                     RotationParameters (..), defaultInteractiveConfiguration,
-                     lcBasePath, lcLoggerTree, lcRotation, lhBackend, lhFpath,
-                     lhMinSeverity, lhName, ltHandlers)
+import           Pos.Util.Log.LoggerConfig (BackendKind (..), LogHandler (..),
+                     LogSecurityLevel (..), RotationParameters (..),
+                     defaultInteractiveConfiguration, lcBasePath, lcLoggerTree,
+                     lcRotation, lhBackend, lhFpath, lhMinSeverity, lhName,
+                     ltHandlers)
 import           Pos.Util.Log.Scribes (mkDevNullScribe, mkJsonFileScribe,
                      mkStderrScribe, mkStdoutScribe, mkTextFileScribe)
 import           System.IO.Unsafe (unsafePerformIO)
 
 import           Universum
 
-import           Control.Monad.Morph (MFunctor (..))
-import qualified Control.Monad.State.Lazy as StateLazy
-import           Data.Sequence ((|>))
-import           Data.Text (Text)
+import qualified Katip as K
+import qualified Katip.Core as KC
 
 type LoggerName = Text
 
@@ -219,7 +227,7 @@ dispatchEvents = mapM_ dispatchLogEvent
 ---
 
 {-# NOINLINE loggingHandler #-}
-loggingHandler :: MVar Log.LoggingHandler
+loggingHandler :: MVar LoggingHandler
 loggingHandler = unsafePerformIO $ do newEmptyMVar
 
 -- | setup logging according to configuration @LoggerConfig@
@@ -232,7 +240,7 @@ setupLogging lc = do
     putMVar loggingHandler lh --Replace with tryPutMVar?
       where
         -- returns a list of: (name, Scribe, finalizer)
-        meta :: Log.LoggingHandler -> LoggerConfig -> IO [(Text, K.Scribe)]
+        meta :: LoggingHandler -> LoggerConfig -> IO [(Text, K.Scribe)]
         meta _lh _lc = do
             -- setup scribes according to configuration
             let lhs = _lc ^. lcLoggerTree ^. ltHandlers ^.. each
@@ -299,3 +307,60 @@ test = do
     setupLogging $ defaultInteractiveConfiguration Debug
     dispatchMessage "andreas" Info "All good!"
     dispatchMessage "andreas" Info "All good!!"
+
+-- LogSafe
+
+-- | Whether to log to given log handler.
+type SelectionMode = LogSecurityLevel -> Bool
+
+-- | this emulates katip's 'logItem' function, but only outputs the message
+--   to scribes which match the 'SelectionMode'
+logItemS
+    :: (K.LogItem a, MonadIO m)
+    => LoggingHandler
+    -> a
+    -> K.Namespace
+    -> Maybe TH.Loc
+    -> K.Severity
+    -> SelectionMode
+    -> K.LogStr
+    -> m ()
+logItemS lhandler a ns loc sev cond msg = do
+    mayle <- liftIO $ Internal.getLogEnv lhandler
+    case mayle of
+        Nothing -> error "logging not yet initialized. Abort."
+        Just le -> do
+            maycfg <- liftIO $ Internal.getConfig lhandler
+            let cfg = case maycfg of
+                    Nothing -> error "No Configuration for logging found. Abort."
+                    Just c  -> c
+            liftIO $ do
+                item <- K.Item
+                    <$> pure (K._logEnvApp le)
+                    <*> pure (K._logEnvEnv le)
+                    <*> pure sev
+                    <*> (KC.mkThreadIdText <$> myThreadId)
+                    <*> pure (K._logEnvHost le)
+                    <*> pure (K._logEnvPid le)
+                    <*> pure a
+                    <*> pure msg
+                    <*> (K._logEnvTimer le)
+                    <*> pure ((K._logEnvApp le) <> ns)
+                    <*> pure loc
+                let lhs = cfg ^. lcLoggerTree ^. ltHandlers ^.. each
+                forM_ (filterWithSafety cond lhs) (\ lh -> do
+                    case lookup (lh ^. lhName) (K._logEnvScribes le) of
+                        Nothing -> error ("Not found Scribe with name: " <> lh ^. lhName)
+                        Just scribeH -> atomically
+                            (KC.tryWriteTBQueue (KC.shChan scribeH) (KC.NewItem item)))
+            where
+              filterWithSafety :: SelectionMode -> [LogHandler] -> [LogHandler]
+              filterWithSafety condition = filter (\lh -> case _lhSecurityLevel lh of
+                  Nothing -> False
+                  Just s  -> condition s)
+
+logMCond :: MonadIO m => LoggerName -> Severity -> Text -> SelectionMode -> m ()
+logMCond name severity msg cond = do
+    let ns = K.Namespace [name]
+    lh <- liftIO $ readMVar loggingHandler
+    logItemS lh () ns Nothing (Internal.sev2klog severity) cond $ K.logStr msg
