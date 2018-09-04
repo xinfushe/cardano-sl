@@ -21,7 +21,7 @@ import           Test.QuickCheck (Property, arbitrary, counterexample, (==>))
 import           Pos.Core (HasConfiguration, addressHash, checkPubKeyAddress,
                            defaultCoreConfiguration, makePubKeyAddressBoot, makeScriptAddress,
                            mkCoin, sumCoins, withGenesisSpec)
-import           Pos.Core.NetworkMagic (NetworkMagic (..))
+import           Pos.Core.NetworkMagic (makeNetworkMagic)
 import           Pos.Core.Txp (Tx (..), TxAux (..), TxIn (..), TxInWitness (..), TxOut (..),
                                TxOutAux (..), TxSigData (..), TxWitness, isTxInUnknown)
 import           Pos.Crypto (ProtocolMagic, SignTag (SignTx), checkSig, fakeSigner, hash, toPublic,
@@ -104,7 +104,7 @@ verifyTxInUtxo pm (SmallGenerator (GoodTx ls)) =
             let id = hash tx
             (idx, out) <- zip [0..] (toList _txOutputs)
             pure ((TxInUtxo id idx), TxOutAux out)
-        vtxContext = VTxContext False fixedNM
+        vtxContext = VTxContext False (makeNetworkMagic pm)
         txAux = TxAux newTx witness
     in counterexample ("\n"+|nameF "txs" (blockListF' "-" genericF txs)|+""
                            +|nameF "transaction" (B.build txAux)|+"") $
@@ -114,7 +114,7 @@ badSigsTx :: ProtocolMagic -> SmallGenerator BadSigsTx -> Property
 badSigsTx pm (SmallGenerator (getBadSigsTx -> ls)) =
     let (tx@UnsafeTx {..}, utxo, extendedInputs, txWits) =
             getTxFromGoodTx ls
-        ctx = VTxContext False fixedNM
+        ctx = VTxContext False (makeNetworkMagic pm)
         transactionVerRes =
             verifyTxUtxoSimple pm ctx utxo $ TxAux tx txWits
         notAllSignaturesAreValid =
@@ -127,7 +127,7 @@ doubleInputTx :: ProtocolMagic -> SmallGenerator DoubleInputTx -> Property
 doubleInputTx pm (SmallGenerator (getDoubleInputTx -> ls)) =
     let ((tx@UnsafeTx {..}), utxo, _extendedInputs, txWits) =
             getTxFromGoodTx ls
-        ctx = VTxContext False fixedNM
+        ctx = VTxContext False (makeNetworkMagic pm)
         transactionVerRes =
             verifyTxUtxoSimple pm ctx utxo $ TxAux tx txWits
         someInputsAreDuplicated =
@@ -137,7 +137,7 @@ doubleInputTx pm (SmallGenerator (getDoubleInputTx -> ls)) =
 validateGoodTx :: ProtocolMagic -> SmallGenerator GoodTx -> Property
 validateGoodTx pm (SmallGenerator (getGoodTx -> ls)) =
     let quadruple@(tx, utxo, _, txWits) = getTxFromGoodTx ls
-        ctx = VTxContext False fixedNM
+        ctx = VTxContext False (makeNetworkMagic pm)
         transactionVerRes =
             verifyTxUtxoSimple pm ctx utxo $ TxAux tx txWits
         transactionReallyIsGood = individualTxPropertyVerifier pm quadruple
@@ -414,10 +414,11 @@ scriptTxSpec pm = describe "script transactions" $ do
                 "Out of petrol."
 
   where
+    nm = makeNetworkMagic pm
     -- Some random stuff we're going to use when building transactions
     randomPkOutput = runGen $ do
         key <- arbitrary
-        return (TxOut (makePubKeyAddressBoot fixedNM key) (mkCoin 1))
+        return (TxOut (makePubKeyAddressBoot nm key) (mkCoin 1))
     -- Make utxo with a single output; return utxo, the output, and an
     -- input that can be used to spend that output
     mkUtxo :: TxOut -> (TxIn, TxOut, Utxo)
@@ -426,7 +427,7 @@ scriptTxSpec pm = describe "script transactions" $ do
         in  (TxInUtxo txid 0, outp, one ((TxInUtxo txid 0), (TxOutAux outp)))
 
     -- Do not verify versions
-    vtxContext = VTxContext False fixedNM
+    vtxContext = VTxContext False nm
 
     -- Try to apply a transaction (with given utxo as context) and say
     -- whether it applied successfully
@@ -443,7 +444,7 @@ scriptTxSpec pm = describe "script transactions" $ do
                   -> Either ToilVerFailure ()
     checkScriptTx val mkWit =
         let (inp, _, utxo) = mkUtxo $
-                TxOut (makeScriptAddress fixedNM Nothing val) (mkCoin 1)
+                TxOut (makeScriptAddress nm Nothing val) (mkCoin 1)
             tx = UnsafeTx (one inp) (one randomPkOutput) $ mkAttributes ()
             txSigData = TxSigData { txSigTxHash = hash tx }
             txAux = TxAux tx (one (mkWit txSigData))
@@ -477,7 +478,3 @@ txShouldFailWithPlutus res err = case res of
     other -> expectationFailure $
         "expected: Left ...: " <> show (WitnessScriptError err) <> "\n" <>
         " but got: " <> show other
-
-
-fixedNM :: NetworkMagic
-fixedNM = NMNothing

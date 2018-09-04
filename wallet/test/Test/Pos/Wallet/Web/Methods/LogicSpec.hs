@@ -7,9 +7,12 @@ module Test.Pos.Wallet.Web.Methods.LogicSpec
 
 import           Universum
 
-import           Test.Hspec (Spec, describe)
+import           Test.Hspec (Spec, describe, runIO)
 import           Test.Hspec.QuickCheck (prop)
+import           Test.QuickCheck (arbitrary, generate)
 
+import           Pos.Core.NetworkMagic (NetworkMagic, makeNetworkMagic)
+import           Pos.Crypto (ProtocolMagic (..), RequiresNetworkMagic (..))
 import           Pos.Launcher (HasConfigurations)
 import           Pos.Wallet.Web.Methods.Logic (getAccounts, getWallets)
 
@@ -19,17 +22,28 @@ import           Test.Pos.Wallet.Web.Mode (WalletProperty)
 
 -- TODO remove HasCompileInfo when MonadWalletWebMode will be splitted.
 spec :: Spec
-spec = withDefConfigurations $ \_ _ ->
+spec = do
+    runWithMagic NMMustBeNothing
+    runWithMagic NMMustBeJust
+
+runWithMagic :: RequiresNetworkMagic -> Spec
+runWithMagic rnm = do
+    pm <- (\ident -> ProtocolMagic ident rnm) <$> runIO (generate arbitrary)
+    describe ("(requiresNetworkMagic=" ++ show rnm ++ ")") $
+        specBody (makeNetworkMagic pm)
+
+specBody :: NetworkMagic -> Spec
+specBody nm = withDefConfigurations $ \_ _ ->
        describe "Pos.Wallet.Web.Methods" $ do
-    prop emptyWalletOnStarts emptyWallet
+    prop emptyWalletOnStarts (emptyWallet nm)
   where
     emptyWalletOnStarts = "wallet must be empty on start"
 
-emptyWallet :: HasConfigurations => WalletProperty ()
-emptyWallet = do
-    wallets <- lift getWallets
+emptyWallet :: HasConfigurations => NetworkMagic -> WalletProperty ()
+emptyWallet nm = do
+    wallets <- lift (getWallets nm)
     unless (null wallets) $
         stopProperty "Wallets aren't empty"
-    accounts <- lift $ getAccounts Nothing
+    accounts <- lift $ getAccounts nm Nothing
     unless (null accounts) $
         stopProperty "Accounts aren't empty"

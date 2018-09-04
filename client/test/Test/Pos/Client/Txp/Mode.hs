@@ -89,5 +89,6 @@ instance (HasTxpConfigurations, Testable a) => Testable (TxpTestProperty a) wher
     property = monadic (ioProperty . flip runReaderT genesisBlockVersionData)
 
 
+-- TODO mhueschen | unclear to me whether it is ok to hardcode this
 fixedNM :: NetworkMagic
 fixedNM = NMNothing
