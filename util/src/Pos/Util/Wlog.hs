@@ -70,22 +70,22 @@ module Pos.Util.Wlog
         , setLevel              -- call sites: 1 networking/src/Network/Broadcast/OutboundQueue/Demo.hs
         ) where
 
-import           System.Wlog (HandlerWrap (..), NamedPureLogger (..),
-                     consoleActionB, debugPlus, defaultHandleAction, errorPlus,
-                     fromScratch, hwFilePath, infoPlus, launchNamedPureLog,
-                     lcLogsDirectory, lcTermSeverityOut, lcTree, ltFiles,
-                     ltSeverity, ltSubloggers, maybeLogsDirB, noticePlus,
-                     parseLoggerConfig, productionB, removeAllHandlers,
-                     retrieveLogContent, runNamedPureLog, setLevel, showTidB,
+import           System.Wlog (HandlerWrap (..), consoleActionB, debugPlus,
+                     defaultHandleAction, errorPlus, fromScratch, hwFilePath,
+                     infoPlus, lcLogsDirectory, lcTermSeverityOut, lcTree,
+                     ltFiles, ltSeverity, ltSubloggers, maybeLogsDirB,
+                     noticePlus, parseLoggerConfig, productionB,
+                     removeAllHandlers, retrieveLogContent, setLevel, showTidB,
                      termSeveritiesOutB, updateGlobalLogger, warningPlus,
                      zoomLogger)
 import           System.Wlog.Formatter (centiUtcTimeF)
 
 import           Pos.Util.Wlog.Compatibility (CanLog (..), HasLoggerName (..),
                      LogEvent (..), LoggerConfig (..), LoggerName,
-                     LoggerNameBox (..), Severity (..), WithLogger,
-                     dispatchEvents, logDebug, logError, logInfo, logMCond,
-                     logMessage, logNotice, logWarning, setupLogging,
+                     LoggerNameBox (..), NamedPureLogger (..), Severity (..),
+                     WithLogger, dispatchEvents, launchNamedPureLog, logDebug,
+                     logError, logInfo, logMCond, logMessage, logNotice,
+                     logWarning, runNamedPureLog, setupLogging,
                      usingLoggerName)
 
 {-

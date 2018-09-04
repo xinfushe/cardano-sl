@@ -1,3 +1,5 @@
+{-# LANGUAGE Rank2Types #-}
+
 module Pos.Util.Wlog.Compatibility
         (  -- * CanLog
            CanLog (..)
@@ -21,7 +23,11 @@ module Pos.Util.Wlog.Compatibility
          , Severity (..)
            -- * Safe logging
          , SelectionMode
-         ,logMCond
+         , logMCond
+           -- * Named Pure logging
+         , NamedPureLogger (..)
+         , launchNamedPureLog
+         , runNamedPureLog
 
          , loggingHandler
          , test
@@ -62,19 +68,6 @@ type LoggerName = Text
 -- this fails with 'MonadIO' redundant constraint
 -- type WithLogger m = (CanLog m, HasLoggerName m, Log.LogContext m)
 
-{-
-class GHC.Base.Monad m => CanLog (m :: * -> *) where
-  dispatchMessage :: LoggerName
-                     -> Severity -> Data.Text.Internal.Text -> m ()
-  default dispatchMessage :: (Control.Monad.Trans.Class.MonadTrans t,
-                              t n ~ m, CanLog n) =>
-                             LoggerName -> Severity -> Data.Text.Internal.Text -> m ()
-  -- Defined in ‘System.Wlog.CanLog’
-instance GHC.Base.Monad m => CanLog (NamedPureLogger m)
-  -- Defined in ‘System.Wlog.PureLogging’
-instance CanLog m => CanLog (LoggerNameBox m)
-  -- Defined in ‘System.Wlog.CanLog’
--}
 class Monad m => CanLog m where
     dispatchMessage :: LoggerName -> Severity -> Text -> m ()
 
@@ -139,9 +132,9 @@ class HasLoggerName m where
 
   -- Defined in ‘System.Wlog.HasLoggerName’
 
--- instance Monad m => HasLoggerName (NamedPureLogger m)
---   -- Defined in ‘System.Wlog.PureLogging’
 instance (Monad m, HasLoggerName m) => HasLoggerName (StateT a m)
+  -- Defined in ‘System.Wlog.HasLoggerName’
+instance (Monad m, HasLoggerName m) => HasLoggerName (StateLazy.StateT a m)
   -- Defined in ‘System.Wlog.HasLoggerName’
 instance (Monad m, HasLoggerName m) => HasLoggerName (ReaderT a m)
   -- Defined in ‘System.Wlog.HasLoggerName’
@@ -155,29 +148,22 @@ instance Monad m => HasLoggerName (LoggerNameBox m) where
   askLoggerName = LoggerNameBox ask
   modifyLoggerName how = LoggerNameBox . local how . loggerNameBoxEntry
 
-{-
-launchNamedPureLog ::
-  (System.Wlog.CanLog.WithLogger n, Monad m) =>
-  (forall (f :: * -> *). Functor f => m (f a) -> n (f b))
-  -> NamedPureLogger m a -> n b
-  	-- Defined in ‘System.Wlog.PureLogging’
--}
--- launchNamedPureLog
---     :: (WithLogger n, Monad m)
---     => (forall f. Functor f => m (f a) -> n (f b))
---     -> NamedPureLogger m a
---     -> n b
--- launchNamedPureLog hoist' namedPureLogger = do
---     name <- askLoggerName
---     (logs, res) <- hoist' $ swap <$> usingNamedPureLogger name namedPureLogger
---     res <$ dispatchEvents logs
+launchNamedPureLog
+    :: (WithLogger n, Monad m)
+    => (forall f. Functor f => m (f a) -> n (f b))
+    -> NamedPureLogger m a
+    -> n b
+launchNamedPureLog hoist' namedPureLogger = do
+    name <- askLoggerName
+    (logs, res) <- hoist' $ swap <$> usingNamedPureLogger name namedPureLogger
+    res <$ dispatchEvents logs
 
--- usingNamedPureLogger :: Functor m
---                      => LoggerName
---                      -> NamedPureLogger m a
---                      -> m (a, [LogEvent])
--- usingNamedPureLogger name (NamedPureLogger action) =
---     usingLoggerName name $ runPureLog action
+usingNamedPureLogger :: Functor m
+                     => LoggerName
+                     -> NamedPureLogger m a
+                     -> m (a, [LogEvent])
+usingNamedPureLogger name (NamedPureLogger action) =
+    usingLoggerName name $ runPureLog action
 
 data LogEvent = LogEvent
     { leLoggerName :: !LoggerName
@@ -185,8 +171,8 @@ data LogEvent = LogEvent
     , leMessage    :: !Text
     } deriving (Show)
 
--- runPureLog :: Functor m => PureLogger m a -> m (a, [LogEvent])
--- runPureLog = fmap (second toList) . usingStateT mempty . runPureLogger
+runPureLog :: Functor m => PureLogger m a -> m (a, [LogEvent])
+runPureLog = fmap (second toList) . usingStateT mempty . runPureLogger
 
 -- |
 newtype PureLogger m a = PureLogger
@@ -199,25 +185,25 @@ instance Monad m => CanLog (PureLogger m) where
 instance MFunctor PureLogger where
     hoist f = PureLogger . hoist f . runPureLogger
 
--- |
--- newtype NamedPureLogger m a = NamedPureLogger
---     { runNamedPureLogger :: PureLogger (LoggerNameBox m) a
---     } deriving (Functor, Applicative, Monad, MonadState (Seq LogEvent),
---                 MonadThrow, HasLoggerName)
 
--- instance MonadTrans NamedPureLogger where
---     lift = NamedPureLogger . lift . lift
--- instance Monad m => CanLog (NamedPureLogger m) where
---     dispatchMessage name sev msg =
---         NamedPureLogger $ dispatchMessage name sev msg
--- instance MFunctor NamedPureLogger where
---     hoist f = NamedPureLogger . hoist (hoist f) . runNamedPureLogger
+newtype NamedPureLogger m a = NamedPureLogger
+    { runNamedPureLogger :: PureLogger (LoggerNameBox m) a
+    } deriving (Functor, Applicative, Monad, MonadState (Seq LogEvent),
+                MonadThrow, HasLoggerName)
 
--- runNamedPureLog
---     :: (Monad m, HasLoggerName m)
---     => NamedPureLogger m a -> m (a, [LogEvent])
--- runNamedPureLog (NamedPureLogger action) =
---     askLoggerName >>= (`usingLoggerName` runPureLog action)
+instance MonadTrans NamedPureLogger where
+    lift = NamedPureLogger . lift . lift
+instance Monad m => CanLog (NamedPureLogger m) where
+    dispatchMessage name sev msg =
+        NamedPureLogger $ dispatchMessage name sev msg
+instance MFunctor NamedPureLogger where
+    hoist f = NamedPureLogger . hoist (hoist f) . runNamedPureLogger
+
+runNamedPureLog
+    :: (Monad m, HasLoggerName m)
+    => NamedPureLogger m a -> m (a, [LogEvent])
+runNamedPureLog (NamedPureLogger action) =
+    askLoggerName >>= (`usingLoggerName` runPureLog action)
 
 dispatchEvents :: CanLog m => [LogEvent] -> m ()
 dispatchEvents = mapM_ dispatchLogEvent
