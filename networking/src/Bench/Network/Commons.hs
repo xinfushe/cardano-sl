@@ -44,11 +44,11 @@ import           Prelude hiding (takeWhile)
 
 import           Node (Message (..))
 import           Pos.Util (realTime)
+import           Pos.Util.Log.LoggerConfig (defaultInteractiveConfiguration)
 import           Pos.Util.Trace (Trace, traceWith)
-import           Pos.Util.Wlog (LoggerConfig (..), errorPlus, fromScratch,
-                     infoPlus, lcTree, ltSeverity, maybeLogsDirB,
-                     parseLoggerConfig, productionB, setupLogging, warningPlus,
-                     zoomLogger)
+import           Pos.Util.Wlog (LoggerConfig (..), Severity (Warning), lcTree,
+                     ltSeverity, maybeLogsDirB, parseLoggerConfig, productionB,
+                     setupLogging)
 
 -- * Transfered data types
 
@@ -86,16 +86,17 @@ logMeasure logTrace miEvent miId miPayload = do
     liftIO $ traceWith logTrace $ F.sformat F.build $ LogMessage MeasureInfo{..}
 
 defaultLogConfig :: LoggerConfig
-defaultLogConfig = fromScratch $ zoom lcTree $ do
-    ltSeverity ?= warningPlus
-    zoomLogger "sender" $ do
-        ltSeverity ?= infoPlus
-        commLogger
-    zoomLogger "receiver" $ do
-        ltSeverity ?= infoPlus
-        commLogger
-  where
-    commLogger = zoomLogger "comm" $ ltSeverity ?= errorPlus
+defaultLogConfig = defaultInteractiveConfiguration Warning
+-- defaultLogConfig = fromScratch $ zoom lcTree $ do
+--     ltSeverity ?= warningPlus
+--     zoomLogger "sender" $ do
+--         ltSeverity ?= infoPlus
+--         commLogger
+--     zoomLogger "receiver" $ do
+--         ltSeverity ?= infoPlus
+--         commLogger
+--   where
+--     commLogger = zoomLogger "comm" $ ltSeverity ?= errorPlus
 
 loadLogConfig :: MonadIO m => Maybe FilePath -> Maybe FilePath -> m ()
 loadLogConfig logsPrefix configFile = do
@@ -175,5 +176,5 @@ instance Buildable a => Buildable (LogMessage a) where
 
 logMessageParser :: Parser a -> Parser (Maybe (LogMessage a))
 logMessageParser p = (takeWhile (/= '#') >>) . join $ do
-        (char '#' *> pure (Just . LogMessage <$> p))
+        (char '#' $> (Just . LogMessage <$> p))
     <|> pure (pure Nothing)

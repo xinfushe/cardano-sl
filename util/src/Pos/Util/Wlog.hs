@@ -35,11 +35,9 @@ module Pos.Util.Wlog
         , parseLoggerConfig     -- call sites: 2 lib,networking
           -- * Hierarchical tree of loggers (with lenses)
         , HandlerWrap (..)      -- call sites: 1 tools/src/launcher/Main.hs
-        , fromScratch           -- call sites: 1 networking/src/Bench/Network/Commons.hs
         , hwFilePath            -- call sites: 1 infra/src/Pos/Infra/Reporting/Wlog.hs
         , ltFiles               -- call sites: 2 infra/.../Reporting/Wlog.hs,tools/src/launcher/Main.hs
         , ltSeverity            -- call sites: 5 networking/src/Bench/Network/Commons.hs,tools/src/launcher/Main.hs
-        , zoomLogger            -- call sites: 3 networking/src/Bench/Network/Commons.hs
         , ltSubloggers          -- call sites: 1 infra/src/Pos/Infra/Reporting/Wlog.hs
           -- * Builders for 'LoggerConfig'
         , consoleActionB        -- call sites: 3 generator/app/VerificationBench.hs,lib/src/Pos/Launcher/Resource.hs
@@ -50,10 +48,7 @@ module Pos.Util.Wlog
           -- * Severity
         , Severity (..)
         , debugPlus             -- call sites: 4 generator/app/VerificationBench.hs,tools:keygen|launcher
-        , errorPlus             -- call sites: 1 networking/src/Bench/Network/Commons.hs
-        , infoPlus              -- call sites: 2 networking/src/Bench/Network/Commons.hs
         , noticePlus            -- call sites: 1 networking/src/Network/Broadcast/OutboundQueue/Demo.hs
-        , warningPlus           -- call sites: 1 networking/src/Bench/Network/Commons.hs
           -- * Saving Changes
         , retrieveLogContent    -- call sites: 1 infra/src/Pos/Infra/Reporting/Wlog.hs
         , updateGlobalLogger    -- call sites: 1 networking/src/Network/Broadcast/OutboundQueue/Demo.hs
@@ -71,13 +66,11 @@ module Pos.Util.Wlog
         ) where
 
 import           System.Wlog (HandlerWrap (..), consoleActionB, debugPlus,
-                     defaultHandleAction, errorPlus, fromScratch, hwFilePath,
-                     infoPlus, lcLogsDirectory, lcTermSeverityOut, lcTree,
-                     ltFiles, ltSeverity, ltSubloggers, maybeLogsDirB,
-                     noticePlus, parseLoggerConfig, productionB,
+                     defaultHandleAction, hwFilePath, lcLogsDirectory,
+                     lcTermSeverityOut, lcTree, ltFiles, ltSeverity,
+                     ltSubloggers, maybeLogsDirB, noticePlus, productionB,
                      removeAllHandlers, retrieveLogContent, setLevel, showTidB,
-                     termSeveritiesOutB, updateGlobalLogger, warningPlus,
-                     zoomLogger)
+                     termSeveritiesOutB, updateGlobalLogger)
 import           System.Wlog.Formatter (centiUtcTimeF)
 
 import           Pos.Util.Wlog.Compatibility (CanLog (..), HasLoggerName (..),
@@ -85,8 +78,8 @@ import           Pos.Util.Wlog.Compatibility (CanLog (..), HasLoggerName (..),
                      LoggerNameBox (..), NamedPureLogger (..), Severity (..),
                      WithLogger, dispatchEvents, launchNamedPureLog, logDebug,
                      logError, logInfo, logMCond, logMessage, logNotice,
-                     logWarning, runNamedPureLog, setupLogging,
-                     usingLoggerName)
+                     logWarning, parseLoggerConfig, runNamedPureLog,
+                     setupLogging, usingLoggerName)
 
 {-
   attempt for reducing complexity:

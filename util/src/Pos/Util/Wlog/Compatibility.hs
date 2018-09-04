@@ -19,8 +19,10 @@ module Pos.Util.Wlog.Compatibility
          , LoggerNameBox (..)
          , HasLoggerName (..)
          , usingLoggerName
-         , LoggerConfig (..)
          , Severity (..)
+           -- * LoggerConfig
+         , LoggerConfig (..)
+         , parseLoggerConfig
            -- * Safe logging
          , SelectionMode
          , logMCond
@@ -48,7 +50,7 @@ import           Pos.Util.Log.LoggerConfig (BackendKind (..), LogHandler (..),
                      LogSecurityLevel (..), RotationParameters (..),
                      defaultInteractiveConfiguration, lcBasePath, lcLoggerTree,
                      lcRotation, lhBackend, lhFpath, lhMinSeverity, lhName,
-                     ltHandlers)
+                     ltHandlers, parseLoggerConfig)
 import           Pos.Util.Log.Scribes (mkDevNullScribe, mkJsonFileScribe,
                      mkStderrScribe, mkStdoutScribe, mkTextFileScribe)
 import           System.IO.Unsafe (unsafePerformIO)
